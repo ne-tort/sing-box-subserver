@@ -19,9 +19,11 @@ data_dir: "/var/lib/subserver"
 
 On status/heartbeat the agent reports:
 
-- `node_id`, `agent_version`, `singbox_version`, `build_tags`
+- `node_id`, `agent_version`, `agent_commit`, `singbox_version`, `singbox_commit`, `build_tags`
 - management listen address
 - current `revision` / `content_sha256` / `state`
+
+Control plane uses version fields to decide whether to **externally** replace the binary/image and restart ([ADR 0005](adr/0005-external-updates-only.md)). The agent never downloads or overwrites itself.
 
 ## Push (primary)
 
@@ -77,12 +79,20 @@ POST JSON snapshot of `GET /v1/status` data. Panel marks node online/offline for
 
 One-time (out of band):
 
-1. Install binary + systemd unit.
+1. Install binary + systemd unit (or Compose service).
 2. Write agent config (token, node_id, pull URL).
 3. Open management port only to panel IP **or** terminate TLS / SSH tunnel / WG management net.
 4. Panel registers node inventory row.
 
 Ongoing ops: API only.
+
+## Agent binary / image upgrades
+
+Not an agent API. Operator or panel bootstrap:
+
+- **systemd:** replace binary under `ExecStart`, `systemctl restart subserver`.
+- **Docker/Compose:** new image tag + recreate container.
+- Artifacts from GitHub Releases (checksums); agent only reports versions so the plane knows when upgrade is due.
 
 ## Multi-server client subscriptions (panel side)
 

@@ -1,11 +1,10 @@
 # 09 — Repository layout
 
-Target layout for implementation (docs phase creates `docs/` + `README` only; packages appear next).
-
 ```
 sing-box-subserver/
   README.md
-  docs/                          # architecture ladder (this tree)
+  CONTRIBUTING.md
+  docs/                          # architecture ladder
   openapi/                       # openapi.yaml (with API impl)
   cmd/
     subserver/
@@ -18,8 +17,11 @@ sing-box-subserver/
     supervisor/                  # state machine, apply, watch
     configstore/                 # staged / last-good / meta
     box/                         # sing-box registries + lifecycle
+    version/                     # agent + sing-box version helpers
     pull/                        # mother pull scheduler
     obs/                         # slog, ring, metrics
+  third_party/
+    sing-box-lx/                 # git submodule (same family as s-ui)
   build/
     tags.server                  # allowlisted -tags
   deploy/
@@ -29,6 +31,7 @@ sing-box-subserver/
     smoke_local.sh               # later
   go.mod
   go.sum
+  .go-version
   .github/workflows/ci.yml
 ```
 
@@ -46,15 +49,19 @@ flowchart TB
   pull[internal_pull]
   obs[internal_obs]
   cfg[internal_agentcfg]
+  ver[internal_version]
   cmd --> app
+  cmd --> ver
   app --> api
   app --> pull
   app --> sup
   app --> cfg
   app --> obs
+  app --> ver
   api --> auth
   api --> sup
   api --> obs
+  api --> ver
   pull --> sup
   pull --> cfg
   sup --> store
@@ -68,6 +75,7 @@ Rules:
 - `internal/box` must not import `api` or `pull`.
 - `api` must not start boxes directly — only via `supervisor`.
 - No imports from s-ui modules.
+- `third_party/sing-box-lx` is the only sing-box source (`replace` in `go.mod`).
 
 ## Data directory layout (runtime)
 
@@ -82,9 +90,12 @@ Rules:
 
 Writes: temp file in same dir + `rename` for atomicity.
 
-## Coding standards (preview)
+## Coding standards
+
+See [10-repo-culture](10-repo-culture.md). Preview:
 
 - Context on all I/O; timeouts on pull/heartbeat.
 - Typed errors (`errors.Is` / codes mapped to API).
 - No global mutable box pointer outside supervisor.
 - Table-driven tests for apply rollback and auth.
+- `gofmt` / `go vet` clean; conventional commits.

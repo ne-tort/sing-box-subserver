@@ -14,6 +14,7 @@ flowchart TD
   obs[07_observability]
   build[08_build_and_ci]
   layout[09_repo_layout]
+  culture[10_repo_culture]
   adr[adr]
   idx --> concept --> req --> arch
   arch --> life
@@ -22,9 +23,11 @@ flowchart TD
   arch --> obs
   arch --> build
   arch --> layout
+  layout --> culture
   concept --> adr
   life --> adr
   api --> adr
+  build --> adr
 ```
 
 ## Map
@@ -38,9 +41,10 @@ flowchart TD
 | [05-api.md](05-api.md) | 02–04 | REST v1 surface |
 | [06-control-plane.md](06-control-plane.md) | 02–05 | Push/pull, identity, auth |
 | [07-observability.md](07-observability.md) | 02–05 | Logs, metrics, health |
-| [08-build-and-ci.md](08-build-and-ci.md) | 02–03 | Build tags, CI, size |
+| [08-build-and-ci.md](08-build-and-ci.md) | 02–03 | Build tags, CI, lx pin, versions |
 | [09-repo-layout.md](09-repo-layout.md) | 03–08 | Directory / package map |
-| [adr/](adr/) | 01–06 | Locked decisions |
+| [10-repo-culture.md](10-repo-culture.md) | 08–09 | Cleanliness, commits, review bar |
+| [adr/](adr/) | 01–06 | Locked decisions (incl. [0005 external updates](adr/0005-external-updates-only.md)) |
 
 ## Quality bar vs panel monoliths
 
@@ -50,6 +54,7 @@ Reference panels (including s-ui) show that in-process `singbox.New` is viable. 
 - last-good atomic swap on apply;
 - typed status/revision contracts;
 - slim server-oriented build profile;
-- explicit observability and ADRs.
+- explicit observability and ADRs;
+- external-only binary upgrades ([ADR 0005](adr/0005-external-updates-only.md)).
 
 See ADRs for the locked choices.

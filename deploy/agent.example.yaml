@@ -1,0 +1,22 @@
+# Example agent config for sing-box-subserver.
+# Copy to agent.local.yaml (gitignored) or /etc/subserver/agent.yaml.
+
+node_id: "edge-ams-1"
+token: "replace-with-high-entropy-secret"
+listen: "127.0.0.1:8080"
+data_dir: "/var/lib/subserver"
+
+# Optional: pull desired config from control plane
+# pull:
+#   url: "https://panel.example/api/nodes/edge-ams-1/desired-config"
+#   interval_sec: 60
+
+# Optional: heartbeat to mother
+# heartbeat:
+#   url: "https://panel.example/api/nodes/edge-ams-1/hello"
+#   interval_sec: 30
+
+# Optional TLS for non-localhost listen
+# tls:
+#   cert: "/etc/subserver/tls.crt"
+#   key: "/etc/subserver/tls.key"

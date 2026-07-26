@@ -2,65 +2,72 @@
 
 ## Binary goals
 
-- One static(ish) Linux binary: `subserver`.
-- **Server edge profile** — inbound protocols + WireGuard endpoint (+ AWG tags if required by lx).
+- One Linux binary: `subserver`.
+- **Server edge profile** — inbound protocols + WireGuard endpoint (+ AWG).
 - No frontend, no panel SQLite, no clash UI experimentals unless later justified.
+- **No in-binary updater** ([ADR 0005](adr/0005-external-updates-only.md)); CI publishes artifacts for external deploy.
 
-## Module graph
+## Core pin (same family as s-ui)
 
 ```
-module github.com/ne-tort/sing-box-subserver
-
-require github.com/sagernet/sing-box  (via replace → sing-box-lx)
+third_party/sing-box-lx  →  https://github.com/ne-tort/sing-box-lx.git
 ```
 
-Pin **sing-box-lx** with `replace` / submodule or Go workspace — same family as s-ui. Document the pin commit in `go.mod` comments.
+Pinned to the **same commit** used by the mother panel when releasing a matching agent. `go.mod`:
+
+```
+require github.com/sagernet/sing-box v1.14.0-lx.17
+replace github.com/sagernet/sing-box => ./third_party/sing-box-lx
+replace github.com/sagernet/wireguard-go => ./third_party/sing-box-lx/submodules/wireguard-go
+```
+
+Bump lx with an explicit commit in both submodule pointer and release notes.
+
+## Version injection
+
+ldflags (example):
+
+```
+-X github.com/ne-tort/sing-box-subserver/internal/version.AgentVersion=0.1.0
+-X github.com/ne-tort/sing-box-subserver/internal/version.AgentCommit=<git-sha>
+-X github.com/ne-tort/sing-box-subserver/internal/version.SingBoxCommit=<lx-sha>
+-X github.com/sagernet/sing-box/constant.Version=<lx-version-string>
+```
+
+Runtime status exposes `agent_version`, `agent_commit`, `singbox_version`, `singbox_commit`, `build_tags` ([05-api](05-api.md)).
 
 ## Build tags (allowlist)
 
-Default `SERVER_TAGS` (illustrative; finalize at implementation against lx):
+File: [`build/tags.server`](../build/tags.server) — single source of truth. CI fails if build uses other tags.
 
-```
-with_quic,with_wireguard,with_utls,with_reality,with_acme,with_gvisor,with_awg,...
-```
-
-Include only what server inbounds need (VLESS/Trojan/SS/Naive/Hy2/TUIC/… as product requires).
-
-**Explicitly exclude from default edge profile** unless a product decision says otherwise:
-
-- client-centric TUN as primary;
-- heavy experimental APIs not used for serving;
-- unused providers that bloat binary (tor, etc.).
-
-CI job: fail if `go build -tags` drifts from allowlist file `build/tags.server`.
+Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds; **omit** `with_clash_api` and other client/UI-heavy tags unless product requires them.
 
 ## Local build
 
 ```bash
-go build -trimpath -ldflags="-s -w" -tags "$(cat build/tags.server)" -o dist/subserver ./cmd/subserver
+git submodule update --init --recursive
+TAGS=$(tr -d '\r\n' < build/tags.server)
+go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver ./cmd/subserver
+./dist/subserver -version
 ```
 
 ## CI matrix
 
 | Job | Purpose |
 |-----|---------|
-| `test` | `go test ./...` |
+| `test` | `go test ./...` with tags |
 | `vet` | `go vet` |
 | `build-linux-amd64` | release artifact |
 | `build-linux-arm64` | release artifact |
-| `tags-allowlist` | ensure tags file matches documented set |
-| `docs-link` | optional markdown link check |
+| `tags-allowlist` | ensure workflow uses `build/tags.server` only |
 
-Triggers: PR + tag. Keep CI **lightweight** (no npm, no docker-in-docker unless packaging later).
+Checkout: init `third_party/sing-box-lx`, then only `submodules/wireguard-go` inside lx (skip `clients/*`). Keep CI lightweight (no npm).
+
+## Release / upgrade path
+
+GitHub Releases: `subserver_linux_amd64`, `subserver_linux_arm64`, checksums.  
+Deploy: external script or Compose pulls new asset and restarts — agent is not asked to update itself.
 
 ## Size budget
 
-Record binary size in CI logs. Soft budget after first green build (e.g. alert if +20% unexplained). No hard fail until baseline exists.
-
-## Release
-
-GitHub Releases: `subserver_linux_amd64`, `subserver_linux_arm64`, checksums. systemd unit example under `deploy/subserver.service`.
-
-## Cross-compile
-
-`GOOS=linux GOARCH=amd64|arm64` with CGO carefully: prefer `CGO_ENABLED=0` if lx tags allow; if WireGuard/gvisor force CGO, document and use musl/zig or Debian builders — decide at implementation and update this doc.
+Log binary size in CI. Soft alert on unexplained +20% after baseline exists.

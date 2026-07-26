@@ -28,13 +28,24 @@ Start here: **[docs/00-index.md](docs/00-index.md)**
 | [05-api](docs/05-api.md) | REST v1 contract |
 | [06-control-plane](docs/06-control-plane.md) | Push / pull / auth |
 | [07-observability](docs/07-observability.md) | Logs and metrics |
-| [08-build-and-ci](docs/08-build-and-ci.md) | Tags and CI |
-| [09-repo-layout](docs/09-repo-layout.md) | Target Go layout |
-| [adr/](docs/adr/) | Architecture Decision Records |
+| [08-build-and-ci](docs/08-build-and-ci.md) | Tags, CI, lx pin |
+| [09-repo-layout](docs/09-repo-layout.md) | Go layout |
+| [10-repo-culture](docs/10-repo-culture.md) | Commits, cleanliness |
+| [adr/](docs/adr/) | ADRs (incl. external updates only) |
+
+## Quick start (skeleton)
+
+```bash
+git submodule update --init third_party/sing-box-lx
+git -C third_party/sing-box-lx submodule update --init submodules/wireguard-go
+TAGS=$(tr -d '\r\n' < build/tags.server)
+go build -tags "$TAGS" -o dist/subserver ./cmd/subserver
+./dist/subserver -version
+```
 
 ## Status
 
-Architecture and contracts only. Implementation lands after these docs are accepted.
+Skeleton binary (`-version`) and architecture docs. Supervisor / REST apply pipeline next.
 
 ## License
 

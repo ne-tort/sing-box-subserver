@@ -1,0 +1,3 @@
+[submodule "third_party/sing-box-lx"]
+	path = third_party/sing-box-lx
+	url = https://github.com/ne-tort/sing-box-lx.git

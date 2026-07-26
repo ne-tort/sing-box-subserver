@@ -1,0 +1,19 @@
+[Unit]
+Description=sing-box-subserver edge agent
+Documentation=https://github.com/ne-tort/sing-box-subserver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=subserver
+Group=subserver
+ExecStart=/usr/local/bin/subserver -config /etc/subserver/agent.yaml
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1048576
+# Upgrades: replace binary under ExecStart, then systemctl restart.
+# The agent does not self-update.
+
+[Install]
+WantedBy=multi-user.target

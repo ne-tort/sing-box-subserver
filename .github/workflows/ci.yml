@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-vet-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Init sing-box-lx (+ wireguard-go only)
+        run: |
+          git submodule update --init third_party/sing-box-lx
+          git -C third_party/sing-box-lx submodule update --init submodules/wireguard-go
+          # Do not recurse into clients/* (not needed for server agent builds).
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: .go-version
+
+      - name: Read build tags
+        id: tags
+        run: |
+          TAGS=$(tr -d '\r\n' < build/tags.server)
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          # allowlist guard: workflow must not invent tags outside the file
+          test -n "$TAGS"
+
+      - name: Test
+        if: matrix.goarch == 'amd64'
+        run: go test -tags "${{ steps.tags.outputs.tags }}" ./...
+
+      - name: Vet
+        if: matrix.goarch == 'amd64'
+        run: go vet -tags "${{ steps.tags.outputs.tags }}" ./...
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w -checklinkname=0" \
+            -tags "${{ steps.tags.outputs.tags }}" \
+            -o "dist/subserver_${{ matrix.goos }}_${{ matrix.goarch }}" \
+            ./cmd/subserver
+
+      - name: Version smoke (amd64 host)
+        if: matrix.goarch == 'amd64'
+        run: ./dist/subserver_linux_amd64 -version

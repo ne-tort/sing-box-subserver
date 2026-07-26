@@ -52,6 +52,25 @@ Liveness of the **process** (not box).
 
 HTTP 200 if process up.
 
+### `GET /v1/version`
+
+Unauthenticated or token-gated (same as health policy). Compact version probe for control plane upgrade checks:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "agent_version": "0.1.0",
+    "agent_commit": "abc1234",
+    "singbox_version": "1.14.0-lx.17",
+    "singbox_commit": "1e9c91e1",
+    "build_tags": ["with_wireguard", "with_quic"]
+  }
+}
+```
+
+Same fields are always present on `GET /v1/status`.
+
 ### `GET /v1/ready`
 
 Readiness for dataplane: 200 if `Running` (and optionally not `Applying`); 503 otherwise. Used by orchestration that must not route users to a dead node.
@@ -65,7 +84,9 @@ Readiness for dataplane: 200 if `Running` (and optionally not `Applying`); 503 o
     "state": "Running",
     "node_id": "edge-1",
     "agent_version": "0.1.0",
-    "singbox_version": "...",
+    "agent_commit": "abc1234",
+    "singbox_version": "1.14.0-lx.17",
+    "singbox_commit": "1e9c91e1",
     "build_tags": ["with_wireguard", "with_quic", "..."],
     "revision": 12,
     "content_sha256": "...",
