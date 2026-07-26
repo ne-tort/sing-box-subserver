@@ -4,7 +4,7 @@
 
 - One Linux binary: `subserver`.
 - **Server edge profile** — inbound protocols + WireGuard endpoint (+ AWG).
-- No frontend, no panel SQLite, no clash UI experimentals unless later justified.
+- No frontend, no panel SQLite, **no Clash API** ([ADR 0006](adr/0006-no-clash-api.md)).
 - **No in-binary updater** ([ADR 0005](adr/0005-external-updates-only.md)); CI publishes artifacts for external deploy.
 
 ## Core pin (same family as s-ui)
@@ -40,7 +40,9 @@ Runtime status exposes `agent_version`, `agent_commit`, `singbox_version`, `sing
 
 File: [`build/tags.server`](../build/tags.server) — single source of truth. CI fails if build uses other tags.
 
-Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds; **omit** `with_clash_api` and other client/UI-heavy tags unless product requires them.
+Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds; **omit** `with_clash_api` ([ADR 0006](adr/0006-no-clash-api.md)) and other client/UI-heavy tags.
+
+CI injects version ldflags (`AgentVersion`, `AgentCommit`, `SingBoxCommit`) on build artifacts. Local builds without `-X` report `0.0.0-dev` / `unknown`.
 
 ## Local build
 

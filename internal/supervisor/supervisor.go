@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -26,10 +27,11 @@ const (
 )
 
 var (
-	ErrConflict   = errors.New("apply in progress")
+	ErrConflict     = errors.New("apply in progress")
 	ErrPrecondition = errors.New("if-match precondition failed")
-	ErrNotFound   = errors.New("no last-good config")
-	ErrInvalid    = errors.New("config invalid")
+	ErrNotFound     = errors.New("no last-good config")
+	ErrInvalid      = errors.New("config invalid")
+	ErrUnsupported  = errors.New("unsupported feature")
 )
 
 // MatchMode for If-Match.
@@ -76,13 +78,14 @@ type PullStatus struct {
 
 // StatusSnapshot is the supervisor view for REST.
 type StatusSnapshot struct {
-	State           State     `json:"state"`
-	Revision        uint64    `json:"revision"`
-	ContentSHA256   string    `json:"content_sha256"`
-	BoxStartedAt    *time.Time `json:"box_started_at"`
-	LastApply       *LastApply `json:"last_apply"`
-	LastError       *string   `json:"last_error"`
-	Pull            PullStatus `json:"pull"`
+	State         State      `json:"state"`
+	Revision      uint64     `json:"revision"`
+	ContentSHA256 string     `json:"content_sha256"`
+	BoxStartedAt  *time.Time `json:"box_started_at"`
+	LastApply     *LastApply `json:"last_apply"`
+	LastError     *string    `json:"last_error"`
+	Pull          PullStatus `json:"pull"`
+	BoxUp         bool       `json:"box_up"`
 }
 
 // BoxEngine is the dataplane dependency (real or fake).
@@ -91,30 +94,40 @@ type BoxEngine interface {
 	Start(ctx context.Context, raw []byte) (box.Instance, error)
 }
 
+// Options configures supervisor behaviour.
+type Options struct {
+	Probe time.Duration // settle after Start before promote; 0 = skip
+}
+
 // Supervisor owns box lifecycle and last-good apply.
 type Supervisor struct {
 	store   *configstore.Store
 	engine  BoxEngine
 	log     *slog.Logger
 	metrics *obs.Metrics
+	opts    Options
 
-	mu            sync.Mutex
-	state         State
-	inst          box.Instance
-	boxStartedAt  time.Time
-	lastApply     *LastApply
-	lastError     *string
-	contentSHA    string
-	revision      uint64
-	applying      bool
-	watchCancel   context.CancelFunc
-	pull          PullStatus
-	processStart  time.Time
-	backoff       time.Duration
-	stopWatch     chan struct{}
+	mu           sync.Mutex
+	state        State
+	inst         box.Instance
+	boxStartedAt time.Time
+	lastApply    *LastApply
+	lastError    *string
+	contentSHA   string
+	revision     uint64
+	applying     bool
+	watchCancel  context.CancelFunc
+	pull         PullStatus
+	processStart time.Time
+	backoff      time.Duration
+	shutdown     bool
 }
 
 func New(store *configstore.Store, engine BoxEngine, log *slog.Logger, metrics *obs.Metrics) *Supervisor {
+	return NewWithOptions(store, engine, log, metrics, Options{Probe: 300 * time.Millisecond})
+}
+
+func NewWithOptions(store *configstore.Store, engine BoxEngine, log *slog.Logger, metrics *obs.Metrics, opts Options) *Supervisor {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -126,18 +139,17 @@ func New(store *configstore.Store, engine BoxEngine, log *slog.Logger, metrics *
 		engine:       engine,
 		log:          log,
 		metrics:      metrics,
+		opts:         opts,
 		state:        StateStopped,
 		processStart: time.Now().UTC(),
 		backoff:      time.Second,
-		stopWatch:    make(chan struct{}),
 	}
 	if rev, err := store.CurrentRevision(); err == nil {
 		s.revision = rev
 	}
-	if raw, meta, err := store.ReadLastGood(); err == nil {
+	if _, meta, err := store.ReadLastGood(); err == nil {
 		s.contentSHA = meta.ContentSHA256
 		s.revision = meta.Revision
-		_ = raw
 	}
 	return s
 }
@@ -170,7 +182,8 @@ func (s *Supervisor) Status() StatusSnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var started *time.Time
-	if !s.boxStartedAt.IsZero() && s.inst != nil {
+	boxUp := s.inst != nil
+	if !s.boxStartedAt.IsZero() && boxUp {
 		t := s.boxStartedAt
 		started = &t
 	}
@@ -182,12 +195,16 @@ func (s *Supervisor) Status() StatusSnapshot {
 		LastApply:     s.lastApply,
 		LastError:     s.lastError,
 		Pull:          s.pull,
+		BoxUp:         boxUp,
 	}
 }
 
 // Validate only.
 func (s *Supervisor) Validate(ctx context.Context, raw []byte) error {
 	if err := s.engine.Validate(ctx, raw); err != nil {
+		if errors.Is(err, box.ErrUnsupported) {
+			return fmt.Errorf("%w: %v", ErrUnsupported, err)
+		}
 		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	return nil
@@ -196,6 +213,10 @@ func (s *Supervisor) Validate(ctx context.Context, raw []byte) error {
 // Apply runs the normative last-good pipeline.
 func (s *Supervisor) Apply(ctx context.Context, req ApplyRequest) (ApplyResult, error) {
 	s.mu.Lock()
+	if s.shutdown {
+		s.mu.Unlock()
+		return ApplyResult{}, fmt.Errorf("shutting down")
+	}
 	if s.applying {
 		s.mu.Unlock()
 		return ApplyResult{}, ErrConflict
@@ -282,6 +303,9 @@ func (s *Supervisor) applyLocked(ctx context.Context, req ApplyRequest, prevStat
 
 	if err := s.engine.Validate(ctx, req.Raw); err != nil {
 		s.setState(prevState)
+		if errors.Is(err, box.ErrUnsupported) {
+			return ApplyResult{}, fmt.Errorf("%w: %v", ErrUnsupported, err)
+		}
 		return ApplyResult{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 
@@ -290,7 +314,6 @@ func (s *Supervisor) applyLocked(ctx context.Context, req ApplyRequest, prevStat
 		return ApplyResult{}, err
 	}
 
-	// Quiesce old
 	old := s.takeInstance()
 	if old != nil {
 		_ = old.Close()
@@ -298,13 +321,11 @@ func (s *Supervisor) applyLocked(ctx context.Context, req ApplyRequest, prevStat
 
 	inst, err := s.engine.Start(ctx, req.Raw)
 	if err != nil {
-		s.metrics.RollbackTotal.Add(1)
-		if restoreErr := s.restoreLastGood(ctx); restoreErr != nil {
-			s.setState(StateStopped)
-			return ApplyResult{}, fmt.Errorf("start failed: %v; restore failed: %w", err, restoreErr)
-		}
-		s.setState(StateRolledBack)
-		return ApplyResult{}, fmt.Errorf("start failed, restored last-good: %w", err)
+		return s.failStart(ctx, err)
+	}
+	if err := s.probe(ctx, inst); err != nil {
+		_ = inst.Close()
+		return s.failStart(ctx, err)
 	}
 
 	meta, err := s.store.PromoteStaged()
@@ -321,8 +342,37 @@ func (s *Supervisor) applyLocked(ctx context.Context, req ApplyRequest, prevStat
 
 	s.installInstance(inst, meta.ContentSHA256, meta.Revision)
 	s.setState(StateRunning)
+	s.mu.Lock()
 	s.backoff = time.Second
+	s.mu.Unlock()
 	return ApplyResult{Revision: meta.Revision, SHA256: meta.ContentSHA256, State: StateRunning}, nil
+}
+
+func (s *Supervisor) failStart(ctx context.Context, err error) (ApplyResult, error) {
+	s.metrics.RollbackTotal.Add(1)
+	if restoreErr := s.restoreLastGood(ctx); restoreErr != nil {
+		s.setState(StateStopped)
+		return ApplyResult{}, fmt.Errorf("start failed: %v; restore failed: %w", err, restoreErr)
+	}
+	s.setState(StateRolledBack)
+	return ApplyResult{}, fmt.Errorf("start failed, restored last-good: %w", err)
+}
+
+func (s *Supervisor) probe(ctx context.Context, inst box.Instance) error {
+	d := s.opts.Probe
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-inst.Done():
+		return fmt.Errorf("box died during probe")
+	case <-t.C:
+		return nil
+	}
 }
 
 func (s *Supervisor) restoreLastGood(ctx context.Context) error {
@@ -332,6 +382,10 @@ func (s *Supervisor) restoreLastGood(ctx context.Context) error {
 	}
 	inst, err := s.engine.Start(ctx, raw)
 	if err != nil {
+		return err
+	}
+	if err := s.probe(ctx, inst); err != nil {
+		_ = inst.Close()
 		return err
 	}
 	s.installInstance(inst, meta.ContentSHA256, meta.Revision)
@@ -377,39 +431,78 @@ func (s *Supervisor) watch(ctx context.Context, inst box.Instance) {
 		return
 	case <-inst.Done():
 	}
+
 	s.mu.Lock()
-	if s.inst != inst {
+	if s.shutdown || s.inst != inst {
 		s.mu.Unlock()
 		return
 	}
+	// Planned Close during apply sets inst nil via takeInstance before Close;
+	// if we still own this instance, treat as unexpected.
 	s.inst = nil
 	s.state = StateDegraded
 	s.metrics.BoxRestarts.Add(1)
-	backoff := s.backoff
 	s.mu.Unlock()
 
-	s.log.Warn("box stopped unexpectedly; restarting last-good", "backoff", backoff.String())
-	timer := time.NewTimer(backoff)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return
-	case <-timer.C:
-	}
-	if err := s.restoreLastGood(context.Background()); err != nil {
-		s.log.Error("restart last-good failed", "err", err)
-		s.setState(StateDegraded)
+	s.log.Warn("box stopped unexpectedly; restarting last-good")
+	s.restartLoop(ctx)
+}
+
+func (s *Supervisor) restartLoop(ctx context.Context) {
+	for {
 		s.mu.Lock()
+		if s.shutdown || s.applying {
+			s.mu.Unlock()
+			return
+		}
+		backoff := s.backoff
+		s.mu.Unlock()
+
+		jitter := time.Duration(0)
+		if backoff > 0 {
+			jitter = time.Duration(rand.Int63n(int64(backoff / 4)))
+		}
+		timer := time.NewTimer(backoff + jitter)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+
+		s.mu.Lock()
+		if s.shutdown || s.applying {
+			s.mu.Unlock()
+			return
+		}
+		s.applying = true
+		s.mu.Unlock()
+
+		err := s.restoreLastGood(context.Background())
+
+		s.mu.Lock()
+		s.applying = false
+		if err == nil {
+			s.state = StateRunning
+			s.backoff = time.Second
+			s.lastError = nil
+			s.mu.Unlock()
+			s.log.Info("restarted last-good after unexpected stop")
+			return
+		}
+		msg := err.Error()
+		s.lastError = &msg
+		s.state = StateDegraded
 		if s.backoff < 60*time.Second {
 			s.backoff *= 2
 			if s.backoff > 60*time.Second {
 				s.backoff = 60 * time.Second
 			}
 		}
+		next := s.backoff
 		s.mu.Unlock()
-		return
+		s.log.Error("restart last-good failed; will retry", "err", err, "next_backoff", next.String())
 	}
-	s.setState(StateRunning)
 }
 
 // BootLastGood starts last-good if present without bumping revision.
@@ -440,12 +533,45 @@ func (s *Supervisor) BootLastGood(ctx context.Context) error {
 		return err
 	}
 	s.setState(StateRunning)
+	s.mu.Lock()
 	s.backoff = time.Second
+	s.mu.Unlock()
 	return nil
 }
 
-// Shutdown closes the running box.
+// StopBox stops the dataplane without changing revision (ops).
+func (s *Supervisor) StopBox() error {
+	s.mu.Lock()
+	if s.applying {
+		s.mu.Unlock()
+		return ErrConflict
+	}
+	s.applying = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.applying = false
+		s.mu.Unlock()
+	}()
+
+	inst := s.takeInstance()
+	if inst != nil {
+		_ = inst.Close()
+	}
+	s.setState(StateStopped)
+	return nil
+}
+
+// StartBox starts last-good without bumping revision.
+func (s *Supervisor) StartBox(ctx context.Context) error {
+	return s.BootLastGood(ctx)
+}
+
+// Shutdown closes the running box and stops watchers.
 func (s *Supervisor) Shutdown() {
+	s.mu.Lock()
+	s.shutdown = true
+	s.mu.Unlock()
 	inst := s.takeInstance()
 	if inst != nil {
 		_ = inst.Close()

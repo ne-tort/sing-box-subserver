@@ -13,26 +13,8 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
+	"github.com/ne-tort/sing-box-subserver/internal/testutil"
 )
-
-type apiFakeEngine struct{}
-
-func (apiFakeEngine) Validate(ctx context.Context, raw []byte) error { return nil }
-func (apiFakeEngine) Start(ctx context.Context, raw []byte) (box.Instance, error) {
-	return &apiFakeInst{done: make(chan struct{})}, nil
-}
-
-type apiFakeInst struct{ done chan struct{} }
-
-func (i *apiFakeInst) Close() error {
-	select {
-	case <-i.done:
-	default:
-		close(i.done)
-	}
-	return nil
-}
-func (i *apiFakeInst) Done() <-chan struct{} { return i.done }
 
 func testServer(t *testing.T) *Server {
 	t.Helper()
@@ -48,7 +30,7 @@ func testServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	o := obs.Setup("error")
-	sup := supervisor.New(store, apiFakeEngine{}, o.Logger, o.Metrics)
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
 	return New(cfg, sup, o)
 }
 
@@ -75,6 +57,13 @@ func TestHealthPublicAndAuth(t *testing.T) {
 	if rr.Code != 200 {
 		t.Fatalf("status with auth: %d body=%s", rr.Code, rr.Body.String())
 	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &env)
+	if env.Data["listen"] != "127.0.0.1:0" {
+		t.Fatalf("listen missing: %+v", env.Data)
+	}
 }
 
 func TestPutConfig(t *testing.T) {
@@ -96,5 +85,27 @@ func TestPutConfig(t *testing.T) {
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil || !env.OK || env.Data.Revision != 1 {
 		t.Fatalf("envelope: %+v err=%v body=%s", env, err, rr.Body.String())
+	}
+}
+
+func TestValidateClashRejected(t *testing.T) {
+	t.Parallel()
+	cfg := &agentcfg.Config{NodeID: "e", Token: "secret", Listen: "127.0.0.1:0"}
+	hp := true
+	cfg.HealthPublic = &hp
+	store, err := configstore.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, box.NewEngine(context.Background()), o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	s := New(cfg, sup, o)
+	body := []byte(`{"experimental":{"clash_api":{"external_controller":"127.0.0.1:9090"}},"outbounds":[{"type":"direct","tag":"d"}]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/validate", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer secret")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("want 422, got %d %s", rr.Code, rr.Body.String())
 	}
 }

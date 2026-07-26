@@ -21,7 +21,6 @@ jobs:
         run: |
           git submodule update --init third_party/sing-box-lx
           git -C third_party/sing-box-lx submodule update --init submodules/wireguard-go
-          # Do not recurse into clients/* (not needed for server agent builds).
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -34,6 +33,24 @@ jobs:
           TAGS=$(tr -d '\r\n' < build/tags.server)
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           test -n "$TAGS"
+
+      - name: Tags allowlist
+        run: |
+          # Workflow must use exactly build/tags.server (no inventing tags).
+          FILE_TAGS=$(tr -d '\r\n' < build/tags.server)
+          test "${{ steps.tags.outputs.tags }}" = "$FILE_TAGS"
+
+      - name: Version ldflags
+        id: ver
+        run: |
+          AGENT_COMMIT=$(git rev-parse --short HEAD)
+          AGENT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "$AGENT_COMMIT")
+          LX_COMMIT=$(git -C third_party/sing-box-lx rev-parse --short HEAD)
+          {
+            echo "agent_commit=$AGENT_COMMIT"
+            echo "agent_version=$AGENT_VERSION"
+            echo "lx_commit=$LX_COMMIT"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Test
         if: matrix.goarch == 'amd64'
@@ -50,10 +67,15 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w -checklinkname=0" \
+          LDFLAGS="-s -w -checklinkname=0"
+          LDFLAGS="$LDFLAGS -X github.com/ne-tort/sing-box-subserver/internal/version.AgentVersion=${{ steps.ver.outputs.agent_version }}"
+          LDFLAGS="$LDFLAGS -X github.com/ne-tort/sing-box-subserver/internal/version.AgentCommit=${{ steps.ver.outputs.agent_commit }}"
+          LDFLAGS="$LDFLAGS -X github.com/ne-tort/sing-box-subserver/internal/version.SingBoxCommit=${{ steps.ver.outputs.lx_commit }}"
+          go build -trimpath -ldflags="$LDFLAGS" \
             -tags "${{ steps.tags.outputs.tags }}" \
             -o "dist/subserver_${{ matrix.goos }}_${{ matrix.goarch }}" \
             ./cmd/subserver
+          ls -la "dist/subserver_${{ matrix.goos }}_${{ matrix.goarch }}"
 
       - name: Version smoke (amd64 host)
         if: matrix.goarch == 'amd64'

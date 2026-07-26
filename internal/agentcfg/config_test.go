@@ -71,6 +71,30 @@ log:
 	}
 }
 
+func TestPublicBindRequiresTLSOrFlag(t *testing.T) {
+	t.Parallel()
+	_, err := Parse([]byte(`
+node_id: edge-1
+token: secret
+listen: 0.0.0.0:8080
+`))
+	if err == nil {
+		t.Fatal("expected bind policy error")
+	}
+	cfg, err := Parse([]byte(`
+node_id: edge-1
+token: secret
+listen: 0.0.0.0:8080
+insecure_public_bind: true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.InsecurePublicBind {
+		t.Fatal("expected insecure flag")
+	}
+}
+
 func TestInvalidLogLevel(t *testing.T) {
 	t.Parallel()
 	_, err := Parse([]byte(`

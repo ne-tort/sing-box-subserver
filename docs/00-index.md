@@ -44,7 +44,7 @@ flowchart TD
 | [08-build-and-ci.md](08-build-and-ci.md) | 02–03 | Build tags, CI, lx pin, versions |
 | [09-repo-layout.md](09-repo-layout.md) | 03–08 | Directory / package map |
 | [10-repo-culture.md](10-repo-culture.md) | 08–09 | Cleanliness, commits, review bar |
-| [adr/](adr/) | 01–06 | Locked decisions (incl. [0005 external updates](adr/0005-external-updates-only.md)) |
+| [adr/](adr/) | 01–06 | Locked decisions (incl. [0005 external updates](adr/0005-external-updates-only.md), [0006 no Clash API](adr/0006-no-clash-api.md)) |
 
 ## Quality bar vs panel monoliths
 
@@ -53,7 +53,7 @@ Reference panels (including s-ui) show that in-process `singbox.New` is viable. 
 - management plane isolated from box failures;
 - last-good atomic swap on apply;
 - typed status/revision contracts;
-- slim server-oriented build profile;
+- slim server-oriented build profile (**no** Clash API — [ADR 0006](adr/0006-no-clash-api.md));
 - explicit observability and ADRs;
 - external-only binary upgrades ([ADR 0005](adr/0005-external-updates-only.md)).
 

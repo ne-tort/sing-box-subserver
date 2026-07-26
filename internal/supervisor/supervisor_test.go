@@ -4,69 +4,14 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/box"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
+	"github.com/ne-tort/sing-box-subserver/internal/testutil"
 )
-
-type fakeInst struct {
-	closed chan struct{}
-	once   sync.Once
-}
-
-func newFakeInst() *fakeInst {
-	return &fakeInst{closed: make(chan struct{})}
-}
-
-func (f *fakeInst) Close() error {
-	f.once.Do(func() { close(f.closed) })
-	return nil
-}
-
-func (f *fakeInst) Done() <-chan struct{} { return f.closed }
-
-type fakeEngine struct {
-	mu            sync.Mutex
-	validateErr   error
-	startErr      error
-	startErrOnce  atomic.Bool // fail first Start only
-	starts        atomic.Int32
-	validates     atomic.Int32
-	failNextStart bool
-}
-
-func (e *fakeEngine) Validate(ctx context.Context, raw []byte) error {
-	e.validates.Add(1)
-	if e.validateErr != nil {
-		return e.validateErr
-	}
-	if len(raw) == 0 {
-		return errors.New("empty")
-	}
-	return nil
-}
-
-func (e *fakeEngine) Start(ctx context.Context, raw []byte) (box.Instance, error) {
-	e.starts.Add(1)
-	e.mu.Lock()
-	fail := e.failNextStart
-	if fail {
-		e.failNextStart = false
-	}
-	permanent := e.startErr
-	e.mu.Unlock()
-	if fail {
-		return nil, errors.New("start failed")
-	}
-	if permanent != nil {
-		return nil, permanent
-	}
-	return newFakeInst(), nil
-}
 
 func newTestSupervisor(t *testing.T, eng BoxEngine) *Supervisor {
 	t.Helper()
@@ -74,19 +19,19 @@ func newTestSupervisor(t *testing.T, eng BoxEngine) *Supervisor {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(store, eng, obs.Setup("error").Logger, &obs.Metrics{})
+	return NewWithOptions(store, eng, obs.Setup("error").Logger, &obs.Metrics{}, Options{Probe: 0})
 }
 
 func TestApplyValidateFailDoesNotStart(t *testing.T) {
 	t.Parallel()
-	eng := &fakeEngine{validateErr: errors.New("bad")}
+	eng := &testutil.FakeEngine{ValidateErr: errors.New("bad")}
 	sup := newTestSupervisor(t, eng)
 	_, err := sup.Apply(context.Background(), ApplyRequest{Raw: []byte(`{}`), Source: configstore.SourcePush})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("want ErrInvalid, got %v", err)
 	}
-	if eng.starts.Load() != 0 {
-		t.Fatalf("start should not be called, got %d", eng.starts.Load())
+	if eng.Starts.Load() != 0 {
+		t.Fatalf("start should not be called, got %d", eng.Starts.Load())
 	}
 	if st := sup.Status().State; st != StateStopped {
 		t.Fatalf("state=%s", st)
@@ -95,20 +40,15 @@ func TestApplyValidateFailDoesNotStart(t *testing.T) {
 
 func TestApplyStartFailRestoresLastGood(t *testing.T) {
 	t.Parallel()
-	eng := &fakeEngine{}
+	eng := &testutil.FakeEngine{}
 	sup := newTestSupervisor(t, eng)
 
 	raw1 := []byte(`{"v":1}`)
 	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw1, Source: configstore.SourcePush}); err != nil {
 		t.Fatal(err)
 	}
-	if sup.Status().Revision != 1 {
-		t.Fatalf("rev=%d", sup.Status().Revision)
-	}
 
-	eng.mu.Lock()
-	eng.failNextStart = true
-	eng.mu.Unlock()
+	eng.SetFailNextStart(true)
 
 	raw2 := []byte(`{"v":2}`)
 	_, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw2, Source: configstore.SourcePush})
@@ -116,11 +56,8 @@ func TestApplyStartFailRestoresLastGood(t *testing.T) {
 		t.Fatal("expected start failure")
 	}
 	st := sup.Status()
-	if st.State != StateRolledBack && st.State != StateRunning {
-		// RolledBack after restore
-		if st.State != StateRolledBack {
-			t.Fatalf("state=%s", st.State)
-		}
+	if st.State != StateRolledBack {
+		t.Fatalf("state=%s", st.State)
 	}
 	if st.ContentSHA256 != configstore.Hash(raw1) {
 		t.Fatalf("should keep last-good sha, got %s", st.ContentSHA256)
@@ -132,13 +69,13 @@ func TestApplyStartFailRestoresLastGood(t *testing.T) {
 
 func TestApplyIdempotentSameHash(t *testing.T) {
 	t.Parallel()
-	eng := &fakeEngine{}
+	eng := &testutil.FakeEngine{}
 	sup := newTestSupervisor(t, eng)
 	raw := []byte(`{"v":1}`)
 	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw}); err != nil {
 		t.Fatal(err)
 	}
-	starts := eng.starts.Load()
+	starts := eng.Starts.Load()
 	res, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw})
 	if err != nil {
 		t.Fatal(err)
@@ -146,26 +83,24 @@ func TestApplyIdempotentSameHash(t *testing.T) {
 	if !res.Noop {
 		t.Fatal("expected noop")
 	}
-	if eng.starts.Load() != starts {
+	if eng.Starts.Load() != starts {
 		t.Fatalf("starts should not increase on noop")
 	}
 }
 
 func TestApplyConflict(t *testing.T) {
 	t.Parallel()
-	eng := &fakeEngine{}
-	// block Start
 	block := make(chan struct{})
 	release := make(chan struct{})
-	eng2 := &blockingEngine{block: block, release: release}
-	sup := newTestSupervisor(t, eng2)
+	eng := &blockingEngine{block: block, release: release}
+	sup := newTestSupervisor(t, eng)
 
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := sup.Apply(context.Background(), ApplyRequest{Raw: []byte(`{"a":1}`)})
 		errCh <- err
 	}()
-	<-block // first apply entered Start
+	<-block
 	_, err := sup.Apply(context.Background(), ApplyRequest{Raw: []byte(`{"a":2}`)})
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("want conflict, got %v", err)
@@ -174,7 +109,6 @@ func TestApplyConflict(t *testing.T) {
 	if err := <-errCh; err != nil {
 		t.Fatal(err)
 	}
-	_ = eng
 }
 
 type blockingEngine struct {
@@ -188,12 +122,12 @@ func (e *blockingEngine) Validate(ctx context.Context, raw []byte) error { retur
 func (e *blockingEngine) Start(ctx context.Context, raw []byte) (box.Instance, error) {
 	e.once.Do(func() { close(e.block) })
 	<-e.release
-	return newFakeInst(), nil
+	return testutil.NewFakeInst(), nil
 }
 
 func TestBootLastGoodNoRevisionBump(t *testing.T) {
 	t.Parallel()
-	eng := &fakeEngine{}
+	eng := &testutil.FakeEngine{}
 	sup := newTestSupervisor(t, eng)
 	raw := []byte(`{"boot":true}`)
 	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw}); err != nil {
@@ -209,5 +143,54 @@ func TestBootLastGoodNoRevisionBump(t *testing.T) {
 	}
 	if sup.Status().State != StateRunning {
 		t.Fatalf("state=%s", sup.Status().State)
+	}
+}
+
+func TestUnexpectedDoneRestarts(t *testing.T) {
+	t.Parallel()
+	eng := &testutil.FakeEngine{}
+	sup := newTestSupervisor(t, eng)
+	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: []byte(`{"v":1}`)}); err != nil {
+		t.Fatal(err)
+	}
+	startsBefore := eng.Starts.Load()
+
+	sup.mu.Lock()
+	inst := sup.inst
+	sup.mu.Unlock()
+	if inst == nil {
+		t.Fatal("no instance")
+	}
+	_ = inst.Close() // fires Done → watch → restart
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		st := sup.Status()
+		if st.State == StateRunning && eng.Starts.Load() > startsBefore {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("expected restart; state=%s starts=%d", sup.Status().State, eng.Starts.Load())
+}
+
+func TestStopStartBox(t *testing.T) {
+	t.Parallel()
+	eng := &testutil.FakeEngine{}
+	sup := newTestSupervisor(t, eng)
+	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: []byte(`{"v":1}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.StopBox(); err != nil {
+		t.Fatal(err)
+	}
+	if sup.Status().State != StateStopped || sup.Status().BoxUp {
+		t.Fatalf("status=%+v", sup.Status())
+	}
+	if err := sup.StartBox(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if sup.Status().State != StateRunning || !sup.Status().BoxUp {
+		t.Fatalf("status=%+v", sup.Status())
 	}
 }

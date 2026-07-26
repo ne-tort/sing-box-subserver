@@ -36,11 +36,13 @@ func TestMetricsPrometheus(t *testing.T) {
 	m.IncApply(true)
 	m.IncApply(false)
 	m.RollbackTotal.Add(1)
-	text := m.PrometheusText()
+	text := m.PrometheusText(true, 12.5, 3)
 	for _, want := range []string{
 		`subserver_apply_total{result="ok"} 1`,
 		`subserver_apply_total{result="fail"} 1`,
 		`subserver_rollback_total 1`,
+		`subserver_box_up 1`,
+		`subserver_config_revision 3`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q in:\n%s", want, text)

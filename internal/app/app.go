@@ -20,8 +20,8 @@ import (
 
 // Options for Run.
 type Options struct {
-	ConfigPath         string
-	ExitOnBootFailure  bool
+	ConfigPath        string
+	ExitOnBootFailure bool
 }
 
 // Run loads config, boots supervisor, serves API until signal.
@@ -31,12 +31,18 @@ func Run(opts Options) error {
 		return err
 	}
 	o := obs.Setup(cfg.Log.Level)
+	if cfg.InsecurePublicBind && !cfg.IsLoopbackListen() && !cfg.HasTLS() {
+		o.Logger.Warn("insecure_public_bind enabled: management API without TLS on non-loopback", "listen", cfg.Listen)
+	}
+
 	store, err := configstore.New(cfg.DataDir)
 	if err != nil {
 		return err
 	}
 	engine := box.NewEngine(context.Background())
-	sup := supervisor.New(store, engine, o.Logger, o.Metrics)
+	sup := supervisor.NewWithOptions(store, engine, o.Logger, o.Metrics, supervisor.Options{
+		Probe: cfg.ProbeDuration(),
+	})
 	sup.SetPullStatus(supervisor.PullStatus{
 		Enabled:     cfg.Pull.Enabled,
 		IntervalSec: cfg.Pull.IntervalSec,

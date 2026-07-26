@@ -32,15 +32,15 @@ Does not replace stderr; duplicates info/warn/error into ring.
 Agent config `log.level`: `debug|info|warn|error`.  
 Box/sing-box log level comes from sing-box JSON `log` section when present.
 
-## Metrics
+## Metrics (implemented)
 
-### Process
+### Process (JSON + Prometheus)
 
 | Metric | Type | Notes |
 |--------|------|-------|
-| `subserver_process_rss_bytes` | gauge | from runtime/memstats + OS RSS if cheap |
-| `subserver_process_cpu_percent` | gauge | sampled |
+| `subserver_process_rss_bytes` | gauge | `runtime/debug.ReadMemStats` Sys (approx RSS) |
 | `subserver_goroutines` | gauge | `runtime.NumGoroutine` |
+| `cpu_percent` | — | deferred (no sampler in v1 JSON yet; field may be 0) |
 
 ### Dataplane / apply
 
@@ -48,12 +48,12 @@ Box/sing-box log level comes from sing-box JSON `log` section when present.
 |--------|------|
 | `subserver_box_up` | gauge 0/1 |
 | `subserver_box_uptime_seconds` | gauge |
-| `subserver_apply_total` | counter labels `result=ok\|fail`, `source=` |
+| `subserver_apply_total` | counter labels `result=ok\|fail` |
 | `subserver_rollback_total` | counter |
 | `subserver_box_restart_total` | counter |
-| `subserver_apply_duration_seconds` | histogram |
-| `subserver_pull_total` | counter `result=` |
 | `subserver_config_revision` | gauge |
+
+Histogram `apply_duration_seconds` and `pull_total` — later.
 
 ### Exposition
 

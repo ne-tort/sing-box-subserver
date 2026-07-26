@@ -6,12 +6,18 @@ token: "replace-with-high-entropy-secret"
 listen: "127.0.0.1:8080"
 data_dir: "/var/lib/subserver"
 
+# Public bind without TLS requires explicit opt-in (logged as warn).
+# insecure_public_bind: false
+
+# Post-start settle before promote (milliseconds). 0 disables.
+# probe_ms: 300
+
 # Optional: pull desired config from control plane
 # pull:
 #   url: "https://panel.example/api/nodes/edge-ams-1/desired-config"
 #   interval_sec: 60
 
-# Optional: heartbeat to mother
+# Optional: heartbeat to mother (not implemented in v1 agent yet)
 # heartbeat:
 #   url: "https://panel.example/api/nodes/edge-ams-1/hello"
 #   interval_sec: 30
@@ -20,3 +26,6 @@ data_dir: "/var/lib/subserver"
 # tls:
 #   cert: "/etc/subserver/tls.crt"
 #   key: "/etc/subserver/tls.key"
+
+log:
+  level: info

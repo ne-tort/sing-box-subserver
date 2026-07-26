@@ -2,6 +2,7 @@ package agentcfg
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -11,14 +12,16 @@ import (
 
 // Config is agent settings (not sing-box dataplane JSON).
 type Config struct {
-	NodeID       string    `yaml:"node_id" json:"node_id"`
-	Token        string    `yaml:"token" json:"token"`
-	Listen       string    `yaml:"listen" json:"listen"`
-	DataDir      string    `yaml:"data_dir" json:"data_dir"`
-	HealthPublic *bool     `yaml:"health_public" json:"health_public"`
-	Pull         PullConfig `yaml:"pull" json:"pull"`
-	TLS          TLSConfig `yaml:"tls" json:"tls"`
-	Log          LogConfig `yaml:"log" json:"log"`
+	NodeID             string     `yaml:"node_id" json:"node_id"`
+	Token              string     `yaml:"token" json:"token"`
+	Listen             string     `yaml:"listen" json:"listen"`
+	DataDir            string     `yaml:"data_dir" json:"data_dir"`
+	HealthPublic       *bool      `yaml:"health_public" json:"health_public"`
+	InsecurePublicBind bool       `yaml:"insecure_public_bind" json:"insecure_public_bind"`
+	ProbeMS            int        `yaml:"probe_ms" json:"probe_ms"`
+	Pull               PullConfig `yaml:"pull" json:"pull"`
+	TLS                TLSConfig  `yaml:"tls" json:"tls"`
+	Log                LogConfig  `yaml:"log" json:"log"`
 }
 
 type PullConfig struct {
@@ -104,6 +107,9 @@ func applyDefaults(c *Config) {
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
 	}
+	if c.ProbeMS == 0 {
+		c.ProbeMS = 300
+	}
 	if c.Pull.URL != "" && !c.Pull.Enabled {
 		// URL present without enabled: treat as enabled for convenience.
 		c.Pull.Enabled = true
@@ -117,6 +123,47 @@ func applyDefaults(c *Config) {
 	if c.Pull.JitterSec == 0 && c.Pull.Enabled {
 		c.Pull.JitterSec = 10
 	}
+}
+
+// ProbeDuration returns post-start settle time. Negative ProbeMS disables probe.
+func (c *Config) ProbeDuration() time.Duration {
+	if c.ProbeMS < 0 {
+		return 0
+	}
+	return time.Duration(c.ProbeMS) * time.Millisecond
+}
+
+// HasTLS reports whether TLS cert/key are configured.
+func (c *Config) HasTLS() bool {
+	return c.TLS.Cert != "" && c.TLS.Key != ""
+}
+
+// IsLoopbackListen reports whether listen host is loopback / unspecified empty host treated as all-interfaces.
+func (c *Config) IsLoopbackListen() bool {
+	host, _, err := net.SplitHostPort(c.Listen)
+	if err != nil {
+		// bare port or invalid — treat as non-loopback to force explicit policy
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return strings.EqualFold(host, "localhost")
+}
+
+// CheckBindPolicy enforces NFR-5: public bind requires TLS or insecure_public_bind.
+func (c *Config) CheckBindPolicy() error {
+	if c.IsLoopbackListen() {
+		return nil
+	}
+	if c.HasTLS() {
+		return nil
+	}
+	if c.InsecurePublicBind {
+		return nil
+	}
+	return fmt.Errorf("agent config: listen %q is not loopback; set tls.cert/key or insecure_public_bind=true", c.Listen)
 }
 
 // Validate checks required fields.
@@ -147,6 +194,9 @@ func (c *Config) Validate() error {
 	}
 	if (c.TLS.Cert == "") != (c.TLS.Key == "") {
 		return fmt.Errorf("agent config: tls.cert and tls.key must both be set")
+	}
+	if err := c.CheckBindPolicy(); err != nil {
+		return err
 	}
 	return nil
 }

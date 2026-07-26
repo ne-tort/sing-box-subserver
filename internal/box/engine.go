@@ -2,11 +2,16 @@ package box
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 
 	singbox "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/option"
 )
+
+// ErrUnsupported is returned when the config requires a feature this agent rejects.
+var ErrUnsupported = errors.New("unsupported feature")
 
 // Engine creates and validates sing-box instances with server registries.
 type Engine struct {
@@ -31,10 +36,13 @@ func NewEngine(parent context.Context) *Engine {
 	return &Engine{base: ctx}
 }
 
-// Validate unmarshals options without starting listeners.
+// Validate unmarshals options without starting listeners and enforces agent policy.
 func (e *Engine) Validate(ctx context.Context, raw []byte) error {
 	if len(raw) == 0 {
 		return fmt.Errorf("empty config")
+	}
+	if err := rejectClashAPI(raw); err != nil {
+		return err
 	}
 	if ctx == nil {
 		ctx = e.base
@@ -44,6 +52,25 @@ func (e *Engine) Validate(ctx context.Context, raw []byte) error {
 	var opt option.Options
 	if err := opt.UnmarshalJSONContext(ctx, raw); err != nil {
 		return fmt.Errorf("config invalid: %w", err)
+	}
+	return nil
+}
+
+func rejectClashAPI(raw []byte) error {
+	var probe struct {
+		Experimental *struct {
+			ClashAPI *struct {
+				ExternalController string `json:"external_controller"`
+			} `json:"clash_api"`
+		} `json:"experimental"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return nil // let UnmarshalJSONContext report parse errors
+	}
+	if probe.Experimental != nil && probe.Experimental.ClashAPI != nil {
+		if probe.Experimental.ClashAPI.ExternalController != "" {
+			return fmt.Errorf("%w: experimental.clash_api is not supported on sing-box-subserver (ADR 0006)", ErrUnsupported)
+		}
 	}
 	return nil
 }
@@ -86,12 +113,14 @@ func (e *Engine) Start(ctx context.Context, raw []byte) (Instance, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty config")
 	}
+	if err := rejectClashAPI(raw); err != nil {
+		return nil, err
+	}
 	if ctx == nil {
 		ctx = e.base
 	} else {
 		ctx = mergeBase(ctx, e.base)
 	}
-	// Fresh demux feeds per start so UDP/TCP inject state is not shared across boxes.
 	ctx = registerDemuxInjectFeedsFresh(ctx)
 
 	var opt option.Options

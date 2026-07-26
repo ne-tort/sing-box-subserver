@@ -15,6 +15,7 @@ Lightweight **edge dataplane agent**: one process embeds sing-box and exposes a 
 - Web UI, client database, billing, or client share-URI generation.
 - Being a second full panel.
 - In-process self-update (external deploy only; [ADR 0005](docs/adr/0005-external-updates-only.md)).
+- Clash Meta API / Yacd on the edge ([ADR 0006](docs/adr/0006-no-clash-api.md)).
 
 ## Documentation
 
@@ -32,7 +33,7 @@ Start here: **[docs/00-index.md](docs/00-index.md)**
 | [08-build-and-ci](docs/08-build-and-ci.md) | Tags, CI, lx pin |
 | [09-repo-layout](docs/09-repo-layout.md) | Go layout |
 | [10-repo-culture](docs/10-repo-culture.md) | Commits, cleanliness |
-| [adr/](docs/adr/) | ADRs (incl. external updates only) |
+| [adr/](docs/adr/) | ADRs |
 
 ## Quick start
 
@@ -46,11 +47,11 @@ cp deploy/agent.example.yaml agent.local.yaml   # edit token / listen / data_dir
 ./dist/subserver -version
 ```
 
-Management API (Bearer token from agent YAML): `GET /v1/health`, `GET /v1/status`, `PUT /v1/config`, `POST /v1/validate`, …
+Management API (Bearer token from agent YAML): `GET /v1/health`, `GET /v1/status`, `PUT /v1/config`, `POST /v1/validate`, `POST /v1/box/stop|start`, …
 
 ## Status
 
-**Core apply + REST v1** implemented: supervisor last-good pipeline, box adapter, auth, pull scheduler. Heartbeat and optional `POST /v1/box/*` still deferred.
+Core apply + REST v1, crash-watch retry, bind/TLS guards, probe, metrics polish, CI version ldflags. Heartbeat still deferred. Clash API explicitly unsupported.
 
 ## License
 

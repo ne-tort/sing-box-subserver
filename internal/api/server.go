@@ -33,7 +33,23 @@ func New(cfg *agentcfg.Config, sup *supervisor.Supervisor, o *obs.Observability)
 	return s
 }
 
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler {
+	return recoverMiddleware(s.Obs, s.mux)
+}
+
+func recoverMiddleware(o *obs.Observability, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				if o != nil && o.Logger != nil {
+					o.Logger.Error("http panic recovered", "err", rec, "path", r.URL.Path)
+				}
+				Fail(w, http.StatusInternalServerError, "panic", "internal error", nil)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/health", s.requireAuthOptional(s.handleHealth))
@@ -45,6 +61,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/validate", s.requireAuth(s.handleValidate))
 	s.mux.HandleFunc("GET /v1/logs", s.requireAuth(s.handleLogs))
 	s.mux.HandleFunc("GET /v1/metrics", s.requireAuth(s.handleMetrics))
+	s.mux.HandleFunc("POST /v1/box/stop", s.requireAuth(s.handleBoxStop))
+	s.mux.HandleFunc("POST /v1/box/start", s.requireAuth(s.handleBoxStart))
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request)
@@ -101,6 +119,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	data := map[string]any{
 		"state":              st.State,
 		"node_id":            s.Cfg.NodeID,
+		"listen":             s.Cfg.Listen,
 		"agent_version":      version.AgentVersion,
 		"agent_commit":       version.AgentCommit,
 		"singbox_version":    version.SingBoxVersion(),
@@ -113,6 +132,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"last_apply":         st.LastApply,
 		"last_error":         st.LastError,
 		"pull":               st.Pull,
+		"box_up":             st.BoxUp,
 	}
 	OK(w, http.StatusOK, data)
 }
@@ -166,10 +186,10 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	OK(w, http.StatusOK, map[string]any{
-		"revision":        res.Revision,
-		"content_sha256":  res.SHA256,
-		"noop":            res.Noop,
-		"state":           res.State,
+		"revision":       res.Revision,
+		"content_sha256": res.SHA256,
+		"noop":           res.Noop,
+		"state":          res.State,
 	})
 }
 
@@ -201,23 +221,52 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	st := s.Supervisor.Status()
+	var uptime float64
+	if st.BoxStartedAt != nil {
+		uptime = time.Since(*st.BoxStartedAt).Seconds()
+	}
 	format := r.URL.Query().Get("format")
 	if format == "" || format == "prometheus" {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, s.Obs.Metrics.PrometheusText())
+		_, _ = io.WriteString(w, s.Obs.Metrics.PrometheusText(st.BoxUp, uptime, st.Revision))
 		return
 	}
-	st := s.Supervisor.Status()
 	snap := s.Obs.Metrics.Snapshot()
+	ps := obs.ReadProcessStats()
 	OK(w, http.StatusOK, map[string]any{
-		"process":           map[string]any{},
-		"box":               map[string]any{"state": st.State},
+		"process": map[string]any{
+			"cpu_percent": ps.CPUPercent,
+			"rss_bytes":   ps.RSSBytes,
+			"goroutines":  ps.Goroutines,
+		},
+		"box": map[string]any{
+			"uptime_sec": uptime,
+			"state":      st.State,
+		},
 		"apply_total":       snap.ApplyTotal,
 		"apply_fail_total":  snap.ApplyFailTotal,
 		"rollback_total":    snap.RollbackTotal,
 		"box_restart_total": snap.BoxRestartTotal,
+		"config_revision":   st.Revision,
 	})
+}
+
+func (s *Server) handleBoxStop(w http.ResponseWriter, _ *http.Request) {
+	if err := s.Supervisor.StopBox(); err != nil {
+		mapSupervisorErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]string{"status": "stopped"})
+}
+
+func (s *Server) handleBoxStart(w http.ResponseWriter, r *http.Request) {
+	if err := s.Supervisor.StartBox(r.Context()); err != nil {
+		mapSupervisorErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
 func readConfigBody(r *http.Request) ([]byte, configstore.Source, error) {

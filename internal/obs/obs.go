@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,9 +47,27 @@ func (m *Metrics) Snapshot() Snapshot {
 	}
 }
 
-// PrometheusText renders a minimal exposition format.
-func (m *Metrics) PrometheusText() string {
+// ProcessStats is a cheap runtime snapshot (no OS RSS sampler).
+type ProcessStats struct {
+	Goroutines int    `json:"goroutines"`
+	RSSBytes   uint64 `json:"rss_bytes"`
+	CPUPercent float64 `json:"cpu_percent"`
+}
+
+func ReadProcessStats() ProcessStats {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	return ProcessStats{
+		Goroutines: runtime.NumGoroutine(),
+		RSSBytes:   ms.Sys,
+		CPUPercent: 0,
+	}
+}
+
+// PrometheusText renders counters plus optional live gauges.
+func (m *Metrics) PrometheusText(boxUp bool, boxUptimeSec float64, revision uint64) string {
 	s := m.Snapshot()
+	ps := ReadProcessStats()
 	var b strings.Builder
 	b.WriteString("# HELP subserver_apply_total Total config applies by result\n")
 	b.WriteString("# TYPE subserver_apply_total counter\n")
@@ -67,6 +86,33 @@ func (m *Metrics) PrometheusText() string {
 	b.WriteString("# TYPE subserver_box_restart_total counter\n")
 	b.WriteString("subserver_box_restart_total ")
 	b.WriteString(strconv.FormatUint(s.BoxRestartTotal, 10))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_box_up Dataplane up (1) or down (0)\n")
+	b.WriteString("# TYPE subserver_box_up gauge\n")
+	if boxUp {
+		b.WriteString("subserver_box_up 1\n")
+	} else {
+		b.WriteString("subserver_box_up 0\n")
+	}
+	b.WriteString("# HELP subserver_box_uptime_seconds Box uptime seconds\n")
+	b.WriteString("# TYPE subserver_box_uptime_seconds gauge\n")
+	b.WriteString("subserver_box_uptime_seconds ")
+	b.WriteString(strconv.FormatFloat(boxUptimeSec, 'f', 1, 64))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_config_revision Current config revision\n")
+	b.WriteString("# TYPE subserver_config_revision gauge\n")
+	b.WriteString("subserver_config_revision ")
+	b.WriteString(strconv.FormatUint(revision, 10))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_goroutines Goroutine count\n")
+	b.WriteString("# TYPE subserver_goroutines gauge\n")
+	b.WriteString("subserver_goroutines ")
+	b.WriteString(strconv.Itoa(ps.Goroutines))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_process_rss_bytes Approx process memory (MemStats.Sys)\n")
+	b.WriteString("# TYPE subserver_process_rss_bytes gauge\n")
+	b.WriteString("subserver_process_rss_bytes ")
+	b.WriteString(strconv.FormatUint(ps.RSSBytes, 10))
 	b.WriteByte('\n')
 	return b.String()
 }

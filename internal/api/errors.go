@@ -11,6 +11,8 @@ func mapSupervisorErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, supervisor.ErrConflict), errors.Is(err, supervisor.ErrPrecondition):
 		Fail(w, http.StatusConflict, "conflict", err.Error(), nil)
+	case errors.Is(err, supervisor.ErrUnsupported):
+		Fail(w, http.StatusUnprocessableEntity, "unsupported", err.Error(), nil)
 	case errors.Is(err, supervisor.ErrInvalid):
 		Fail(w, http.StatusBadRequest, "config_invalid", err.Error(), nil)
 	case errors.Is(err, supervisor.ErrNotFound):

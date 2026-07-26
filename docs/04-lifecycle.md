@@ -60,12 +60,18 @@ Idempotent same-hash apply may skip steps 4–7.
 
 ## Crash detection
 
-- Supervisor holds `done` channel / context cancel from box runtime if available; otherwise poll `Alive()` / wait group.
-- On unexpected death while state was `Running`:
-  - transition `Degraded`;
-  - `box_restarts` metric;
-  - restart from **last-good** with exponential backoff (e.g. 1s → 2s → … cap 60s) + jitter;
-  - after N failures, stay `Degraded` and require manual apply or longer backoff (configurable).
+sing-box-lx does not expose a public `Box.Done()` for unexpected internal death. The agent:
+
+- Closes a per-instance `Done` channel when **our** `Instance.Close()` runs (planned stop / apply quiesce).
+- Treats `Done` while state was `Running` (and not during apply) as unexpected → `Degraded`, `box_restart_total++`, then **retry loop** restart from last-good with exponential backoff (1s → … cap 60s) + jitter.
+- Serializes restarts with the apply mutex so they cannot race `PUT /v1/config`.
+- After repeated restore failures, stays `Degraded` with `last_error` set; management API remains up. A later successful apply or start clears the condition.
+
+True silent dataplane hang without `Close` is out of scope for v1 (no Alive poll yet).
+
+## Probe (post-start)
+
+After staged `Start` succeeds, wait a short settle (`probe_ms`, default 300) before promote. If the instance `Done` fires during settle → treat as start failure and restore last-good.
 
 ## Rollback semantics
 

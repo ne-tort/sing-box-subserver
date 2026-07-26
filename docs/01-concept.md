@@ -42,7 +42,7 @@ flowchart LR
 1. **Lightweight overlay** — API and supervisor stay thin; cost is dominated by sing-box and traffic, not the agent framework.
 2. **Fail closed on apply, fail open on management** — bad config does not take down HTTP or wipe last-good; dead box does not take down HTTP.
 3. **One box per process** — no multi-tenant boxes in v1; horizontal scale = more nodes.
-4. **Server profile** — agent is for **server** configs (inbounds + WireGuard endpoints), not client TUN desktops.
+4. **Server profile** — agent is for **server** configs (inbounds + WireGuard endpoints), not client TUN desktops or Clash dashboards ([ADR 0006](adr/0006-no-clash-api.md)).
 5. **Independence** — no import of panel packages; contracts are HTTP + JSON only.
 
 ## Boundary with s-ui

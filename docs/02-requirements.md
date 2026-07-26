@@ -68,6 +68,7 @@
 - Multiple sing-box instances in one process.
 - gRPC as primary control protocol ([ADR 0002](adr/0002-rest-not-grpc.md)).
 - Embedding control-plane business logic.
+- Clash Meta API / Yacd on the edge ([ADR 0006](adr/0006-no-clash-api.md)); `with_clash_api` is not in the server tag allowlist.
 
 ## SLOs (initial, soft)
 
