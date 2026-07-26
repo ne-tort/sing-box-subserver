@@ -1,0 +1,201 @@
+package obs
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Metrics holds process counters for apply / rollback / restarts.
+type Metrics struct {
+	ApplyOK       atomic.Uint64
+	ApplyFail     atomic.Uint64
+	RollbackTotal atomic.Uint64
+	BoxRestarts   atomic.Uint64
+}
+
+func (m *Metrics) IncApply(ok bool) {
+	if ok {
+		m.ApplyOK.Add(1)
+	} else {
+		m.ApplyFail.Add(1)
+	}
+}
+
+// Snapshot is a JSON-friendly metrics view.
+type Snapshot struct {
+	ApplyTotal      uint64 `json:"apply_total"`
+	ApplyFailTotal  uint64 `json:"apply_fail_total"`
+	RollbackTotal   uint64 `json:"rollback_total"`
+	BoxRestartTotal uint64 `json:"box_restart_total"`
+}
+
+func (m *Metrics) Snapshot() Snapshot {
+	ok := m.ApplyOK.Load()
+	fail := m.ApplyFail.Load()
+	return Snapshot{
+		ApplyTotal:      ok + fail,
+		ApplyFailTotal:  fail,
+		RollbackTotal:   m.RollbackTotal.Load(),
+		BoxRestartTotal: m.BoxRestarts.Load(),
+	}
+}
+
+// PrometheusText renders a minimal exposition format.
+func (m *Metrics) PrometheusText() string {
+	s := m.Snapshot()
+	var b strings.Builder
+	b.WriteString("# HELP subserver_apply_total Total config applies by result\n")
+	b.WriteString("# TYPE subserver_apply_total counter\n")
+	b.WriteString("subserver_apply_total{result=\"ok\"} ")
+	b.WriteString(strconv.FormatUint(s.ApplyTotal-s.ApplyFailTotal, 10))
+	b.WriteByte('\n')
+	b.WriteString("subserver_apply_total{result=\"fail\"} ")
+	b.WriteString(strconv.FormatUint(s.ApplyFailTotal, 10))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_rollback_total Last-good restores after failed apply\n")
+	b.WriteString("# TYPE subserver_rollback_total counter\n")
+	b.WriteString("subserver_rollback_total ")
+	b.WriteString(strconv.FormatUint(s.RollbackTotal, 10))
+	b.WriteByte('\n')
+	b.WriteString("# HELP subserver_box_restart_total Unexpected box restarts\n")
+	b.WriteString("# TYPE subserver_box_restart_total counter\n")
+	b.WriteString("subserver_box_restart_total ")
+	b.WriteString(strconv.FormatUint(s.BoxRestartTotal, 10))
+	b.WriteByte('\n')
+	return b.String()
+}
+
+// Entry is one ring-buffer log line.
+type Entry struct {
+	Seq    uint64         `json:"seq"`
+	TS     time.Time      `json:"ts"`
+	Level  string         `json:"level"`
+	Msg    string         `json:"msg"`
+	Fields map[string]any `json:"fields,omitempty"`
+}
+
+// Ring is a fixed-size concurrent log buffer.
+type Ring struct {
+	mu      sync.RWMutex
+	entries []Entry
+	cap     int
+	nextSeq uint64
+}
+
+func NewRing(capacity int) *Ring {
+	if capacity <= 0 {
+		capacity = 2000
+	}
+	return &Ring{cap: capacity, entries: make([]Entry, 0, capacity)}
+}
+
+func (r *Ring) Append(level, msg string, fields map[string]any) Entry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.nextSeq++
+	e := Entry{
+		Seq:    r.nextSeq,
+		TS:     time.Now().UTC(),
+		Level:  level,
+		Msg:    msg,
+		Fields: fields,
+	}
+	if len(r.entries) >= r.cap {
+		r.entries = r.entries[1:]
+	}
+	r.entries = append(r.entries, e)
+	return e
+}
+
+// Query returns entries with seq > sinceSeq, filtered by level, limited.
+func (r *Ring) Query(sinceSeq uint64, level string, limit int) (entries []Entry, next uint64) {
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	level = strings.ToLower(strings.TrimSpace(level))
+	out := make([]Entry, 0, limit)
+	for _, e := range r.entries {
+		if e.Seq <= sinceSeq {
+			continue
+		}
+		if level != "" && !strings.EqualFold(e.Level, level) {
+			continue
+		}
+		out = append(out, e)
+		if len(out) >= limit {
+			break
+		}
+	}
+	next = sinceSeq
+	if len(out) > 0 {
+		next = out[len(out)-1].Seq
+	} else if r.nextSeq > 0 {
+		next = r.nextSeq
+	}
+	return out, next
+}
+
+type ringHandler struct {
+	inner slog.Handler
+	ring  *Ring
+}
+
+func (h *ringHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.inner.Enabled(ctx, level)
+}
+
+func (h *ringHandler) Handle(ctx context.Context, rec slog.Record) error {
+	fields := make(map[string]any)
+	rec.Attrs(func(a slog.Attr) bool {
+		fields[a.Key] = a.Value.Any()
+		return true
+	})
+	h.ring.Append(strings.ToLower(rec.Level.String()), rec.Message, fields)
+	return h.inner.Handle(ctx, rec)
+}
+
+func (h *ringHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &ringHandler{inner: h.inner.WithAttrs(attrs), ring: h.ring}
+}
+
+func (h *ringHandler) WithGroup(name string) slog.Handler {
+	return &ringHandler{inner: h.inner.WithGroup(name), ring: h.ring}
+}
+
+// Observability bundles logger, ring, and metrics.
+type Observability struct {
+	Logger  *slog.Logger
+	Ring    *Ring
+	Metrics *Metrics
+}
+
+// Setup builds slog + ring + metrics. level is debug|info|warn|error.
+func Setup(level string) *Observability {
+	ring := NewRing(2000)
+	metrics := &Metrics{}
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "warn":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
+	inner := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
+	logger := slog.New(&ringHandler{inner: inner, ring: ring})
+	return &Observability{Logger: logger, Ring: ring, Metrics: metrics}
+}

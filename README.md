@@ -14,6 +14,7 @@ Lightweight **edge dataplane agent**: one process embeds sing-box and exposes a 
 
 - Web UI, client database, billing, or client share-URI generation.
 - Being a second full panel.
+- In-process self-update (external deploy only; [ADR 0005](docs/adr/0005-external-updates-only.md)).
 
 ## Documentation
 
@@ -33,19 +34,23 @@ Start here: **[docs/00-index.md](docs/00-index.md)**
 | [10-repo-culture](docs/10-repo-culture.md) | Commits, cleanliness |
 | [adr/](docs/adr/) | ADRs (incl. external updates only) |
 
-## Quick start (skeleton)
+## Quick start
 
 ```bash
 git submodule update --init third_party/sing-box-lx
 git -C third_party/sing-box-lx submodule update --init submodules/wireguard-go
 TAGS=$(tr -d '\r\n' < build/tags.server)
-go build -tags "$TAGS" -o dist/subserver ./cmd/subserver
+go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver ./cmd/subserver
+cp deploy/agent.example.yaml agent.local.yaml   # edit token / listen / data_dir
+./dist/subserver -config agent.local.yaml
 ./dist/subserver -version
 ```
 
+Management API (Bearer token from agent YAML): `GET /v1/health`, `GET /v1/status`, `PUT /v1/config`, `POST /v1/validate`, …
+
 ## Status
 
-Skeleton binary (`-version`) and architecture docs. Supervisor / REST apply pipeline next.
+**Core apply + REST v1** implemented: supervisor last-good pipeline, box adapter, auth, pull scheduler. Heartbeat and optional `POST /v1/box/*` still deferred.
 
 ## License
 

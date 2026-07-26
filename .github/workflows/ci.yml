@@ -33,12 +33,11 @@ jobs:
         run: |
           TAGS=$(tr -d '\r\n' < build/tags.server)
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
-          # allowlist guard: workflow must not invent tags outside the file
           test -n "$TAGS"
 
       - name: Test
         if: matrix.goarch == 'amd64'
-        run: go test -tags "${{ steps.tags.outputs.tags }}" ./...
+        run: go test -ldflags="-checklinkname=0" -tags "${{ steps.tags.outputs.tags }}" ./...
 
       - name: Vet
         if: matrix.goarch == 'amd64'

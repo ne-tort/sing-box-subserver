@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ne-tort/sing-box-subserver/internal/app"
 	"github.com/ne-tort/sing-box-subserver/internal/version"
 )
 
 func main() {
 	showVersion := flag.Bool("version", false, "print agent and sing-box versions and exit")
+	configPath := flag.String("config", "", "path to agent YAML config")
+	exitOnBootFailure := flag.Bool("exit-on-boot-failure", false, "exit if last-good boot start fails")
 	flag.Parse()
 
 	if *showVersion {
@@ -20,6 +23,16 @@ func main() {
 		os.Exit(0)
 	}
 
-	fmt.Fprintln(os.Stderr, "sing-box-subserver skeleton: pass -version; supervisor not implemented yet")
-	os.Exit(0)
+	if *configPath == "" {
+		fmt.Fprintln(os.Stderr, "usage: subserver -config /path/to/agent.yaml")
+		os.Exit(2)
+	}
+
+	if err := app.Run(app.Options{
+		ConfigPath:        *configPath,
+		ExitOnBootFailure: *exitOnBootFailure,
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

@@ -22,9 +22,9 @@ Go toolchain: see `.go-version` / `go.mod`.
 
 ```bash
 TAGS=$(tr -d '\r\n' < build/tags.server)
-go test -tags "$TAGS" ./...
+go test -ldflags="-checklinkname=0" -tags "$TAGS" ./...
 go vet -tags "$TAGS" ./...
-go build -tags "$TAGS" -o dist/subserver ./cmd/subserver
+go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver ./cmd/subserver
 ./dist/subserver -version
 ```
 
@@ -32,7 +32,8 @@ On Windows PowerShell:
 
 ```powershell
 $TAGS = (Get-Content build/tags.server -Raw).Trim()
-go build -tags $TAGS -o dist/subserver.exe ./cmd/subserver
+go test -ldflags="-checklinkname=0" -tags $TAGS ./...
+go build -ldflags="-checklinkname=0" -tags $TAGS -o dist/subserver.exe ./cmd/subserver
 ```
 
 ## Commits

@@ -45,7 +45,8 @@ Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds
 ## Local build
 
 ```bash
-git submodule update --init --recursive
+git submodule update --init third_party/sing-box-lx
+git -C third_party/sing-box-lx submodule update --init submodules/wireguard-go
 TAGS=$(tr -d '\r\n' < build/tags.server)
 go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver ./cmd/subserver
 ./dist/subserver -version
