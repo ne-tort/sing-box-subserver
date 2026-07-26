@@ -1,0 +1,9 @@
+# Ignore local/OS junk; keep docs and future Go artifacts clean
+dist/
+*.exe
+*.test
+.idea/
+.vscode/
+*.log
+agent.local.yaml
+/data/
