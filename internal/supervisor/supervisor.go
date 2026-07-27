@@ -445,7 +445,8 @@ func (s *Supervisor) watch(ctx context.Context, inst box.Instance) {
 	s.mu.Unlock()
 
 	s.log.Warn("box stopped unexpectedly; restarting last-good")
-	s.restartLoop(ctx)
+	// Detach from watch cancel context so installInstance/watchCancel cannot abort the retry loop.
+	s.restartLoop(context.Background())
 }
 
 func (s *Supervisor) restartLoop(ctx context.Context) {

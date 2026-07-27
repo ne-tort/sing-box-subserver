@@ -23,9 +23,10 @@ const (
 type Source string
 
 const (
-	SourcePush Source = "push"
-	SourcePull Source = "pull"
-	SourceBoot Source = "boot"
+	SourcePush      Source = "push"
+	SourcePull      Source = "pull"
+	SourceSubscribe Source = "subscribe"
+	SourceBoot      Source = "boot"
 )
 
 // Meta describes a stored config blob.

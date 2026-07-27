@@ -15,6 +15,8 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/auth"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
+	"github.com/ne-tort/sing-box-subserver/internal/heartbeat"
+	"github.com/ne-tort/sing-box-subserver/internal/subscribe"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
 	"github.com/ne-tort/sing-box-subserver/internal/version"
 )
@@ -24,6 +26,9 @@ type Server struct {
 	Cfg        *agentcfg.Config
 	Supervisor *supervisor.Supervisor
 	Obs        *obs.Observability
+	Subscribe  *subscribe.Manager
+	Heartbeat  *heartbeat.Pusher
+	Auth       *auth.Store
 	mux        *http.ServeMux
 }
 
@@ -63,13 +68,37 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/metrics", s.requireAuth(s.handleMetrics))
 	s.mux.HandleFunc("POST /v1/box/stop", s.requireAuth(s.handleBoxStop))
 	s.mux.HandleFunc("POST /v1/box/start", s.requireAuth(s.handleBoxStart))
+	s.mux.HandleFunc("GET /v1/subscribe", s.requireAuth(s.handleSubscribeGet))
+	s.mux.HandleFunc("POST /v1/subscribe", s.requireAuth(s.handleSubscribePost))
+	s.mux.HandleFunc("DELETE /v1/subscribe", s.requireAuth(s.handleSubscribeDelete))
+	s.mux.HandleFunc("POST /v1/subscribe/refresh", s.requireAuth(s.handleSubscribeRefresh))
+	// Alias: pull == subscribe (same runtime manager).
+	s.mux.HandleFunc("GET /v1/pull", s.requireAuth(s.handleSubscribeGet))
+	s.mux.HandleFunc("PUT /v1/pull", s.requireAuth(s.handleSubscribePost))
+	s.mux.HandleFunc("DELETE /v1/pull", s.requireAuth(s.handleSubscribeDelete))
+	s.mux.HandleFunc("POST /v1/pull/refresh", s.requireAuth(s.handleSubscribeRefresh))
+	s.mux.HandleFunc("GET /v1/heartbeat", s.requireAuth(s.handleHeartbeatGet))
+	s.mux.HandleFunc("PUT /v1/heartbeat", s.requireAuth(s.handleHeartbeatPut))
+	s.mux.HandleFunc("DELETE /v1/heartbeat", s.requireAuth(s.handleHeartbeatDelete))
+	s.mux.HandleFunc("GET /v1/auth/tokens", s.requireAuth(s.handleAuthList))
+	s.mux.HandleFunc("POST /v1/auth/tokens", s.requireAuth(s.handleAuthCreate))
+	s.mux.HandleFunc("DELETE /v1/auth/tokens/{id}", s.requireAuth(s.handleAuthDelete))
+	s.mux.HandleFunc("POST /v1/auth/rotate", s.requireAuth(s.handleAuthRotate))
+	s.mux.HandleFunc("POST /v1/auth/bootstrap/disable", s.requireAuth(s.handleAuthBootstrapDisable))
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request)
 
+func (s *Server) authorize(r *http.Request) bool {
+	if s.Auth != nil {
+		return s.Auth.Authorize(r)
+	}
+	return auth.Bearer(r, s.Cfg.Token)
+}
+
 func (s *Server) requireAuth(next handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !auth.Bearer(r, s.Cfg.Token) {
+		if !s.authorize(r) {
 			Fail(w, http.StatusUnauthorized, "unauthorized", "invalid or missing bearer token", nil)
 			return
 		}
@@ -79,7 +108,7 @@ func (s *Server) requireAuth(next handlerFunc) http.HandlerFunc {
 
 func (s *Server) requireAuthOptional(next handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.Cfg.HealthPublicEnabled() && !auth.Bearer(r, s.Cfg.Token) {
+		if !s.Cfg.HealthPublicEnabled() && !s.authorize(r) {
 			Fail(w, http.StatusUnauthorized, "unauthorized", "invalid or missing bearer token", nil)
 			return
 		}
@@ -116,6 +145,7 @@ func (s *Server) handleReady(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	st := s.Supervisor.Status()
+	started := s.Supervisor.ProcessStartedAt()
 	data := map[string]any{
 		"state":              st.State,
 		"node_id":            s.Cfg.NodeID,
@@ -128,11 +158,29 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"revision":           st.Revision,
 		"content_sha256":     st.ContentSHA256,
 		"box_started_at":     st.BoxStartedAt,
-		"process_started_at": s.Supervisor.ProcessStartedAt().UTC().Format(time.RFC3339Nano),
+		"process_started_at": started.UTC().Format(time.RFC3339Nano),
+		"uptime_sec":         int64(time.Since(started).Seconds()),
 		"last_apply":         st.LastApply,
 		"last_error":         st.LastError,
 		"pull":               st.Pull,
 		"box_up":             st.BoxUp,
+	}
+	if s.Subscribe != nil {
+		sub := s.Subscribe.Status()
+		data["subscribe"] = sub
+		data["config_mode"] = sub.Mode
+		if st.LastApply != nil && st.LastApply.Source == string(configstore.SourcePush) && !sub.Enabled {
+			data["config_mode"] = "direct"
+		}
+	}
+	if s.Heartbeat != nil {
+		data["heartbeat"] = s.Heartbeat.Status()
+	}
+	if s.Auth != nil {
+		data["auth"] = map[string]any{
+			"bootstrap_enabled": s.Auth.BootstrapEnabled(),
+			"active_count":      s.Auth.CountActive(),
+		}
 	}
 	OK(w, http.StatusOK, data)
 }
@@ -185,11 +233,16 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		mapSupervisorErr(w, err)
 		return
 	}
+	// Direct push cancels subscription so scheduled pull cannot overwrite this config.
+	if s.Subscribe != nil {
+		s.Subscribe.CancelOnDirectConfig()
+	}
 	OK(w, http.StatusOK, map[string]any{
 		"revision":       res.Revision,
 		"content_sha256": res.SHA256,
 		"noop":           res.Noop,
 		"state":          res.State,
+		"config_mode":    "direct",
 	})
 }
 
@@ -267,6 +320,236 @@ func (s *Server) handleBoxStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	OK(w, http.StatusOK, map[string]string{"status": "started"})
+}
+
+func (s *Server) handleAuthList(w http.ResponseWriter, _ *http.Request) {
+	if s.Auth == nil {
+		Fail(w, http.StatusNotFound, "not_found", "auth store unavailable", nil)
+		return
+	}
+	OK(w, http.StatusOK, map[string]any{
+		"tokens":            s.Auth.List(),
+		"bootstrap_enabled": s.Auth.BootstrapEnabled(),
+		"active_count":      s.Auth.CountActive(),
+	})
+}
+
+func (s *Server) handleAuthCreate(w http.ResponseWriter, r *http.Request) {
+	if s.Auth == nil {
+		Fail(w, http.StatusNotFound, "not_found", "auth store unavailable", nil)
+		return
+	}
+	var body struct {
+		Name  string `json:"name"`
+		Token string `json:"token"` // optional: panel-chosen secret
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+		return
+	}
+	view, secret, err := s.Auth.Create(body.Name, body.Token)
+	if err != nil {
+		mapAuthErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]any{
+		"id":         view.ID,
+		"name":       view.Name,
+		"created_at": view.CreatedAt,
+		"token":      secret, // shown once
+	})
+}
+
+func (s *Server) handleAuthDelete(w http.ResponseWriter, r *http.Request) {
+	if s.Auth == nil {
+		Fail(w, http.StatusNotFound, "not_found", "auth store unavailable", nil)
+		return
+	}
+	id := r.PathValue("id")
+	if err := s.Auth.Delete(id); err != nil {
+		mapAuthErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]any{"deleted": id, "tokens": s.Auth.List()})
+}
+
+func (s *Server) handleAuthRotate(w http.ResponseWriter, r *http.Request) {
+	if s.Auth == nil {
+		Fail(w, http.StatusNotFound, "not_found", "auth store unavailable", nil)
+		return
+	}
+	var body struct {
+		Name         string `json:"name"`
+		RevokeOthers bool   `json:"revoke_others"`
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body)
+	if body.Name == "" {
+		body.Name = "panel"
+	}
+	view, secret, err := s.Auth.Rotate(body.Name, body.RevokeOthers)
+	if err != nil {
+		mapAuthErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]any{
+		"id":            view.ID,
+		"name":          view.Name,
+		"created_at":    view.CreatedAt,
+		"token":         secret,
+		"revoke_others": body.RevokeOthers,
+		"tokens":        s.Auth.List(),
+	})
+}
+
+func (s *Server) handleAuthBootstrapDisable(w http.ResponseWriter, _ *http.Request) {
+	if s.Auth == nil {
+		Fail(w, http.StatusNotFound, "not_found", "auth store unavailable", nil)
+		return
+	}
+	if err := s.Auth.DisableBootstrap(); err != nil {
+		mapAuthErr(w, err)
+		return
+	}
+	OK(w, http.StatusOK, map[string]any{
+		"bootstrap_enabled": false,
+		"tokens":            s.Auth.List(),
+	})
+}
+
+func mapAuthErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, auth.ErrNotFound):
+		Fail(w, http.StatusNotFound, "not_found", err.Error(), nil)
+	case errors.Is(err, auth.ErrLastCredential), errors.Is(err, auth.ErrNeedManaged):
+		Fail(w, http.StatusConflict, "conflict", err.Error(), nil)
+	case errors.Is(err, auth.ErrInvalidToken), errors.Is(err, auth.ErrBootstrapOff):
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+	default:
+		Fail(w, http.StatusInternalServerError, "internal", err.Error(), nil)
+	}
+}
+
+func (s *Server) handleSubscribeGet(w http.ResponseWriter, _ *http.Request) {
+	if s.Subscribe == nil {
+		Fail(w, http.StatusNotFound, "not_found", "subscribe not available", nil)
+		return
+	}
+	OK(w, http.StatusOK, s.Subscribe.Status())
+}
+
+func (s *Server) handleSubscribePost(w http.ResponseWriter, r *http.Request) {
+	if s.Subscribe == nil {
+		Fail(w, http.StatusNotFound, "not_found", "subscribe not available", nil)
+		return
+	}
+	var body subscribe.Spec
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+		return
+	}
+	if err := s.Subscribe.Subscribe(body); err != nil {
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+		return
+	}
+	// Immediate apply (same as refresh) so mode flips and config is live.
+	if err := s.Subscribe.Refresh(r.Context()); err != nil {
+		Fail(w, http.StatusBadGateway, "subscribe_fetch_failed", err.Error(), s.Subscribe.Status())
+		return
+	}
+	st := s.Supervisor.Status()
+	OK(w, http.StatusOK, map[string]any{
+		"subscribe":      s.Subscribe.Status(),
+		"revision":       st.Revision,
+		"content_sha256": st.ContentSHA256,
+		"state":          st.State,
+		"config_mode":    "subscribed",
+	})
+}
+
+func (s *Server) handleSubscribeDelete(w http.ResponseWriter, _ *http.Request) {
+	if s.Subscribe == nil {
+		Fail(w, http.StatusNotFound, "not_found", "subscribe not available", nil)
+		return
+	}
+	if err := s.Subscribe.Unsubscribe(); err != nil {
+		Fail(w, http.StatusInternalServerError, "internal", err.Error(), nil)
+		return
+	}
+	OK(w, http.StatusOK, s.Subscribe.Status())
+}
+
+func (s *Server) handleSubscribeRefresh(w http.ResponseWriter, r *http.Request) {
+	if s.Subscribe == nil {
+		Fail(w, http.StatusNotFound, "not_found", "subscribe not available", nil)
+		return
+	}
+	if err := s.Subscribe.Refresh(r.Context()); err != nil {
+		if errors.Is(err, subscribe.ErrNotSubscribed) {
+			Fail(w, http.StatusConflict, "not_subscribed", "subscription is not active", nil)
+			return
+		}
+		Fail(w, http.StatusBadGateway, "subscribe_fetch_failed", err.Error(), s.Subscribe.Status())
+		return
+	}
+	st := s.Supervisor.Status()
+	OK(w, http.StatusOK, map[string]any{
+		"subscribe":      s.Subscribe.Status(),
+		"revision":       st.Revision,
+		"content_sha256": st.ContentSHA256,
+		"state":          st.State,
+	})
+}
+
+func (s *Server) handleHeartbeatGet(w http.ResponseWriter, _ *http.Request) {
+	if s.Heartbeat == nil {
+		Fail(w, http.StatusNotFound, "not_found", "heartbeat not available", nil)
+		return
+	}
+	OK(w, http.StatusOK, s.Heartbeat.Status())
+}
+
+func (s *Server) handleHeartbeatPut(w http.ResponseWriter, r *http.Request) {
+	if s.Heartbeat == nil {
+		Fail(w, http.StatusNotFound, "not_found", "heartbeat not available", nil)
+		return
+	}
+	var body struct {
+		URL         string            `json:"url"`
+		IntervalSec int               `json:"interval_sec"`
+		TimeoutSec  int               `json:"timeout_sec"`
+		Headers     map[string]string `json:"headers"`
+		Enabled     *bool             `json:"enabled"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+		return
+	}
+	en := true
+	if body.Enabled != nil {
+		en = *body.Enabled
+	}
+	if err := s.Heartbeat.Configure(heartbeat.Spec{
+		URL:         body.URL,
+		IntervalSec: body.IntervalSec,
+		TimeoutSec:  body.TimeoutSec,
+		Headers:     body.Headers,
+	}, en); err != nil {
+		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
+		return
+	}
+	OK(w, http.StatusOK, s.Heartbeat.Status())
+}
+
+func (s *Server) handleHeartbeatDelete(w http.ResponseWriter, _ *http.Request) {
+	if s.Heartbeat == nil {
+		Fail(w, http.StatusNotFound, "not_found", "heartbeat not available", nil)
+		return
+	}
+	if err := s.Heartbeat.Disable(); err != nil {
+		Fail(w, http.StatusInternalServerError, "internal", err.Error(), nil)
+		return
+	}
+	OK(w, http.StatusOK, s.Heartbeat.Status())
 }
 
 func readConfigBody(r *http.Request) ([]byte, configstore.Source, error) {

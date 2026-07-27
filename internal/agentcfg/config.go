@@ -12,16 +12,17 @@ import (
 
 // Config is agent settings (not sing-box dataplane JSON).
 type Config struct {
-	NodeID             string     `yaml:"node_id" json:"node_id"`
-	Token              string     `yaml:"token" json:"token"`
-	Listen             string     `yaml:"listen" json:"listen"`
-	DataDir            string     `yaml:"data_dir" json:"data_dir"`
-	HealthPublic       *bool      `yaml:"health_public" json:"health_public"`
-	InsecurePublicBind bool       `yaml:"insecure_public_bind" json:"insecure_public_bind"`
-	ProbeMS            int        `yaml:"probe_ms" json:"probe_ms"`
-	Pull               PullConfig `yaml:"pull" json:"pull"`
-	TLS                TLSConfig  `yaml:"tls" json:"tls"`
-	Log                LogConfig  `yaml:"log" json:"log"`
+	NodeID             string          `yaml:"node_id" json:"node_id"`
+	Token              string          `yaml:"token" json:"token"`
+	Listen             string          `yaml:"listen" json:"listen"`
+	DataDir            string          `yaml:"data_dir" json:"data_dir"`
+	HealthPublic       *bool           `yaml:"health_public" json:"health_public"`
+	InsecurePublicBind bool            `yaml:"insecure_public_bind" json:"insecure_public_bind"`
+	ProbeMS            int             `yaml:"probe_ms" json:"probe_ms"`
+	Pull               PullConfig      `yaml:"pull" json:"pull"`
+	Heartbeat          HeartbeatConfig `yaml:"heartbeat" json:"heartbeat"`
+	TLS                TLSConfig       `yaml:"tls" json:"tls"`
+	Log                LogConfig       `yaml:"log" json:"log"`
 }
 
 type PullConfig struct {
@@ -29,6 +30,15 @@ type PullConfig struct {
 	URL         string            `yaml:"url" json:"url"`
 	IntervalSec int               `yaml:"interval_sec" json:"interval_sec"`
 	JitterSec   int               `yaml:"jitter_sec" json:"jitter_sec"`
+	TimeoutSec  int               `yaml:"timeout_sec" json:"timeout_sec"`
+	Headers     map[string]string `yaml:"headers" json:"headers"`
+}
+
+// HeartbeatConfig POSTs status snapshots to the panel (optional).
+type HeartbeatConfig struct {
+	Enabled     bool              `yaml:"enabled" json:"enabled"`
+	URL         string            `yaml:"url" json:"url"`
+	IntervalSec int               `yaml:"interval_sec" json:"interval_sec"`
 	TimeoutSec  int               `yaml:"timeout_sec" json:"timeout_sec"`
 	Headers     map[string]string `yaml:"headers" json:"headers"`
 }
@@ -123,6 +133,15 @@ func applyDefaults(c *Config) {
 	if c.Pull.JitterSec == 0 && c.Pull.Enabled {
 		c.Pull.JitterSec = 10
 	}
+	if c.Heartbeat.URL != "" && !c.Heartbeat.Enabled {
+		c.Heartbeat.Enabled = true
+	}
+	if c.Heartbeat.IntervalSec == 0 {
+		c.Heartbeat.IntervalSec = 30
+	}
+	if c.Heartbeat.TimeoutSec == 0 {
+		c.Heartbeat.TimeoutSec = 10
+	}
 }
 
 // ProbeDuration returns post-start settle time. Negative ProbeMS disables probe.
@@ -131,6 +150,22 @@ func (c *Config) ProbeDuration() time.Duration {
 		return 0
 	}
 	return time.Duration(c.ProbeMS) * time.Millisecond
+}
+
+func (c *Config) HeartbeatInterval() time.Duration {
+	sec := c.Heartbeat.IntervalSec
+	if sec <= 0 {
+		sec = 30
+	}
+	return time.Duration(sec) * time.Second
+}
+
+func (c *Config) HeartbeatTimeout() time.Duration {
+	sec := c.Heartbeat.TimeoutSec
+	if sec <= 0 {
+		sec = 10
+	}
+	return time.Duration(sec) * time.Second
 }
 
 // HasTLS reports whether TLS cert/key are configured.
@@ -191,6 +226,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Pull.Enabled && strings.TrimSpace(c.Pull.URL) == "" {
 		return fmt.Errorf("agent config: pull.enabled requires pull.url")
+	}
+	if c.Heartbeat.Enabled && strings.TrimSpace(c.Heartbeat.URL) == "" {
+		return fmt.Errorf("agent config: heartbeat.enabled requires heartbeat.url")
 	}
 	if (c.TLS.Cert == "") != (c.TLS.Key == "") {
 		return fmt.Errorf("agent config: tls.cert and tls.key must both be set")

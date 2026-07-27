@@ -1,0 +1,1 @@
+{"log":{"level":"error"},"inbounds":[],"outbounds":[{"type":"direct","tag":"from-sub-b"}]}

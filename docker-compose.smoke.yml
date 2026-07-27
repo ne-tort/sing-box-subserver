@@ -1,0 +1,35 @@
+# Smoke: idle agent + mock panel for subscribe/direct scenarios.
+services:
+  mock-panel:
+    image: python:3.12-slim
+    container_name: subserver-mock-panel
+    command: ["python", "/app/mock_panel.py"]
+    environment:
+      MOCK_CONFIG_DIR: /configs
+      PORT: "8080"
+    volumes:
+      - ./testdata/docker/mock_panel.py:/app/mock_panel.py:ro
+      - ./testdata/docker/configs:/configs:ro
+    expose:
+      - "8080"
+
+  subserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: subserver-smoke
+    depends_on:
+      - mock-panel
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./testdata/docker/agent.yaml:/etc/subserver/agent.yaml:ro
+      - subserver-data:/var/lib/subserver
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  subserver-data:

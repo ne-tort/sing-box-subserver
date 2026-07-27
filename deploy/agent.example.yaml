@@ -1,5 +1,12 @@
 # Example agent config for sing-box-subserver.
 # Copy to agent.local.yaml (gitignored) or /etc/subserver/agent.yaml.
+#
+# IMPORTANT: pull/heartbeat in this file are BOOTSTRAP SEED ONLY.
+# After first start (or after REST configure), runtime state lives in data_dir:
+#   subscribe-state.json / heartbeat-state.json
+# Restart does NOT re-apply YAML over REST-disabled settings.
+# Install env vars are write-once into this file by install scripts — the Go
+# process never reads env for pull/heartbeat.
 
 node_id: "edge-ams-1"
 token: "replace-with-high-entropy-secret"
@@ -12,15 +19,21 @@ data_dir: "/var/lib/subserver"
 # Post-start settle before promote (milliseconds). 0 disables.
 # probe_ms: 300
 
-# Optional: pull desired config from control plane
+# Optional pull (= subscribe): any URL returning server JSON (plain or encrypted envelope).
+# Not tied to s-ui. Defaults: interval_sec=60, jitter_sec=10, timeout_sec=15.
 # pull:
-#   url: "https://panel.example/api/nodes/edge-ams-1/desired-config"
+#   url: "https://example.com/subserver/edge-ams-1"
 #   interval_sec: 60
+#   jitter_sec: 10
+#   timeout_sec: 15
+#   headers:
+#     Authorization: "Bearer replace-with-high-entropy-secret"
 
-# Optional: heartbeat to mother (not implemented in v1 agent yet)
+# Optional heartbeat: POST status JSON to any URL. Defaults: interval_sec=30, timeout_sec=10.
 # heartbeat:
-#   url: "https://panel.example/api/nodes/edge-ams-1/hello"
+#   url: "https://example.com/hooks/edge-status"
 #   interval_sec: 30
+#   timeout_sec: 10
 
 # Optional TLS for non-localhost listen
 # tls:

@@ -47,11 +47,36 @@ cp deploy/agent.example.yaml agent.local.yaml   # edit token / listen / data_dir
 ./dist/subserver -version
 ```
 
-Management API (Bearer token from agent YAML): `GET /v1/health`, `GET /v1/status`, `PUT /v1/config`, `POST /v1/validate`, `POST /v1/box/stop|start`, …
+Management API (Bearer token): health/status/config/subscribe/auth…
+
+## Auth smoke
+
+```bash
+powershell -File ./scripts/smoke_auth.ps1
+```
+
+Bootstrap → create panel token → disable bootstrap → rotate.
 
 ## Status
 
-Core apply + REST v1, crash-watch retry, bind/TLS guards, probe, metrics polish, CI version ldflags. Heartbeat still deferred. Clash API explicitly unsupported.
+Core apply + REST v1, harden (crash-watch, bind/TLS, Clash reject), stress tests, Docker smoke (`scripts/smoke_docker.sh`). Heartbeat still deferred.
+
+## Docker smoke
+
+```bash
+./scripts/smoke_docker.sh
+# Windows: powershell -File ./scripts/smoke_docker.ps1
+```
+
+Scenarios: health, 401 on status, PUT config, ready, clash 422, box stop/start, metrics.
+
+Full mode matrix (idle → subscribe → refresh → direct cancel → re-subscribe):
+
+```bash
+powershell -File ./scripts/smoke_scenarios.ps1
+```
+
+Note: idle (no subscription) keeps serving. Schedule is an in-process timer, not CronJob.
 
 ## License
 

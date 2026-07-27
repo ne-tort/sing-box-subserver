@@ -1,0 +1,9 @@
+# Smoke agent for docker-compose.smoke.yml (token is test-only).
+node_id: "docker-smoke-1"
+token: "smoke-token-not-for-prod"
+listen: "0.0.0.0:8080"
+data_dir: "/var/lib/subserver"
+insecure_public_bind: true
+probe_ms: 100
+log:
+  level: info

@@ -35,6 +35,22 @@ Header: `Authorization: Bearer <token>`
 | `GET /v1/health` | Configurable (`health_public=true` default for LB probes) |
 | All others | Required |
 
+**Credential model (panel-friendly):**
+
+1. **Bootstrap** — `token` from agent YAML (install-time). Accepted until disabled.
+2. **Managed tokens** — created via API, persisted in `data_dir/credentials.json` (mode 0600). Secret returned **once** on create/rotate.
+3. Panel flow: create managed token → store in node inventory → `POST /v1/auth/bootstrap/disable` → later `POST /v1/auth/rotate` with `revoke_others=true`.
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/auth/tokens` | List (no secrets): bootstrap flag + managed ids/names |
+| POST | `/v1/auth/tokens` | Create `{name, token?}` → returns `{id, token}` once |
+| DELETE | `/v1/auth/tokens/{id}` | Revoke managed (`409` if last credential) |
+| POST | `/v1/auth/rotate` | `{name?, revoke_others?}` → new token; optional revoke other managed |
+| POST | `/v1/auth/bootstrap/disable` | Stop accepting YAML token (`409` if no managed yet) |
+
+Rotation does **not** require process restart.
+
 ### Conditional headers
 
 - `If-Match: "<revision>"` or `If-Match: "sha256:<hex>"` on `PUT /v1/config`
@@ -130,6 +146,8 @@ Body: raw sing-box JSON **or** wrapper:
 
 Raw body treated as config for simplicity (Content-Type `application/json`).
 
+**Side effect:** successful PUT sets `config_mode=direct` and **cancels** any active subscription so the scheduled fetch cannot overwrite the pushed config.
+
 Responses:
 
 | Code | Meaning |
@@ -140,6 +158,41 @@ Responses:
 | 409 | Apply in progress or If-Match mismatch |
 | 422 | Unsupported feature / missing build tag |
 | 500 | Unexpected supervisor error (process still up) |
+
+### Subscription / pull (`/v1/subscribe`, alias `/v1/pull`)
+
+Runtime control of **remote JSON URL** (any HTTP that returns server sing-box JSON). Not s-ui-specific. Not a client share-URI generator.
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/subscribe` or `/v1/pull` | Status (`configured`, `enabled`, `last_noop`, …) |
+| POST | `/v1/subscribe` | Enable + immediate fetch `{url, interval_sec, jitter_sec, timeout_sec, headers?, decrypt_body?}` |
+| PUT | `/v1/pull` | Same as POST subscribe |
+| DELETE | `/v1/subscribe` or `/v1/pull` | Disable; persists so YAML cannot re-seed on restart |
+| POST | `/v1/subscribe/refresh` or `/v1/pull/refresh` | Force one fetch (`409` if idle) |
+
+**Schedule:** in-process `time.Timer` + jitter — not robfig/cron / crontab.  
+**Dedupe:** `304` and local SHA compare before Apply (no useless core restart).  
+**Seed vs runtime:** YAML `pull:` seeds only when `subscribe-state.json` is absent. See [08-pull-heartbeat.md](08-pull-heartbeat.md).
+
+Mode matrix:
+
+| Event | Result |
+|-------|--------|
+| Idle (no subscribe) | Wait for PUT or POST subscribe |
+| POST subscribe | `config_mode=subscribed`; overwrites prior direct config on successful fetch |
+| PUT config | `config_mode=direct`; subscription cancelled |
+| refresh | Re-fetch URL; Apply if body changed (`304` / same SHA = no-op) |
+
+### Heartbeat (`/v1/heartbeat`)
+
+Optional POST of status JSON to any URL. Seed-once from YAML; REST owns afterwards.
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/heartbeat` | Status |
+| PUT | `/v1/heartbeat` | `{url, interval_sec?, timeout_sec?, headers?, enabled?}` |
+| DELETE | `/v1/heartbeat` | Disable; persist |
 
 ### `POST /v1/validate`
 

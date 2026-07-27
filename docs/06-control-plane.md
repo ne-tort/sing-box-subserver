@@ -38,51 +38,52 @@ Recommended panel flow:
 3. PUT to agent; on failure show agent `error` details; do not assume dataplane changed.
 4. Refresh node card from `GET /v1/status`.
 
-## Pull (safety net)
+## Pull (safety net / subscribe)
 
-Agent settings:
+Optional HTTP GET of server JSON from **any** URL (not s-ui-specific).
 
 ```yaml
 pull:
   enabled: true
-  url: "https://panel.example/api/nodes/edge-ams-1/desired-config"
-  interval_sec: 60          # N, user-configurable
+  url: "https://example.com/subserver/edge-ams-1"
+  interval_sec: 60
   jitter_sec: 10
   timeout_sec: 15
-  headers:
-    Authorization: "Bearer <panel-token>"  # or agent-specific
 ```
+
+Runtime: `POST|DELETE /v1/subscribe` (alias `/v1/pull`).  
+YAML seeds only when `subscribe-state.json` is absent. See [08-pull-heartbeat.md](08-pull-heartbeat.md).
 
 Behavior:
 
-- Timer fires every `interval_sec ± jitter`.
-- Conditional GET with `If-None-Match` / `If-None-Match: "sha256:…"` when known.
-- `304` → no apply.
-- `200` → supervisor `Apply` with `source=pull`.
-- Transport errors → log + metric; **do not** restart box.
-- Overlap with push → single mutex; loser gets consistent state via status.
-
-Pull exists so a missed push (panel restart, network blip) self-heals within N seconds.
+- Timer every `interval_sec ± jitter`.
+- `If-None-Match` / `304`, plus **local SHA dedupe** before Apply (no useless core restart).
+- Optional encrypted envelope (`aes-256-gcm` + agent token).
+- `PUT /v1/config` cancels subscribe so push is not overwritten.
 
 ## Heartbeat (optional)
 
 ```yaml
 heartbeat:
   enabled: true
-  url: "https://panel.example/api/nodes/edge-ams-1/hello"
+  url: "https://example.com/hooks/status"
   interval_sec: 30
 ```
 
-POST JSON snapshot of `GET /v1/status` data. Panel marks node online/offline for multi-server subscription health.
+Runtime: `PUT|DELETE /v1/heartbeat`. Same seed-once persistence rule as pull.
+Payload: status snapshot + `inbounds_count` (not Clash online users).
 
 ## Bootstrap via SSH
 
-One-time (out of band):
+One-shot **panel-owned** provisioning (not agent self-update). Design:
+[ADR 0007](adr/0007-panel-owned-ssh-bootstrap.md), mother doc `docs/EDGE_SSH_BOOTSTRAP.md`.
 
-1. Install binary + systemd unit (or Compose service).
+Operator checklist (manual until panel InstallJob exists):
+
+1. Install binary + systemd unit (or Compose service with `network_mode: host`, `restart: unless-stopped`).
 2. Write agent config (token, node_id, pull URL).
 3. Open management port only to panel IP **or** terminate TLS / SSH tunnel / WG management net.
-4. Panel registers node inventory row.
+4. Panel registers node inventory row; prefer `POST /v1/auth/tokens` then bootstrap disable.
 
 Ongoing ops: API only.
 
@@ -106,7 +107,8 @@ Not implemented in the agent. Panel should:
 
 | Control | Requirement |
 |---------|-------------|
-| Token | High entropy; file 0600; rotation supported by restart or hot-reload of agentcfg |
+| Token | High entropy; YAML bootstrap + managed tokens in `data_dir/credentials.json` (0600) |
+| Rotation | Hot via `POST /v1/auth/rotate` / CRUD `/v1/auth/tokens` — no agent restart |
 | Bind | Default localhost; public bind needs TLS or explicit insecure flag |
 | TLS | Recommended for non-localhost (`tls.cert`, `tls.key`) |
 | Future | mTLS, allowlist CIDRs |
@@ -115,6 +117,8 @@ Not implemented in the agent. Panel should:
 
 For pull, mother should expose something equivalent to:
 
-`GET /api/nodes/{node_id}/desired-config` → sing-box JSON + `ETag`.
+`GET /api/edge/agent/{node_id}/desired-config` → sing-box JSON + `ETag` (Bearer = node agent token).
 
-Exact panel routes are owned by s-ui integration work (out of this repo’s v1 code scope; contract only).
+`POST /api/edge/agent/{node_id}/hello` → accept status snapshot.
+
+Exact panel routes are owned by s-ui (`internal/edge`).
