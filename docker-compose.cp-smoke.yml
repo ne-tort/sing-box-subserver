@@ -1,0 +1,21 @@
+# Controlplane matrix using host-built linux binary (avoids docker module proxy).
+services:
+  subserver-cp:
+    build:
+      context: .
+      dockerfile: Dockerfile.controlplane.runtime
+    container_name: subserver-cp-smoke
+    ports:
+      - "18081:8080"
+      - "18443:8443"
+    volumes:
+      - ./testdata/docker/agent.controlplane.yaml:/etc/subserver/agent.yaml:ro
+      - subserver-cp-data:/var/lib/subserver
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+
+volumes:
+  subserver-cp-data:

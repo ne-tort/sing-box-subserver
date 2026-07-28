@@ -13,8 +13,10 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/api"
 	"github.com/ne-tort/sing-box-subserver/internal/auth"
 	"github.com/ne-tort/sing-box-subserver/internal/box"
+	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/configstats"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane"
 	"github.com/ne-tort/sing-box-subserver/internal/heartbeat"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
 	"github.com/ne-tort/sing-box-subserver/internal/subscribe"
@@ -75,15 +77,46 @@ func Run(opts Options) error {
 		return fmt.Errorf("auth store: %w", err)
 	}
 	srv.Auth = creds
+
+	owner, err := configowner.Open(cfg.DataDir)
+	if err != nil {
+		sup.Shutdown()
+		return fmt.Errorf("config owner: %w", err)
+	}
+	srv.Owner = owner
+
 	subMgr := subscribe.New(cfg.DataDir, cfg.Token, sup)
 	if err := subMgr.BootstrapFromYAML(cfg); err != nil {
 		o.Logger.Warn("subscribe bootstrap failed", "err", err)
 	}
 	srv.Subscribe = subMgr
 
+	cpSvc := controlplane.New(controlplane.Deps{
+		Cfg:        cfg,
+		DataDir:    cfg.DataDir,
+		Supervisor: sup,
+		Owner:      owner,
+		Logger:     o.Logger,
+	})
+	if cpSvc != nil {
+		srv.SetControlplane(cpSvc)
+	}
+
+	owner.SetHooks(configowner.Hooks{
+		OnLeaveSubscribe: func() {
+			subMgr.CancelOnDirectConfig()
+		},
+		OnLeaveControlplane: func() {
+			if cpSvc != nil {
+				cpSvc.OnLeaveOwnership()
+			}
+		},
+	})
+
 	hb := heartbeat.New(cfg.DataDir, cfg.NodeID, cfg.Listen, cfg.Token, sup)
 	hb.SetInboundsCounter(func() int { return configstats.CountInbounds(sup) })
 	hb.SetSubscribeStatus(func() any { return subMgr.Status() })
+	hb.SetConfigMode(func() string { return string(owner.Owner()) })
 	if err := hb.BootstrapFromYAML(cfg); err != nil {
 		o.Logger.Warn("heartbeat bootstrap failed", "err", err)
 	}
@@ -93,6 +126,10 @@ func Run(opts Options) error {
 	// Runtime state lives in data_dir; agent.yaml / install env are seed-only.
 	go subMgr.Run(ctx)
 	go hb.Run(ctx)
+	if cpSvc != nil {
+		go cpSvc.Run(ctx)
+		cpSvc.Bootstrap(ctx)
+	}
 
 	apiErr := make(chan error, 1)
 	go func() {

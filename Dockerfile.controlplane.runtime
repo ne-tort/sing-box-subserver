@@ -1,0 +1,8 @@
+# Runtime-only image for local matrix when docker build cannot reach the module proxy.
+# Expects a prebuilt linux binary at dist/subserver-cp-linux (see scripts/cp_matrix_docker.ps1).
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates || true
+COPY dist/subserver-cp-linux /usr/local/bin/subserver
+RUN chmod +x /usr/local/bin/subserver && mkdir -p /var/lib/subserver
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/subserver", "-config", "/etc/subserver/agent.yaml"]

@@ -1,4 +1,4 @@
-package box
+﻿package box
 
 import (
 	"context"
@@ -116,19 +116,19 @@ func (e *Engine) Start(ctx context.Context, raw []byte) (Instance, error) {
 	if err := rejectClashAPI(raw); err != nil {
 		return nil, err
 	}
+	// Detach from caller cancel (HTTP request context) so the dataplane outlives Apply.
 	if ctx == nil {
-		ctx = e.base
-	} else {
-		ctx = mergeBase(ctx, e.base)
+		ctx = context.Background()
 	}
-	ctx = registerDemuxInjectFeedsFresh(ctx)
+	runCtx := mergeBase(context.WithoutCancel(ctx), e.base)
+	runCtx = registerDemuxInjectFeedsFresh(runCtx)
 
 	var opt option.Options
-	if err := opt.UnmarshalJSONContext(ctx, raw); err != nil {
+	if err := opt.UnmarshalJSONContext(runCtx, raw); err != nil {
 		return nil, fmt.Errorf("config invalid: %w", err)
 	}
 	b, err := singbox.New(singbox.Options{
-		Context: ctx,
+		Context: runCtx,
 		Options: opt,
 	})
 	if err != nil {
@@ -161,3 +161,4 @@ func (m *mergeCtx) Value(key any) any {
 	}
 	return m.base.Value(key)
 }
+

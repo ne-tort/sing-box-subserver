@@ -39,5 +39,6 @@ Agent does **not** self-update ([ADR 0005](adr/0005-external-updates-only.md)). 
 ## Review bar
 
 - New dependency: justify size/security.
-- New build tag: update `build/tags.server` + docs.
+- New build tag: update `build/tags.server` (and/or `tags.server.controlplane`) + docs.
 - Status/API fields: keep mother-panel compatibility in mind (additive JSON preferred).
+- Optional controlplane changes: update `docs/controlplane/` in the same PR as the contract change.

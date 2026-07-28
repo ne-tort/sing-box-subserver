@@ -88,6 +88,27 @@ func TestApplyIdempotentSameHash(t *testing.T) {
 	}
 }
 
+func TestApplyForceReloadsSameHash(t *testing.T) {
+	t.Parallel()
+	eng := &testutil.FakeEngine{}
+	sup := newTestSupervisor(t, eng)
+	raw := []byte(`{"v":1}`)
+	if _, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw}); err != nil {
+		t.Fatal(err)
+	}
+	starts := eng.Starts.Load()
+	res, err := sup.Apply(context.Background(), ApplyRequest{Raw: raw, Force: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Noop {
+		t.Fatal("Force must not noop")
+	}
+	if eng.Starts.Load() != starts+1 {
+		t.Fatalf("starts=%d want %d", eng.Starts.Load(), starts+1)
+	}
+}
+
 func TestApplyConflict(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})

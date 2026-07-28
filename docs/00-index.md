@@ -16,6 +16,7 @@ flowchart TD
   layout[09_repo_layout]
   culture[10_repo_culture]
   adr[adr]
+  cpmod[controlplane_docs]
   idx --> concept --> req --> arch
   arch --> life
   arch --> api
@@ -28,6 +29,7 @@ flowchart TD
   life --> adr
   api --> adr
   build --> adr
+  idx --> cpmod
 ```
 
 ## Map
@@ -44,7 +46,15 @@ flowchart TD
 | [08-build-and-ci.md](08-build-and-ci.md) | 02–03 | Build tags, CI, lx pin, versions |
 | [09-repo-layout.md](09-repo-layout.md) | 03–08 | Directory / package map |
 | [10-repo-culture.md](10-repo-culture.md) | 08–09 | Cleanliness, commits, review bar |
-| [adr/](adr/) | 01–06 | Locked decisions (incl. [0005 external updates](adr/0005-external-updates-only.md), [0006 no Clash API](adr/0006-no-clash-api.md)) |
+| [adr/](adr/) | 01–06 | Locked decisions (incl. [0005 external updates](adr/0005-external-updates-only.md), [0006 no Clash API](adr/0006-no-clash-api.md), [0008 exclusive config owner](adr/0008-exclusive-config-owner.md)) |
+
+## Optional module: embedded controlplane
+
+When building with `with_controlplane`, see the separate ladder:
+
+**[controlplane/00-index.md](controlplane/00-index.md)** — local users, presets, demux sets, subscription URLs, materialize.
+
+Default `build/tags.server` omits the tag ([controlplane/09-build-and-ci](controlplane/09-build-and-ci.md)).
 
 ## Quality bar vs panel monoliths
 

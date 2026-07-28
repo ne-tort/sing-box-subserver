@@ -10,6 +10,7 @@ import (
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
 	"github.com/ne-tort/sing-box-subserver/internal/box"
+	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
@@ -25,13 +26,20 @@ func testServer(t *testing.T) *Server {
 	}
 	hp := true
 	cfg.HealthPublic = &hp
-	store, err := configstore.New(t.TempDir())
+	dir := t.TempDir()
+	store, err := configstore.New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	o := obs.Setup("error")
 	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
-	return New(cfg, sup, o)
+	s := New(cfg, sup, o)
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Owner = owner
+	return s
 }
 
 func TestHealthPublicAndAuth(t *testing.T) {

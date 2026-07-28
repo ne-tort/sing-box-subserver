@@ -1,0 +1,12 @@
+# Smoke agent for controlplane docker matrix (token is test-only).
+node_id: "docker-cp-1"
+token: "smoke-token-not-for-prod"
+listen: "0.0.0.0:8080"
+data_dir: "/var/lib/subserver"
+insecure_public_bind: true
+probe_ms: 100
+log:
+  level: info
+controlplane:
+  public_host: "203.0.113.10"
+  expiry_tick_sec: 60

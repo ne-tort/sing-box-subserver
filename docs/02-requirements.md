@@ -35,11 +35,17 @@
 
 | ID | Requirement |
 |----|-------------|
-| FR-CP-1 | Push: `PUT /v1/config` applies desired JSON. |
-| FR-CP-2 | Pull: configurable URL + interval `N` (+ jitter); fetch desired config when mother is available. |
+| FR-CP-1 | Push: `PUT /v1/config` applies desired JSON and sets `config_mode=direct`. |
+| FR-CP-2 | Pull: configurable URL + interval `N` (+ jitter); fetch desired config when mother is available (`config_mode=subscribed`). |
 | FR-CP-3 | Pull failures must not stop or restart a healthy box. |
 | FR-CP-4 | Report `node_id`, agent version, sing-box version / build tags, listen bind of management API. |
 | FR-CP-5 | Optional heartbeat/register URL to mother (POST status snapshot). |
+| FR-CP-6 | Expose a single normative `config_mode` (`idle` \| `subscribed` \| `direct` \| `controlplane`) from one owner registry in status and heartbeat ([ADR 0008](adr/0008-exclusive-config-owner.md)). |
+| FR-CP-7 | Mode transitions cancel the previous writer explicitly (no dual schedules / half-states). |
+
+### Optional embedded controlplane
+
+When built with `with_controlplane`, requirements in [controlplane/02-requirements](controlplane/02-requirements.md) apply. Default server builds **omit** the tag; routes must not exist (404).
 
 ### Ops
 
@@ -63,12 +69,14 @@
 
 ## Non-goals (v1)
 
-- Web admin UI, multi-user RBAC beyond single bearer token.
-- SQLite / client CRUD / subscription generation for end users.
+- Web admin UI, multi-user RBAC beyond agent Bearer (+ optional per-user sub tokens in controlplane).
+- SQLite as the agent datastore; panel-style client DB in the **default** (non-controlplane) binary.
+- Client CRUD / end-user subscription generation **unless** `with_controlplane` (see [controlplane/](controlplane/00-index.md)).
 - Multiple sing-box instances in one process.
 - gRPC as primary control protocol ([ADR 0002](adr/0002-rest-not-grpc.md)).
-- Embedding control-plane business logic.
+- Embedding **external-panel** business logic or importing s-ui packages ([ADR 0004](adr/0004-independent-of-sui.md)). Optional in-process controlplane is an explicit, tagged exception.
 - Clash Meta API / Yacd on the edge ([ADR 0006](adr/0006-no-clash-api.md)); `with_clash_api` is not in the server tag allowlist.
+- Real traffic counters / billing (future module; controlplane only reserves hooks).
 
 ## SLOs (initial, soft)
 

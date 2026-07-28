@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
+	"github.com/ne-tort/sing-box-subserver/internal/httputil"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
 	"github.com/ne-tort/sing-box-subserver/internal/version"
 )
@@ -26,6 +27,8 @@ type Spec struct {
 	IntervalSec int               `json:"interval_sec"`
 	TimeoutSec  int               `json:"timeout_sec"`
 	Headers     map[string]string `json:"headers,omitempty"`
+	// TLSInsecure skips TLS certificate verification (local/dev panels with self-signed certs).
+	TLSInsecure bool `json:"tls_insecure,omitempty"`
 }
 
 // Status is exposed via REST / status.
@@ -49,13 +52,14 @@ type InboundsCounter func() int
 
 // Pusher POSTs status snapshots on a schedule; runtime Spec is owned by data_dir after seed/REST.
 type Pusher struct {
-	nodeID   string
-	listen   string
-	token    string
-	dataDir  string
-	sup      *supervisor.Supervisor
-	inbounds InboundsCounter
-	subStat  func() any // optional subscribe status snapshot
+	nodeID     string
+	listen     string
+	token      string
+	dataDir    string
+	sup        *supervisor.Supervisor
+	inbounds   InboundsCounter
+	subStat    func() any // optional subscribe status snapshot
+	configMode func() string
 
 	mu         sync.Mutex
 	configured bool
@@ -76,12 +80,20 @@ func New(dataDir, nodeID, listen, agentToken string, sup *supervisor.Supervisor)
 		token:   agentToken,
 		sup:     sup,
 		trigger: make(chan struct{}, 1),
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client:  httputil.NewClient(10, false),
 	}
+}
+
+// SetOutboundToken updates the default Bearer used when Spec.Headers has no Authorization.
+func (p *Pusher) SetOutboundToken(token string) {
+	p.mu.Lock()
+	p.token = strings.TrimSpace(token)
+	p.mu.Unlock()
 }
 
 func (p *Pusher) SetInboundsCounter(fn InboundsCounter) { p.inbounds = fn }
 func (p *Pusher) SetSubscribeStatus(fn func() any)      { p.subStat = fn }
+func (p *Pusher) SetConfigMode(fn func() string)        { p.configMode = fn }
 
 // BootstrapFromYAML seeds once from YAML when no runtime state exists.
 func (p *Pusher) BootstrapFromYAML(cfg *agentcfg.Config) error {
@@ -101,6 +113,7 @@ func (p *Pusher) BootstrapFromYAML(cfg *agentcfg.Config) error {
 			IntervalSec: cfg.Heartbeat.IntervalSec,
 			TimeoutSec:  cfg.Heartbeat.TimeoutSec,
 			Headers:     cfg.Heartbeat.Headers,
+			TLSInsecure: cfg.Heartbeat.TLSInsecure,
 		}, true)
 	}
 	return nil
@@ -113,7 +126,7 @@ func (p *Pusher) applyPersisted(st persisted) error {
 	p.spec = normalize(st.Spec)
 	p.enabled = st.Enabled && strings.TrimSpace(p.spec.URL) != ""
 	if p.enabled {
-		p.client = &http.Client{Timeout: time.Duration(p.spec.TimeoutSec) * time.Second}
+		p.client = httputil.NewClient(p.spec.TimeoutSec, p.spec.TLSInsecure)
 	}
 	return nil
 }
@@ -139,7 +152,7 @@ func (p *Pusher) Configure(spec Spec, enabled bool) error {
 	p.spec = spec
 	p.enabled = enabled && spec.URL != ""
 	p.configured = true
-	p.client = &http.Client{Timeout: time.Duration(spec.TimeoutSec) * time.Second}
+	p.client = httputil.NewClient(spec.TimeoutSec, spec.TLSInsecure)
 	p.mu.Unlock()
 	if err := p.save(); err != nil {
 		return err
@@ -227,6 +240,10 @@ func (p *Pusher) tick(ctx context.Context) error {
 	p.mu.Unlock()
 
 	st := p.sup.Status()
+	mode := "idle"
+	if p.configMode != nil {
+		mode = p.configMode()
+	}
 	payload := map[string]any{
 		"node_id":            nodeID,
 		"state":              st.State,
@@ -244,7 +261,7 @@ func (p *Pusher) tick(ctx context.Context) error {
 		"box_up":             st.BoxUp,
 		"last_error":         st.LastError,
 		"pull":               st.Pull,
-		"config_mode":        configMode(st),
+		"config_mode":        mode,
 	}
 	if p.subStat != nil {
 		payload["subscribe"] = p.subStat()
@@ -287,16 +304,6 @@ func (p *Pusher) tick(ctx context.Context) error {
 	p.lastErr = nil
 	p.mu.Unlock()
 	return nil
-}
-
-func configMode(st supervisor.StatusSnapshot) string {
-	if st.Pull.Enabled {
-		return "subscribed"
-	}
-	if st.ContentSHA256 != "" {
-		return "direct_or_boot"
-	}
-	return "idle"
 }
 
 func (p *Pusher) recordErr(err error) error {

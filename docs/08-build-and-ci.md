@@ -42,6 +42,9 @@ File: [`build/tags.server`](../build/tags.server) — single source of truth. CI
 
 Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds; **omit** `with_clash_api` ([ADR 0006](adr/0006-no-clash-api.md)) and other client/UI-heavy tags.
 
+**Optional embedded controlplane:** omit `with_controlplane` from `tags.server` by default.
+Ship / CI-test a second allowlist file `build/tags.server.controlplane` (= server tags + `with_controlplane`) as described in [controlplane/09-build-and-ci](controlplane/09-build-and-ci.md).
+
 CI injects version ldflags (`AgentVersion`, `AgentCommit`, `SingBoxCommit`) on build artifacts. Local builds without `-X` report `0.0.0-dev` / `unknown`.
 
 ## Local build
@@ -54,15 +57,24 @@ go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subse
 ./dist/subserver -version
 ```
 
+With controlplane:
+
+```bash
+TAGS=$(tr -d '\r\n' < build/tags.server.controlplane)   # once file exists
+# or: TAGS="$(tr -d '\r\n' < build/tags.server),with_controlplane"
+go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver ./cmd/subserver
+```
+
 ## CI matrix
 
 | Job | Purpose |
 |-----|---------|
-| `test` | `go test ./...` with tags |
+| `test` | `go test ./...` with `tags.server` |
 | `vet` | `go vet` |
 | `build-linux-amd64` | release artifact |
 | `build-linux-arm64` | release artifact |
-| `tags-allowlist` | ensure workflow uses `build/tags.server` only |
+| `tags-allowlist` | ensure workflow uses allowlisted tags files only |
+| `test-controlplane` | `go test` with `tags.server.controlplane` (when module lands) |
 
 Checkout: init `third_party/sing-box-lx`, then only `submodules/wireguard-go` inside lx (skip `clients/*`). Keep CI lightweight (no npm).
 

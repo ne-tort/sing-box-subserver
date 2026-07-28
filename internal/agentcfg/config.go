@@ -21,8 +21,16 @@ type Config struct {
 	ProbeMS            int             `yaml:"probe_ms" json:"probe_ms"`
 	Pull               PullConfig      `yaml:"pull" json:"pull"`
 	Heartbeat          HeartbeatConfig `yaml:"heartbeat" json:"heartbeat"`
-	TLS                TLSConfig       `yaml:"tls" json:"tls"`
-	Log                LogConfig       `yaml:"log" json:"log"`
+	Controlplane       ControlplaneConfig `yaml:"controlplane" json:"controlplane"`
+	TLS                TLSConfig          `yaml:"tls" json:"tls"`
+	Log                LogConfig          `yaml:"log" json:"log"`
+}
+
+// ControlplaneConfig seeds optional embedded CP (with_controlplane).
+type ControlplaneConfig struct {
+	PublicHost    string `yaml:"public_host" json:"public_host"`
+	PublicPort    int    `yaml:"public_port" json:"public_port"`
+	ExpiryTickSec int    `yaml:"expiry_tick_sec" json:"expiry_tick_sec"`
 }
 
 type PullConfig struct {
@@ -32,6 +40,7 @@ type PullConfig struct {
 	JitterSec   int               `yaml:"jitter_sec" json:"jitter_sec"`
 	TimeoutSec  int               `yaml:"timeout_sec" json:"timeout_sec"`
 	Headers     map[string]string `yaml:"headers" json:"headers"`
+	TLSInsecure bool              `yaml:"tls_insecure" json:"tls_insecure"`
 }
 
 // HeartbeatConfig POSTs status snapshots to the panel (optional).
@@ -41,6 +50,7 @@ type HeartbeatConfig struct {
 	IntervalSec int               `yaml:"interval_sec" json:"interval_sec"`
 	TimeoutSec  int               `yaml:"timeout_sec" json:"timeout_sec"`
 	Headers     map[string]string `yaml:"headers" json:"headers"`
+	TLSInsecure bool              `yaml:"tls_insecure" json:"tls_insecure"`
 }
 
 type TLSConfig struct {
@@ -141,6 +151,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Heartbeat.TimeoutSec == 0 {
 		c.Heartbeat.TimeoutSec = 10
+	}
+	if c.Controlplane.ExpiryTickSec == 0 {
+		c.Controlplane.ExpiryTickSec = 60
 	}
 }
 

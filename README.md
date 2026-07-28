@@ -12,8 +12,10 @@ Lightweight **edge dataplane agent**: one process embeds sing-box and exposes a 
 
 ## Non-goals
 
-- Web UI, client database, billing, or client share-URI generation.
+- Web UI, panel SQLite, or billing in the **default** agent binary.
 - Being a second full panel.
+- Client CRUD / end-user subscription generation **unless** built with optional
+  [`with_controlplane`](docs/controlplane/00-index.md).
 - In-process self-update (external deploy only; [ADR 0005](docs/adr/0005-external-updates-only.md)).
 - Clash Meta API / Yacd on the edge ([ADR 0006](docs/adr/0006-no-clash-api.md)).
 
@@ -33,7 +35,8 @@ Start here: **[docs/00-index.md](docs/00-index.md)**
 | [08-build-and-ci](docs/08-build-and-ci.md) | Tags, CI, lx pin |
 | [09-repo-layout](docs/09-repo-layout.md) | Go layout |
 | [10-repo-culture](docs/10-repo-culture.md) | Commits, cleanliness |
-| [adr/](docs/adr/) | ADRs |
+| [adr/](docs/adr/) | ADRs (incl. [0008 config owner](docs/adr/0008-exclusive-config-owner.md)) |
+| [controlplane/](docs/controlplane/00-index.md) | Optional embedded CP (`with_controlplane`) |
 
 ## Quick start
 

@@ -67,6 +67,14 @@ flowchart TB
 | `internal/pull` | HTTP client to mother desired-config URL |
 | `internal/obs` | slog setup, ring buffer, Prometheus + JSON metrics |
 | `internal/agentcfg` | Agent YAML/JSON settings (not sing-box JSON) |
+| `internal/controlplane` | Optional (`with_controlplane`): local users, presets, sets, materialize, `/v1/sub/{token}` — see [controlplane/](controlplane/00-index.md) |
+
+## Config ownership
+
+Exactly one writer owns desired-config updates at a time:
+`idle` | `subscribed` | `direct` | `controlplane` ([ADR 0008](adr/0008-exclusive-config-owner.md)).
+Push, subscribe, and controlplane Claim through a shared owner registry; all Applies go through `supervisor`.
+
 
 ## Data flow — push apply
 
@@ -130,7 +138,8 @@ sequenceDiagram
 | Boundary | Trust |
 |----------|--------|
 | Dataplane listeners | Untrusted internet |
-| Management API | Trusted control plane only (token + bind/TLS policy) |
+| Management API | Trusted control plane / operator only (token + bind/TLS policy) |
+| Public `/v1/sub/{token}` (optional CP) | Anyone with the user token; no agent Bearer |
 | Data dir | Local root/agent user; secrets (token) file mode 0600 |
 
 ## Evolution hooks (not v1)
@@ -138,3 +147,4 @@ sequenceDiagram
 - mTLS client certs for management.
 - Sidecar metrics remote write.
 - Canary dual-box traffic shift (still one process, advanced).
+- Traffic accounting module consuming controlplane user hooks.

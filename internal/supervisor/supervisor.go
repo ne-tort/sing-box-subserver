@@ -50,6 +50,9 @@ type ApplyRequest struct {
 	MatchMode MatchMode
 	MatchRev  uint64
 	MatchSHA  string
+	// Force skips the same-SHA noop so the box reloads (e.g. PEM rewritten
+	// under unchanged certificate_path / key_path).
+	Force bool
 }
 
 // ApplyResult is returned to API.
@@ -294,7 +297,7 @@ func (s *Supervisor) applyLocked(ctx context.Context, req ApplyRequest, prevStat
 
 	sha := configstore.Hash(req.Raw)
 	s.mu.Lock()
-	same := sha == s.contentSHA && s.inst != nil && (prevState == StateRunning || prevState == StateRolledBack)
+	same := !req.Force && sha == s.contentSHA && s.inst != nil && (prevState == StateRunning || prevState == StateRolledBack)
 	s.mu.Unlock()
 	if same {
 		s.setState(StateRunning)

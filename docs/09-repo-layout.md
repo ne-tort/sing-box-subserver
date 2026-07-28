@@ -5,6 +5,7 @@ sing-box-subserver/
   README.md
   CONTRIBUTING.md
   docs/                          # architecture ladder
+  docs/controlplane/             # optional embedded CP docs
   openapi/                       # openapi.yaml (with API impl)
   cmd/
     subserver/
@@ -18,12 +19,16 @@ sing-box-subserver/
     configstore/                 # staged / last-good / meta
     box/                         # sing-box registries + lifecycle
     version/                     # agent + sing-box version helpers
-    pull/                        # mother pull scheduler
+    pull/                        # mother pull scheduler (legacy)
+    subscribe/                   # runtime pull/subscribe manager
+    heartbeat/                   # optional status push
+    controlplane/                # optional with_controlplane module
     obs/                         # slog, ring, metrics
   third_party/
     sing-box-lx/                 # git submodule (same family as s-ui)
   build/
-    tags.server                  # allowlisted -tags
+    tags.server                  # allowlisted -tags (default; no CP)
+    tags.server.controlplane     # optional: server + with_controlplane
   deploy/
     subserver.service            # systemd example
     agent.example.yaml
@@ -47,6 +52,8 @@ flowchart TB
   store[internal_configstore]
   box[internal_box]
   pull[internal_pull]
+  sub[internal_subscribe]
+  cp[internal_controlplane]
   obs[internal_obs]
   cfg[internal_agentcfg]
   ver[internal_version]
@@ -54,6 +61,8 @@ flowchart TB
   cmd --> ver
   app --> api
   app --> pull
+  app --> sub
+  app --> cp
   app --> sup
   app --> cfg
   app --> obs
@@ -64,6 +73,9 @@ flowchart TB
   api --> ver
   pull --> sup
   pull --> cfg
+  sub --> sup
+  cp --> sup
+  cp --> cfg
   sup --> store
   sup --> box
   sup --> obs
@@ -72,10 +84,12 @@ flowchart TB
 
 Rules:
 
-- `internal/box` must not import `api` or `pull`.
+- `internal/box` must not import `api`, `pull`, `subscribe`, or `controlplane`.
 - `api` must not start boxes directly — only via `supervisor`.
+- `controlplane` Applies only via `supervisor`; must not import s-ui.
 - No imports from s-ui modules.
 - `third_party/sing-box-lx` is the only sing-box source (`replace` in `go.mod`).
+- `with_controlplane` is compile-optional; see [controlplane/09-build-and-ci](controlplane/09-build-and-ci.md).
 
 ## Data directory layout (runtime)
 
@@ -86,6 +100,13 @@ Rules:
   staged.json
   staged.meta.json
   agent-state.json          # revision counter, etc.
+  subscribe-state.json
+  heartbeat-state.json
+  credentials.json
+  controlplane/             # only when module used
+    users.json
+    sets.json
+    state.json
 ```
 
 Writes: temp file in same dir + `rename` for atomicity.

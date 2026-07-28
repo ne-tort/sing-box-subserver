@@ -79,11 +79,19 @@ POST body to heartbeat URL (agent → controller) includes:
 
 - identity/versions (`node_id`, agent/sing-box versions, listen)
 - box state (`state`, `revision`, `content_sha256`, `box_up`, uptime)
-- `pull` / `subscribe` summaries, `config_mode`
+- `pull` / `subscribe` summaries
+- `config_mode` — **same enum as** `GET /v1/status`: `idle` \| `subscribed` \| `direct` \| `controlplane`
+  ([ADR 0008](adr/0008-exclusive-config-owner.md)). Do **not** emit `direct_or_boot`.
 - `inbounds_count` from last-good JSON
 
 `online_users` is **not** reported (no Clash API — ADR 0006). Add later only via a
 safe sing-box stats path if one exists.
+
+### Mode vs subscribe schedule
+
+Subscribe enable/disable flips ownership per the transition table in ADR 0008.
+Heartbeat must read `config_mode` from the shared owner registry, not re-derive it
+from `pull.enabled` alone (that misses `direct` and `controlplane`).
 
 ## Bootstrap env (install scripts only)
 
@@ -107,4 +115,5 @@ wipes data_dir and reseeds YAML.
 |------|-------|
 | `data_dir/subscribe-state.json` | subscribe/pull (`present`, `enabled`, `spec`) |
 | `data_dir/heartbeat-state.json` | heartbeat |
+| `data_dir/controlplane/` | optional embedded CP ([controlplane/08-storage](controlplane/08-storage.md)) |
 | `agent.yaml` | identity/listen/TLS + **first-boot seed only** for pull/hb |

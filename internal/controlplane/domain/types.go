@@ -1,0 +1,70 @@
+//go:build with_controlplane
+
+package domain
+
+import "time"
+
+// User is a local controlplane account.
+type User struct {
+	ID                    string                    `json:"id"`
+	Name                  string                    `json:"name"`
+	Enabled               bool                      `json:"enabled"`
+	CreatedAt             time.Time                 `json:"created_at"`
+	UpdatedAt             time.Time                 `json:"updated_at"`
+	ExpiresAt             *time.Time                `json:"expires_at,omitempty"`
+	TrafficLimitBytes     *uint64                   `json:"traffic_limit_bytes,omitempty"`
+	TrafficUsedBytes      uint64                    `json:"traffic_used_bytes"`
+	TrafficResetAt        *time.Time                `json:"traffic_reset_at,omitempty"`
+	TrafficResetPeriodSec *uint64                   `json:"traffic_reset_period_sec,omitempty"`
+	SubToken              string                    `json:"sub_token"`
+	Creds                 map[string]map[string]any `json:"creds"`
+}
+
+// Eligible reports whether the user may appear in materialize / fetch a sub.
+func (u User) Eligible(now time.Time) bool {
+	if !u.Enabled {
+		return false
+	}
+	if u.ExpiresAt != nil && !now.Before(*u.ExpiresAt) {
+		return false
+	}
+	if u.TrafficLimitBytes != nil && u.TrafficUsedBytes >= *u.TrafficLimitBytes {
+		return false
+	}
+	return true
+}
+
+// InboundSet is a named listen + presets (+ optional demux).
+type InboundSet struct {
+	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
+	Listen        string         `json:"listen"`
+	ListenPort    uint16         `json:"listen_port"`
+	Presets       []string       `json:"presets"`
+	DemuxTemplate map[string]any `json:"demux_template,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+}
+
+// HasDemux reports whether the set uses a demux front.
+func (s InboundSet) HasDemux() bool {
+	return len(s.DemuxTemplate) > 0
+}
+
+// State is persisted runtime for active sets.
+type State struct {
+	ActiveSets             []string   `json:"active_sets"`
+	LastMaterializeSHA256  string     `json:"last_materialize_sha256,omitempty"`
+	LastMaterializeAt      *time.Time `json:"last_materialize_at,omitempty"`
+}
+
+// ProtocolPreset is an embedded catalog entry.
+type ProtocolPreset struct {
+	Name             string         `json:"name"`
+	Protocol         string         `json:"protocol"`
+	Description      string         `json:"description"`
+	Traits           []string       `json:"traits"`
+	InboundTemplate  map[string]any `json:"inbound_template"`
+	OutboundTemplate map[string]any `json:"outbound_template"`
+	CredFields       []string       `json:"cred_fields"` // e.g. uuid, password
+}

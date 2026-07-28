@@ -16,6 +16,7 @@ import (
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
+	"github.com/ne-tort/sing-box-subserver/internal/httputil"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
 )
 
@@ -31,6 +32,8 @@ type Spec struct {
 	// DecryptBody: when true, body must be an aes-256-gcm envelope decryptable with agent token.
 	// When false/omitted, plain JSON is accepted; encrypted envelopes are still auto-detected.
 	DecryptBody bool `json:"decrypt_body,omitempty"`
+	// TLSInsecure skips TLS certificate verification (local/dev panels with self-signed certs).
+	TLSInsecure bool `json:"tls_insecure,omitempty"`
 }
 
 // Status is exposed via GET /v1/status and subscribe endpoints.
@@ -76,8 +79,15 @@ func New(dataDir, agentToken string, sup *supervisor.Supervisor) *Manager {
 		token:   agentToken,
 		sup:     sup,
 		trigger: make(chan struct{}, 1),
-		client:  &http.Client{Timeout: 15 * time.Second},
+		client:  httputil.NewClient(15, false),
 	}
+}
+
+// SetOutboundToken updates the default Bearer used when Spec.Headers has no Authorization.
+func (m *Manager) SetOutboundToken(token string) {
+	m.mu.Lock()
+	m.token = strings.TrimSpace(token)
+	m.mu.Unlock()
 }
 
 // BootstrapFromYAML seeds subscription once from agent YAML pull when no runtime state exists.
@@ -89,7 +99,7 @@ func (m *Manager) BootstrapFromYAML(cfg *agentcfg.Config) error {
 		m.spec = normalizeSpec(st.Spec)
 		m.enabled = st.Enabled && strings.TrimSpace(st.Spec.URL) != ""
 		if m.enabled {
-			m.client = &http.Client{Timeout: time.Duration(m.spec.TimeoutSec) * time.Second}
+			m.client = httputil.NewClient(m.spec.TimeoutSec, m.spec.TLSInsecure)
 		}
 		m.mu.Unlock()
 		m.syncPullStatus()
@@ -105,7 +115,7 @@ func (m *Manager) BootstrapFromYAML(cfg *agentcfg.Config) error {
 		m.spec = normalizeSpec(st.Spec)
 		m.enabled = st.Enabled
 		if m.enabled {
-			m.client = &http.Client{Timeout: time.Duration(m.spec.TimeoutSec) * time.Second}
+			m.client = httputil.NewClient(m.spec.TimeoutSec, m.spec.TLSInsecure)
 		}
 		m.mu.Unlock()
 		_ = m.save() // upgrade to Present=true
@@ -122,6 +132,7 @@ func (m *Manager) BootstrapFromYAML(cfg *agentcfg.Config) error {
 			JitterSec:   cfg.Pull.JitterSec,
 			TimeoutSec:  cfg.Pull.TimeoutSec,
 			Headers:     cfg.Pull.Headers,
+			TLSInsecure: cfg.Pull.TLSInsecure,
 		})
 	}
 	m.syncPullStatus()
@@ -220,7 +231,7 @@ func (m *Manager) Subscribe(spec Spec) error {
 	m.spec = spec
 	m.enabled = true
 	m.configured = true
-	m.client = &http.Client{Timeout: time.Duration(spec.TimeoutSec) * time.Second}
+	m.client = httputil.NewClient(spec.TimeoutSec, spec.TLSInsecure)
 	m.mu.Unlock()
 	if err := m.save(); err != nil {
 		return err

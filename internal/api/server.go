@@ -13,6 +13,7 @@ import (
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
 	"github.com/ne-tort/sing-box-subserver/internal/auth"
+	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
 	"github.com/ne-tort/sing-box-subserver/internal/heartbeat"
@@ -23,13 +24,20 @@ import (
 
 // Server is the management HTTP API.
 type Server struct {
-	Cfg        *agentcfg.Config
-	Supervisor *supervisor.Supervisor
-	Obs        *obs.Observability
-	Subscribe  *subscribe.Manager
-	Heartbeat  *heartbeat.Pusher
-	Auth       *auth.Store
-	mux        *http.ServeMux
+	Cfg         *agentcfg.Config
+	Supervisor  *supervisor.Supervisor
+	Obs         *obs.Observability
+	Subscribe   *subscribe.Manager
+	Heartbeat   *heartbeat.Pusher
+	Auth        *auth.Store
+	Owner       *configowner.Registry
+	Controlplane ControlplaneHandler // optional; nil without with_controlplane
+	mux         *http.ServeMux
+}
+
+// ControlplaneHandler mounts optional embedded CP routes.
+type ControlplaneHandler interface {
+	Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc)
 }
 
 func New(cfg *agentcfg.Config, sup *supervisor.Supervisor, o *obs.Observability) *Server {
@@ -85,6 +93,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /v1/auth/tokens/{id}", s.requireAuth(s.handleAuthDelete))
 	s.mux.HandleFunc("POST /v1/auth/rotate", s.requireAuth(s.handleAuthRotate))
 	s.mux.HandleFunc("POST /v1/auth/bootstrap/disable", s.requireAuth(s.handleAuthBootstrapDisable))
+}
+
+// SetControlplane wires optional CP routes (call after New; routes are additive).
+func (s *Server) SetControlplane(h ControlplaneHandler) {
+	s.Controlplane = h
+	if h != nil {
+		h.Register(s.mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+			return s.requireAuth(handlerFunc(next))
+		})
+	}
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request)
@@ -166,12 +184,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"box_up":             st.BoxUp,
 	}
 	if s.Subscribe != nil {
-		sub := s.Subscribe.Status()
-		data["subscribe"] = sub
-		data["config_mode"] = sub.Mode
-		if st.LastApply != nil && st.LastApply.Source == string(configstore.SourcePush) && !sub.Enabled {
-			data["config_mode"] = "direct"
-		}
+		data["subscribe"] = s.Subscribe.Status()
+	}
+	if s.Owner != nil {
+		data["config_mode"] = string(s.Owner.Owner())
 	}
 	if s.Heartbeat != nil {
 		data["heartbeat"] = s.Heartbeat.Status()
@@ -233,16 +249,21 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		mapSupervisorErr(w, err)
 		return
 	}
-	// Direct push cancels subscription so scheduled pull cannot overwrite this config.
-	if s.Subscribe != nil {
+	if s.Owner != nil {
+		_ = s.Owner.Claim(configowner.ModeDirect)
+	} else if s.Subscribe != nil {
 		s.Subscribe.CancelOnDirectConfig()
+	}
+	mode := "direct"
+	if s.Owner != nil {
+		mode = string(s.Owner.Owner())
 	}
 	OK(w, http.StatusOK, map[string]any{
 		"revision":       res.Revision,
 		"content_sha256": res.SHA256,
 		"noop":           res.Noop,
 		"state":          res.State,
-		"config_mode":    "direct",
+		"config_mode":    mode,
 	})
 }
 
@@ -391,6 +412,12 @@ func (s *Server) handleAuthRotate(w http.ResponseWriter, r *http.Request) {
 		mapAuthErr(w, err)
 		return
 	}
+	if s.Subscribe != nil {
+		s.Subscribe.SetOutboundToken(secret)
+	}
+	if s.Heartbeat != nil {
+		s.Heartbeat.SetOutboundToken(secret)
+	}
 	OK(w, http.StatusOK, map[string]any{
 		"id":            view.ID,
 		"name":          view.Name,
@@ -452,18 +479,37 @@ func (s *Server) handleSubscribePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Immediate apply (same as refresh) so mode flips and config is live.
+	// Spec is already persisted: if the controller is unreachable (common for
+	// local panel / private network), still return 200 with fetch_error so
+	// callers can update Authorization headers without a hard failure.
+	var fetchErr string
 	if err := s.Subscribe.Refresh(r.Context()); err != nil {
-		Fail(w, http.StatusBadGateway, "subscribe_fetch_failed", err.Error(), s.Subscribe.Status())
-		return
+		fetchErr = err.Error()
+	}
+	// Enabling subscribe claims ownership even if the first fetch fails: the
+	// schedule is the writer now (ADR 0008). fetch_error is reported separately.
+	if s.Owner != nil {
+		_ = s.Owner.Claim(configowner.ModeSubscribed)
 	}
 	st := s.Supervisor.Status()
-	OK(w, http.StatusOK, map[string]any{
+	mode := "subscribed"
+	if s.Owner != nil {
+		mode = string(s.Owner.Owner())
+	}
+	out := map[string]any{
 		"subscribe":      s.Subscribe.Status(),
 		"revision":       st.Revision,
 		"content_sha256": st.ContentSHA256,
 		"state":          st.State,
-		"config_mode":    "subscribed",
-	})
+		"config_mode":    mode,
+	}
+	if fetchErr != "" {
+		out["fetch_error"] = fetchErr
+		out["fetch_ok"] = false
+	} else {
+		out["fetch_ok"] = true
+	}
+	OK(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSubscribeDelete(w http.ResponseWriter, _ *http.Request) {
@@ -475,7 +521,18 @@ func (s *Server) handleSubscribeDelete(w http.ResponseWriter, _ *http.Request) {
 		Fail(w, http.StatusInternalServerError, "internal", err.Error(), nil)
 		return
 	}
-	OK(w, http.StatusOK, s.Subscribe.Status())
+	// Only displace ownership when we were the subscribe writer. DELETE must not
+	// wipe controlplane/direct ownership (ADR 0008).
+	if s.Owner != nil && s.Owner.Owner() == configowner.ModeSubscribed {
+		_ = s.Owner.Claim(configowner.ModeIdle)
+	}
+	out := map[string]any{
+		"subscribe": s.Subscribe.Status(),
+	}
+	if s.Owner != nil {
+		out["config_mode"] = string(s.Owner.Owner())
+	}
+	OK(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSubscribeRefresh(w http.ResponseWriter, r *http.Request) {
@@ -519,6 +576,7 @@ func (s *Server) handleHeartbeatPut(w http.ResponseWriter, r *http.Request) {
 		TimeoutSec  int               `json:"timeout_sec"`
 		Headers     map[string]string `json:"headers"`
 		Enabled     *bool             `json:"enabled"`
+		TLSInsecure bool              `json:"tls_insecure"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
@@ -533,6 +591,7 @@ func (s *Server) handleHeartbeatPut(w http.ResponseWriter, r *http.Request) {
 		IntervalSec: body.IntervalSec,
 		TimeoutSec:  body.TimeoutSec,
 		Headers:     body.Headers,
+		TLSInsecure: body.TLSInsecure,
 	}, en); err != nil {
 		Fail(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
 		return

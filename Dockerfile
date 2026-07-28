@@ -4,8 +4,9 @@ COPY go.mod go.sum ./
 COPY third_party/sing-box-lx ./third_party/sing-box-lx
 RUN test -f third_party/sing-box-lx/go.mod
 COPY . .
-# Always read allowlist from build/tags.server (do not bake empty ARG into -tags).
-RUN TAGS=$(tr -d '\r\n' < build/tags.server) && \
+# TAGS_FILE selects allowlist (default tags.server; use tags.server.controlplane for CP image).
+ARG TAGS_FILE=build/tags.server
+RUN TAGS=$(tr -d '\r\n' < "$TAGS_FILE") && \
     test -n "$TAGS" && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o /out/subserver ./cmd/subserver
 

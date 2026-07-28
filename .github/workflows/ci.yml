@@ -56,6 +56,12 @@ jobs:
         if: matrix.goarch == 'amd64'
         run: go test -ldflags="-checklinkname=0" -tags "${{ steps.tags.outputs.tags }}" ./...
 
+      - name: Test controlplane
+        if: matrix.goarch == 'amd64'
+        run: |
+          CP_TAGS=$(tr -d '\r\n' < build/tags.server.controlplane)
+          go test -ldflags="-checklinkname=0" -tags "$CP_TAGS" ./internal/controlplane/... ./internal/configowner/...
+
       - name: Vet
         if: matrix.goarch == 'amd64'
         run: go vet -tags "${{ steps.tags.outputs.tags }}" ./...

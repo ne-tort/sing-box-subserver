@@ -146,7 +146,7 @@ Body: raw sing-box JSON **or** wrapper:
 
 Raw body treated as config for simplicity (Content-Type `application/json`).
 
-**Side effect:** successful PUT sets `config_mode=direct` and **cancels** any active subscription so the scheduled fetch cannot overwrite the pushed config.
+**Side effects (exclusive owner — [ADR 0008](adr/0008-exclusive-config-owner.md)):** successful PUT sets `config_mode=direct`, **cancels** any active subscription, and **deactivates** embedded controlplane ownership so no other writer can overwrite the pushed config.
 
 Responses:
 
@@ -175,14 +175,29 @@ Runtime control of **remote JSON URL** (any HTTP that returns server sing-box JS
 **Dedupe:** `304` and local SHA compare before Apply (no useless core restart).  
 **Seed vs runtime:** YAML `pull:` seeds only when `subscribe-state.json` is absent. See [08-pull-heartbeat.md](08-pull-heartbeat.md).
 
+### `config_mode` (normative)
+
+Single enum for status / heartbeat / mutate responses ([ADR 0008](adr/0008-exclusive-config-owner.md)):
+
+| Value | Meaning |
+|-------|---------|
+| `idle` | No active remote/local writer; box may still serve last-good |
+| `subscribed` | Subscribe/pull manager owns Apply |
+| `direct` | Last successful writer was `PUT /v1/config` |
+| `controlplane` | Optional embedded module owns materialize → Apply |
+
+Boot of last-good does **not** invent a mode (`direct_or_boot` is removed).
+
 Mode matrix:
 
 | Event | Result |
 |-------|--------|
-| Idle (no subscribe) | Wait for PUT or POST subscribe |
-| POST subscribe | `config_mode=subscribed`; overwrites prior direct config on successful fetch |
-| PUT config | `config_mode=direct`; subscription cancelled |
-| refresh | Re-fetch URL; Apply if body changed (`304` / same SHA = no-op) |
+| Idle | Wait for PUT, POST subscribe, or controlplane activate |
+| POST subscribe | `config_mode=subscribed`; deactivates controlplane; overwrites prior config on successful fetch |
+| PUT config | `config_mode=direct`; subscription cancelled; controlplane deactivated |
+| controlplane activate | `config_mode=controlplane`; subscription cancelled; see [controlplane/05-api](controlplane/05-api.md) |
+| DELETE subscribe / CP deactivate | If was `subscribed` → `idle`; DELETE subscribe while `direct`/`controlplane` only disables schedule, **does not** Claim(idle). CP deactivate last set → `idle` |
+| refresh (subscribed) | Re-fetch URL; Apply if body changed (`304` / same SHA = no-op) |
 
 ### Heartbeat (`/v1/heartbeat`)
 
@@ -240,6 +255,12 @@ Stop/start last-good without changing revision. Default: include for ops; start 
 ## Versioning
 
 Breaking changes → `/v2`. Additive fields allowed in v1.
+
+## Optional embedded controlplane
+
+When built with `with_controlplane`, additional routes under `/v1/controlplane/*` (agent Bearer)
+and public `GET /v1/sub/{token}` are defined in [controlplane/05-api](controlplane/05-api.md).
+Without the tag those paths are absent (404).
 
 ## OpenAPI
 
