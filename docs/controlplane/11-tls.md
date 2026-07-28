@@ -51,11 +51,12 @@ Emitted config:
 ```
 
 Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge`.  
-Outbounds: verify enabled (no `insecure`), SNI = domain.
+Outbounds: verify enabled (no `insecure`), SNI = domain.  
+If host :80 is taken (e.g. nginx), use `disable_http_challenge: true` and publish agent :443 for TLS-ALPN.
 
 ### `acme_ip`
 
-Same as domain, but `domain: ["<public-ip>"]`, provider **must** be `letsencrypt` (shortlived profile). DNS-01 rejected. Challenges must reach the edge.
+Same as domain, but `domain: ["<public-ip>"]`, provider **must** be `letsencrypt` (shortlived profile). DNS-01 rejected. Challenges must reach the edge (TLS-ALPN on :443 works when :80 is busy).
 
 ## API
 
