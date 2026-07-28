@@ -74,6 +74,7 @@ String tokens inside JSON templates (no Go-template DSL):
 | `{{user.name}}` | User display name |
 | `{{user.uuid}}` | From `creds[preset].uuid` when present |
 | `{{user.password}}` | From `creds[preset].password` when present |
+| `{{user.username}}` | From `creds[preset].username` when present |
 | `{{tag:PRESET}}` | Inbound tag for preset `PRESET` in the current set (`cp-in-{set}-{preset}`) |
 
 Unknown tokens → materialize/validate error.

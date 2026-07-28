@@ -1,0 +1,39 @@
+//go:build with_controlplane
+
+package controlplane
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestACMECertificateReady(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "controlplane", "acme", "certificates", "acme-v02.api.letsencrypt.org-directory", "vpn.example.com")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ready, missing, found := acmeCertificateReady(dir, []string{"vpn.example.com"})
+	if ready || len(found) != 0 || len(missing) != 1 {
+		t.Fatalf("before write: ready=%v missing=%v found=%v", ready, missing, found)
+	}
+	if err := os.WriteFile(filepath.Join(root, "vpn.example.com.crt"), []byte("CERT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ready, missing, found = acmeCertificateReady(dir, []string{"vpn.example.com", "other.example.com"})
+	if ready || len(found) != 1 || len(missing) != 1 {
+		t.Fatalf("partial: ready=%v missing=%v found=%v", ready, missing, found)
+	}
+	other := filepath.Join(dir, "controlplane", "acme", "certificates", "acme-v02.api.letsencrypt.org-directory", "other.example.com")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "other.example.com.crt"), []byte("CERT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ready, missing, found = acmeCertificateReady(dir, []string{"vpn.example.com", "other.example.com"})
+	if !ready || len(missing) != 0 || len(found) != 2 {
+		t.Fatalf("full: ready=%v missing=%v found=%v", ready, missing, found)
+	}
+}

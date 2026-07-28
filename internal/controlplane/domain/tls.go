@@ -134,7 +134,7 @@ func (a ACMESpec) ValidateDomain() error {
 	if prov != "letsencrypt" && prov != "zerossl" && !strings.HasPrefix(prov, "https://") {
 		return fmt.Errorf("unsupported acme provider %q", prov)
 	}
-	return nil
+	return validateACMEPorts(a)
 }
 
 func (a ACMESpec) ValidateIP() error {
@@ -156,6 +156,19 @@ func (a ACMESpec) ValidateIP() error {
 	}
 	if len(a.DNS01Challenge) > 0 {
 		return fmt.Errorf("dns01_challenge not allowed for acme_ip")
+	}
+	return validateACMEPorts(a)
+}
+
+func validateACMEPorts(a ACMESpec) error {
+	if a.AlternativeHTTPPort < 0 || a.AlternativeHTTPPort > 65535 {
+		return fmt.Errorf("alternative_http_port out of range")
+	}
+	if a.AlternativeTLSPort < 0 || a.AlternativeTLSPort > 65535 {
+		return fmt.Errorf("alternative_tls_port out of range")
+	}
+	if a.DisableHTTPChallenge && a.DisableTLSALPNChallenge && len(a.DNS01Challenge) == 0 {
+		return fmt.Errorf("all ACME challenge methods disabled")
 	}
 	return nil
 }

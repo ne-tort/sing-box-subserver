@@ -39,12 +39,10 @@ assert d.get("subscription_url"); assert d.get("sub_token"); print(d["subscripti
 pass "secrets get has url"
 
 echo "== demux set trojan+vless on :9443 =="
-# free port mapping: recreate container adding 9443 if needed
-if ! ss -lnt | grep -q ':9443'; then
-  note "host :9443 not published — remapping container"
-  docker rm -f subserver-cp
-  docker run -d --name subserver-cp --restart unless-stopped \
-    -p 8080:8080 -p 8443:8443 -p 1080:1080 -p 443:443 -p 9443:9443 \
+# host network: no port remap needed; ensure container is up
+if ! docker ps --format '{{.Names}}' | grep -Fxq subserver-cp; then
+  note "container missing — starting with --network host"
+  docker run -d --name subserver-cp --restart unless-stopped --network host \
     -v /opt/subserver/agent.yaml:/etc/subserver/agent.yaml:ro \
     -v /opt/subserver/data:/var/lib/subserver \
     subserver-cp:local

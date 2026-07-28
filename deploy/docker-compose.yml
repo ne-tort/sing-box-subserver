@@ -1,0 +1,16 @@
+# Canonical edge deploy (Linux). Host network so inbound ports bind on the host
+# without per-port publish. Used by deploy/install-edge.sh and panel SSH bootstrap.
+#
+# Usage:
+#   cp deploy/docker-compose.yml /opt/subserver/docker-compose.yml
+#   # edit image + volume paths, then:
+#   docker compose -f /opt/subserver/docker-compose.yml up -d
+services:
+  subserver:
+    image: ghcr.io/ne-tort/sing-box-subserver:latest
+    container_name: subserver
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - /opt/subserver/agent.yaml:/etc/subserver/agent.yaml:ro
+      - /opt/subserver/data:/var/lib/subserver

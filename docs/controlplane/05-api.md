@@ -24,7 +24,8 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
     "active_sets": ["mixed-443", "hy2-8443"],
     "users_total": 10,
     "users_eligible": 8,
-    "presets_count": 12,
+    "presets_count": 13,
+    "demux_recipes_count": 9,
     "sets_count": 2,
     "last_materialize_sha256": "...",
     "last_materialize_at": "..."
@@ -74,6 +75,19 @@ Modes: `self_signed` \| `acme_domain` \| `acme_ip`. See [11-tls](11-tls.md).
 | GET | `/v1/controlplane/presets/{name}` | Full preset including templates |
 
 Read-only in v1. `404` if unknown.
+
+---
+
+## Demux recipes
+
+Named demux_template skeletons (separate from protocol presets). Operators copy `demux_template` + `required_presets` into a set.
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/controlplane/demux-recipes` | List name, description, required_presets, suggested_port |
+| GET | `/v1/controlplane/demux-recipes/{name}` | Full recipe including `demux_template` |
+
+`404` if unknown. Creating a set with empty `"match":{"tls":{}}` → `400` `cp_invalid_demux`.
 
 ---
 

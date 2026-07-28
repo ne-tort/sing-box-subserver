@@ -49,7 +49,7 @@ cleanup_old_install() {
   fi
   log "RESET_MODE=fresh: cleaning old subserver artifacts"
 
-  for name in "subserver" "sui-subserver" "subserver-smoke"; do
+  for name in "subserver" "sui-subserver" "subserver-smoke" "subserver-cp"; do
     if docker ps -a --format '{{.Names}}' | grep -Fxq "$name"; then
       docker rm -f "$name" >/dev/null 2>&1 || true
     fi
@@ -95,12 +95,42 @@ write_install_files() {
     fi
   fi
 
+  MGMT_TLS_MODE="${SUBSERVER_MGMT_TLS:-off}" # off|self_signed
+  INSECURE_BIND=true
+  TLS_YAML=""
+  if [[ "$MGMT_TLS_MODE" == "self_signed" ]]; then
+    command -v openssl >/dev/null 2>&1 || { apt-get update -y && apt-get install -y openssl || true; }
+    mkdir -p "$REMOTE_DIR/tls"
+    HOST_CN="${SUBSERVER_MGMT_TLS_CN:-}"
+    if [[ -z "$HOST_CN" ]]; then
+      HOST_CN="$(hostname -f 2>/dev/null || hostname || echo localhost)"
+    fi
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "$REMOTE_DIR/tls/mgmt.key" \
+      -out "$REMOTE_DIR/tls/mgmt.crt" \
+      -days 825 \
+      -subj "/CN=${HOST_CN}" \
+      -addext "subjectAltName=DNS:${HOST_CN},DNS:localhost,IP:127.0.0.1" \
+      >/dev/null 2>&1 || openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "$REMOTE_DIR/tls/mgmt.key" \
+      -out "$REMOTE_DIR/tls/mgmt.crt" \
+      -days 825 \
+      -subj "/CN=${HOST_CN}"
+    chmod 600 "$REMOTE_DIR/tls/mgmt.key" "$REMOTE_DIR/tls/mgmt.crt"
+    INSECURE_BIND=false
+    TLS_YAML=$'tls:\n  cert: "/etc/subserver/tls/mgmt.crt"\n  key: "/etc/subserver/tls/mgmt.key"\n'
+    log "MGMT TLS self_signed enabled (CN=${HOST_CN}); panel AgentURL must use https:// (tls_insecure ok for labs)"
+  fi
+
   {
     echo "node_id: \"$NODE_ID\""
     echo "token: \"$TOKEN\""
     echo "listen: \"$MGMT_LISTEN\""
     echo "data_dir: \"/var/lib/subserver\""
-    echo "insecure_public_bind: true"
+    echo "insecure_public_bind: $INSECURE_BIND"
+    if [[ -n "$TLS_YAML" ]]; then
+      printf '%s' "$TLS_YAML"
+    fi
     if [[ -n "$PULL_URL" ]]; then
       cat <<EOF
 pull:
@@ -122,6 +152,11 @@ EOF
   } >"$REMOTE_DIR/agent.yaml"
   chmod 0600 "$REMOTE_DIR/agent.yaml"
 
+  TLS_VOL=""
+  if [[ "$MGMT_TLS_MODE" == "self_signed" ]]; then
+    TLS_VOL=$'      - '"$REMOTE_DIR"'/tls:/etc/subserver/tls:ro\n'
+  fi
+
   if [[ -n "$IMAGE" ]]; then
     cat >"$REMOTE_DIR/docker-compose.yml" <<EOF
 services:
@@ -132,7 +167,7 @@ services:
     restart: unless-stopped
     volumes:
       - $REMOTE_DIR/agent.yaml:/etc/subserver/agent.yaml:ro
-      - $REMOTE_DIR/data:/var/lib/subserver
+${TLS_VOL}      - $REMOTE_DIR/data:/var/lib/subserver
 EOF
   else
     cat >"$REMOTE_DIR/docker-compose.yml" <<EOF
@@ -146,7 +181,7 @@ services:
     restart: unless-stopped
     volumes:
       - $REMOTE_DIR/agent.yaml:/etc/subserver/agent.yaml:ro
-      - $REMOTE_DIR/data:/var/lib/subserver
+${TLS_VOL}      - $REMOTE_DIR/data:/var/lib/subserver
 EOF
   fi
 }
@@ -176,13 +211,19 @@ docker compose up -d --build --remove-orphans
 
 PORT="${MGMT_LISTEN##*:}"
 PORT="${PORT%%]*}"
+HEALTH_SCHEME=http
+CURL_EXTRA=()
+if [[ "${SUBSERVER_MGMT_TLS:-off}" == "self_signed" ]]; then
+  HEALTH_SCHEME=https
+  CURL_EXTRA=(-k)
+fi
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${PORT}/v1/health" >/dev/null 2>&1; then
-    log "health ok"
+  if curl -fsS "${CURL_EXTRA[@]}" "${HEALTH_SCHEME}://127.0.0.1:${PORT}/v1/health" >/dev/null 2>&1; then
+    log "health ok (${HEALTH_SCHEME})"
     exit 0
   fi
   sleep 2
 done
-log "ERROR: health check failed on 127.0.0.1:${PORT}"
+log "ERROR: health check failed on ${HEALTH_SCHEME}://127.0.0.1:${PORT}"
 docker compose logs --tail=80 || true
 exit 3

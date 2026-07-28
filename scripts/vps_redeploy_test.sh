@@ -4,8 +4,7 @@ sed -i 's/\r$//' /tmp/vps_cp_smoke.sh /tmp/vps_cp_deeper.sh || true
 docker rm -f subserver-cp 2>/dev/null || true
 rm -rf /opt/subserver/data/*
 mkdir -p /opt/subserver/data
-docker run -d --name subserver-cp --restart unless-stopped \
-  -p 8080:8080 -p 8443:8443 -p 1080:1080 \
+docker run -d --name subserver-cp --restart unless-stopped --network host \
   -v /opt/subserver/agent.yaml:/etc/subserver/agent.yaml:ro \
   -v /opt/subserver/data:/var/lib/subserver \
   subserver-cp:local

@@ -31,8 +31,7 @@ controlplane:
   public_port: 8080
   expiry_tick_sec: 60
 EOF
-docker run -d --name subserver-cp --restart unless-stopped \
-  -p 8080:8080 -p 8443:8443 -p 1080:1080 -p 443:443 \
+docker run -d --name subserver-cp --restart unless-stopped --network host \
   -v /opt/subserver/agent.yaml:/etc/subserver/agent.yaml:ro \
   -v /opt/subserver/data:/var/lib/subserver \
   subserver-cp:local

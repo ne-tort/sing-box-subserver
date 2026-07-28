@@ -1,4 +1,7 @@
 # Controlplane matrix using host-built linux binary (avoids docker module proxy).
+# NOTE: published ports (not host network) so the matrix works on Docker Desktop
+# (Windows/macOS). Production / VPS deploy MUST use network_mode: host —
+# see deploy/docker-compose.yml and deploy/install-edge.sh.
 services:
   subserver-cp:
     build:

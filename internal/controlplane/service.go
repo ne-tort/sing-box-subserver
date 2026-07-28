@@ -23,6 +23,7 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/materialize"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxrecipes"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/store"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
@@ -171,6 +172,8 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("POST /v1/controlplane/users/{id}/rotate-creds", requireAuth(s.handleUsersRotateCreds))
 	mux.HandleFunc("GET /v1/controlplane/presets", requireAuth(s.handlePresetsList))
 	mux.HandleFunc("GET /v1/controlplane/presets/{name}", requireAuth(s.handlePresetsGet))
+	mux.HandleFunc("GET /v1/controlplane/demux-recipes", requireAuth(s.handleDemuxRecipesList))
+	mux.HandleFunc("GET /v1/controlplane/demux-recipes/{name}", requireAuth(s.handleDemuxRecipesGet))
 	mux.HandleFunc("GET /v1/controlplane/sets", requireAuth(s.handleSetsList))
 	mux.HandleFunc("POST /v1/controlplane/sets", requireAuth(s.handleSetsCreate))
 	mux.HandleFunc("GET /v1/controlplane/sets/{name}", requireAuth(s.handleSetsGet))
@@ -526,6 +529,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"users_total":              len(users),
 		"users_eligible":           elig,
 		"presets_count":            len(presets.All()),
+		"demux_recipes_count":      len(demuxrecipes.All()),
 		"sets_count":               len(sets),
 		"last_materialize_sha256":  st.LastMaterializeSHA256,
 		"last_materialize_at":      st.LastMaterializeAt,
@@ -802,6 +806,29 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 	okJSON(w, 200, p)
 }
 
+func (s *Service) handleDemuxRecipesList(w http.ResponseWriter, _ *http.Request) {
+	all := demuxrecipes.All()
+	out := make([]any, 0, len(all))
+	for _, r := range all {
+		out = append(out, map[string]any{
+			"name":             r.Name,
+			"description":      r.Description,
+			"required_presets": r.RequiredPresets,
+			"suggested_port":   r.SuggestedPort,
+		})
+	}
+	okJSON(w, 200, out)
+}
+
+func (s *Service) handleDemuxRecipesGet(w http.ResponseWriter, r *http.Request) {
+	rec, err := demuxrecipes.Get(r.PathValue("name"))
+	if err != nil {
+		failJSON(w, 404, "not_found", err.Error())
+		return
+	}
+	okJSON(w, 200, rec)
+}
+
 func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet) error {
 	if set.Name == "" || set.ListenPort == 0 || len(set.Presets) == 0 {
 		return fmt.Errorf("name, listen_port, presets required")
@@ -815,6 +842,11 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 	for _, pn := range set.Presets {
 		if _, err := presets.Get(pn); err != nil {
 			return fmt.Errorf("cp_unknown_preset: %w", err)
+		}
+	}
+	if set.HasDemux() {
+		if err := demuxrecipes.ValidateTemplate(set.DemuxTemplate); err != nil {
+			return fmt.Errorf("cp_invalid_demux: %w", err)
 		}
 	}
 	for _, o := range others {
@@ -872,6 +904,9 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		if strings.Contains(err.Error(), "cp_unknown_preset") {
 			ec = "cp_unknown_preset"
+		}
+		if strings.Contains(err.Error(), "cp_invalid_demux") {
+			ec = "cp_invalid_demux"
 		}
 		failJSON(w, code, ec, err.Error())
 		return
@@ -933,6 +968,12 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 		code, ec := 400, "bad_request"
 		if strings.Contains(err.Error(), "cp_port_conflict") {
 			code, ec = 409, "cp_port_conflict"
+		}
+		if strings.Contains(err.Error(), "cp_unknown_preset") {
+			ec = "cp_unknown_preset"
+		}
+		if strings.Contains(err.Error(), "cp_invalid_demux") {
+			ec = "cp_invalid_demux"
 		}
 		failJSON(w, code, ec, err.Error())
 		return
@@ -1159,12 +1200,29 @@ func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
 		status["cert_path"] = cert
 		status["key_path"] = key
 		status["active_material"] = "self_signed_pem"
+		status["ready"] = pemPresent
+		if !pemPresent {
+			status["ready_reason"] = "self_signed pem missing"
+		}
 	case domain.TLSModeACMEDomain, domain.TLSModeACMEIP:
 		status["self_signed_cert_present"] = pemPresent // orphan files may remain
 		status["active_material"] = "certificate_provider"
 		status["certificate_provider_tag"] = domain.TLSProviderTag
+		domains := []string{}
+		if p.ACME != nil {
+			domains = p.ACME.Domains
+		}
+		ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
+		status["ready"] = ready
+		status["acme_certs_found"] = found
+		status["acme_certs_missing"] = missing
+		if !ready {
+			status["ready_reason"] = "waiting for ACME obtain (certmagic)"
+		}
 	default:
 		status["active_material"] = "unknown"
+		status["ready"] = false
+		status["ready_reason"] = "unknown mode"
 	}
 	out["material_status"] = status
 	return out

@@ -10,7 +10,7 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
-// Catalog of embedded protocol presets (MVP).
+// Catalog of embedded protocol presets (inbound variants).
 // TLS-capable presets declare trait "tls"; materialize attaches certificate
 // via attachInboundTLS (paths or certificate_provider) — templates only set enabled+server_name placeholders.
 var (
@@ -41,6 +41,52 @@ func load() {
       "server": "{{server}}",
       "server_port": 0,
       "method": "aes-128-gcm",
+      "password": "{{user.password}}"
+    }
+  },
+  {
+    "name": "shadowsocks-aes-256-gcm",
+    "protocol": "shadowsocks",
+    "description": "Shadowsocks AES-256-GCM multi-user over TCP",
+    "traits": ["tcp"],
+    "cred_fields": ["password"],
+    "inbound_template": {
+      "type": "shadowsocks",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "method": "aes-256-gcm",
+      "users": []
+    },
+    "outbound_template": {
+      "type": "shadowsocks",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "method": "aes-256-gcm",
+      "password": "{{user.password}}"
+    }
+  },
+  {
+    "name": "shadowsocks-chacha20",
+    "protocol": "shadowsocks",
+    "description": "Shadowsocks 2022-unrelated classic chacha20-ietf-poly1305 TCP",
+    "traits": ["tcp"],
+    "cred_fields": ["password"],
+    "inbound_template": {
+      "type": "shadowsocks",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "method": "chacha20-ietf-poly1305",
+      "users": []
+    },
+    "outbound_template": {
+      "type": "shadowsocks",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "method": "chacha20-ietf-poly1305",
       "password": "{{user.password}}"
     }
   },
@@ -86,6 +132,191 @@ func load() {
       "server": "{{server}}",
       "server_port": 0,
       "uuid": "{{user.uuid}}"
+    }
+  },
+  {
+    "name": "vless-tls",
+    "protocol": "vless",
+    "description": "VLESS over TCP with TLS (controlplane TLS profile)",
+    "traits": ["tcp", "tls"],
+    "cred_fields": ["uuid"],
+    "inbound_template": {
+      "type": "vless",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    },
+    "outbound_template": {
+      "type": "vless",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "uuid": "{{user.uuid}}",
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    }
+  },
+  {
+    "name": "vmess-tcp",
+    "protocol": "vmess",
+    "description": "VMess over TCP without TLS",
+    "traits": ["tcp"],
+    "cred_fields": ["uuid"],
+    "inbound_template": {
+      "type": "vmess",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": []
+    },
+    "outbound_template": {
+      "type": "vmess",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "uuid": "{{user.uuid}}",
+      "security": "auto"
+    }
+  },
+  {
+    "name": "hysteria2",
+    "protocol": "hysteria2",
+    "description": "Hysteria2 UDP/QUIC with TLS (controlplane TLS profile)",
+    "traits": ["udp", "quic", "tls"],
+    "cred_fields": ["password"],
+    "inbound_template": {
+      "type": "hysteria2",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    },
+    "outbound_template": {
+      "type": "hysteria2",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "password": "{{user.password}}",
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    }
+  },
+  {
+    "name": "tuic",
+    "protocol": "tuic",
+    "description": "TUIC v5 UDP/QUIC with TLS (controlplane TLS profile)",
+    "traits": ["udp", "quic", "tls"],
+    "cred_fields": ["uuid", "password"],
+    "inbound_template": {
+      "type": "tuic",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" },
+      "congestion_control": "bbr"
+    },
+    "outbound_template": {
+      "type": "tuic",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "uuid": "{{user.uuid}}",
+      "password": "{{user.password}}",
+      "tls": { "enabled": true, "server_name": "{{server}}" },
+      "congestion_control": "bbr"
+    }
+  },
+  {
+    "name": "anytls",
+    "protocol": "anytls",
+    "description": "AnyTLS over TCP with TLS (controlplane TLS profile)",
+    "traits": ["tcp", "tls"],
+    "cred_fields": ["password"],
+    "inbound_template": {
+      "type": "anytls",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    },
+    "outbound_template": {
+      "type": "anytls",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "password": "{{user.password}}",
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    }
+  },
+  {
+    "name": "socks",
+    "protocol": "socks",
+    "description": "SOCKS5 with username/password (lab / demux plaintext target)",
+    "traits": ["tcp"],
+    "cred_fields": ["username", "password"],
+    "inbound_template": {
+      "type": "socks",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": []
+    },
+    "outbound_template": {
+      "type": "socks",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "username": "{{user.username}}",
+      "password": "{{user.password}}"
+    }
+  },
+  {
+    "name": "http",
+    "protocol": "http",
+    "description": "HTTP CONNECT proxy with username/password",
+    "traits": ["tcp"],
+    "cred_fields": ["username", "password"],
+    "inbound_template": {
+      "type": "http",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": []
+    },
+    "outbound_template": {
+      "type": "http",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "username": "{{user.username}}",
+      "password": "{{user.password}}"
+    }
+  },
+  {
+    "name": "vmess-tls",
+    "protocol": "vmess",
+    "description": "VMess over TCP with TLS (controlplane TLS profile)",
+    "traits": ["tcp", "tls"],
+    "cred_fields": ["uuid"],
+    "inbound_template": {
+      "type": "vmess",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    },
+    "outbound_template": {
+      "type": "vmess",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "uuid": "{{user.uuid}}",
+      "security": "auto",
+      "tls": { "enabled": true, "server_name": "{{server}}" }
     }
   }
 ]`)

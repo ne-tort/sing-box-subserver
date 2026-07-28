@@ -323,6 +323,7 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 				"{{user.name}}":     user.Name,
 				"{{user.password}}": fmt.Sprint(creds["password"]),
 				"{{user.uuid}}":     fmt.Sprint(creds["uuid"]),
+				"{{user.username}}": fmt.Sprint(creds["username"]),
 			}
 			ob, err = substituteMap(ob, vars)
 			if err != nil {
