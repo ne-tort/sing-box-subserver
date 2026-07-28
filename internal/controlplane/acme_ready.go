@@ -32,30 +32,49 @@ func acmeCertificateReady(dataDir string, domains []string) (ready bool, missing
 }
 
 func acmeDomainHasCert(certificatesRoot, domain string) bool {
+	_, _, ok := acmeCertKeyPaths(certificatesRoot, domain)
+	return ok
+}
+
+// acmeCertKeyPaths returns certmagic PEM paths for domain under certificatesRoot.
+func acmeCertKeyPaths(certificatesRoot, domain string) (certPath, keyPath string, ok bool) {
 	entries, err := os.ReadDir(certificatesRoot)
 	if err != nil {
-		return false
+		return "", "", false
 	}
 	for _, iss := range entries {
 		if !iss.IsDir() {
 			continue
 		}
-		// Exact leaf used by certmagic: .../<issuer>/<domain>/<domain>.crt
-		exact := filepath.Join(certificatesRoot, iss.Name(), domain, domain+".crt")
-		if st, err := os.Stat(exact); err == nil && st.Size() > 0 {
-			return true
+		exactCert := filepath.Join(certificatesRoot, iss.Name(), domain, domain+".crt")
+		exactKey := filepath.Join(certificatesRoot, iss.Name(), domain, domain+".key")
+		if st, err := os.Stat(exactCert); err == nil && st.Size() > 0 {
+			if _, err := os.Stat(exactKey); err == nil {
+				return exactCert, exactKey, true
+			}
 		}
-		// Fallback: any .crt under .../<issuer>/<domain>/
 		dir := filepath.Join(certificatesRoot, iss.Name(), domain)
 		files, err := os.ReadDir(dir)
 		if err != nil {
 			continue
 		}
+		var crt, key string
 		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".crt") {
-				return true
+			if f.IsDir() {
+				continue
+			}
+			name := strings.ToLower(f.Name())
+			full := filepath.Join(dir, f.Name())
+			if strings.HasSuffix(name, ".crt") && crt == "" {
+				crt = full
+			}
+			if strings.HasSuffix(name, ".key") && key == "" {
+				key = full
 			}
 		}
+		if crt != "" && key != "" {
+			return crt, key, true
+		}
 	}
-	return false
+	return "", "", false
 }

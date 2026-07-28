@@ -211,19 +211,18 @@ docker compose up -d --build --remove-orphans
 
 PORT="${MGMT_LISTEN##*:}"
 PORT="${PORT%%]*}"
-HEALTH_SCHEME=http
-CURL_EXTRA=()
-if [[ "${SUBSERVER_MGMT_TLS:-off}" == "self_signed" ]]; then
-  HEALTH_SCHEME=https
-  CURL_EXTRA=(-k)
-fi
 for _ in $(seq 1 60); do
-  if curl -fsS "${CURL_EXTRA[@]}" "${HEALTH_SCHEME}://127.0.0.1:${PORT}/v1/health" >/dev/null 2>&1; then
-    log "health ok (${HEALTH_SCHEME})"
+  # CP builds terminate management over HTTPS; legacy plain HTTP still accepted as fallback.
+  if curl -fkSs "https://127.0.0.1:${PORT}/v1/health" >/dev/null 2>&1; then
+    log "health ok (https)"
+    exit 0
+  fi
+  if curl -fsS "http://127.0.0.1:${PORT}/v1/health" >/dev/null 2>&1; then
+    log "health ok (http)"
     exit 0
   fi
   sleep 2
 done
-log "ERROR: health check failed on ${HEALTH_SCHEME}://127.0.0.1:${PORT}"
+log "ERROR: health check failed on 127.0.0.1:${PORT}"
 docker compose logs --tail=80 || true
 exit 3

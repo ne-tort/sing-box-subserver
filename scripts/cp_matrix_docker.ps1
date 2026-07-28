@@ -1,9 +1,11 @@
 # Controlplane scenario matrix (self_signed only — no live ACME).
 $ErrorActionPreference = "Stop"
+# Allow self-signed management TLS in local matrix.
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $Root
 $Token = "smoke-token-not-for-prod"
-$Base = if ($env:BASE_URL) { $env:BASE_URL } else { "http://127.0.0.1:18081" }
+$Base = if ($env:BASE_URL) { $env:BASE_URL } else { "https://127.0.0.1:18081" }
 $Compose = "docker-compose.cp-smoke.yml"
 $headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
 

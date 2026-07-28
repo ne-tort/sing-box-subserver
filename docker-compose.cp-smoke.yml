@@ -15,7 +15,7 @@ services:
       - ./testdata/docker/agent.controlplane.yaml:/etc/subserver/agent.yaml:ro
       - subserver-cp-data:/var/lib/subserver
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/v1/health"]
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://127.0.0.1:8080/v1/health"]
       interval: 2s
       timeout: 2s
       retries: 45

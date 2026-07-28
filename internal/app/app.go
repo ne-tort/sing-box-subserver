@@ -38,9 +38,6 @@ func Run(opts Options) error {
 		return err
 	}
 	o := obs.Setup(cfg.Log.Level)
-	if cfg.InsecurePublicBind && !cfg.IsLoopbackListen() && !cfg.HasTLS() {
-		o.Logger.Warn("insecure_public_bind enabled: management API without TLS on non-loopback", "listen", cfg.Listen)
-	}
 
 	store, err := configstore.New(cfg.DataDir)
 	if err != nil {
@@ -100,6 +97,9 @@ func Run(opts Options) error {
 	})
 	if cpSvc != nil {
 		srv.SetControlplane(cpSvc)
+		o.Logger.Info("management API will use HTTPS from controlplane TLS profile", "listen", cfg.Listen)
+	} else if cfg.InsecurePublicBind && !cfg.IsLoopbackListen() && !cfg.HasTLS() {
+		o.Logger.Warn("insecure_public_bind enabled: management API without TLS on non-loopback", "listen", cfg.Listen)
 	}
 
 	owner.SetHooks(configowner.Hooks{
@@ -133,7 +133,13 @@ func Run(opts Options) error {
 
 	apiErr := make(chan error, 1)
 	go func() {
-		o.Logger.Info("management API listening", "addr", cfg.Listen, "node_id", cfg.NodeID)
+		scheme := "http"
+		if _, ok := srv.Controlplane.(api.MgmtTLSProvider); ok {
+			scheme = "https"
+		} else if cfg.HasTLS() {
+			scheme = "https"
+		}
+		o.Logger.Info("management API listening", "addr", cfg.Listen, "scheme", scheme, "node_id", cfg.NodeID)
 		apiErr <- srv.ListenAndServe(ctx)
 	}()
 

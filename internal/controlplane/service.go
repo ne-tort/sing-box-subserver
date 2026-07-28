@@ -35,6 +35,14 @@ type Service struct {
 	store *store.Store
 	log   *slog.Logger
 	mu    sync.Mutex
+
+	mgmtTLS   mgmtCertCache
+	acmeWatch struct {
+		mu        sync.Mutex
+		enteredAt time.Time
+		everReady bool
+		lostSince time.Time
+	}
 }
 
 // New constructs the CP service (with_controlplane builds only).
@@ -65,8 +73,20 @@ func (s *Service) Bootstrap(ctx context.Context) {
 	if s == nil {
 		return
 	}
-	if _, err := s.ensureTLSProfile(false); err != nil && s.log != nil {
+	p, err := s.ensureTLSProfile(false)
+	if err != nil && s.log != nil {
 		s.log.Warn("controlplane tls profile bootstrap failed", "err", err)
+	} else if err == nil {
+		if err := s.ensureSafetySelfSignedPEMs(p); err != nil && s.log != nil {
+			s.log.Warn("controlplane safety self_signed pems failed", "err", err)
+		}
+		if p.Mode == domain.TLSModeACMEDomain || p.Mode == domain.TLSModeACMEIP {
+			s.noteACMEModeEntered()
+			if p.ACME != nil {
+				ready, _, _ := acmeCertificateReady(s.cfg.DataDir, p.ACME.Domains)
+				s.noteACMEReady(ready)
+			}
+		}
 	}
 	if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
 		return
@@ -88,13 +108,22 @@ func (s *Service) Run(ctx context.Context) {
 	if s.cfg.Cfg != nil && s.cfg.Cfg.Controlplane.ExpiryTickSec > 0 {
 		tickSec = s.cfg.Cfg.Controlplane.ExpiryTickSec
 	}
+	// ACME watchdog ticks more often than expiry; reuse min(tick, 30s).
+	watchSec := tickSec
+	if watchSec > 30 {
+		watchSec = 30
+	}
 	t := time.NewTicker(time.Duration(tickSec) * time.Second)
+	w := time.NewTicker(time.Duration(watchSec) * time.Second)
 	defer t.Stop()
+	defer w.Stop()
 	var lastFP string
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-w.C:
+			s.acmeWatchdog(ctx)
 		case <-t.C:
 			s.mu.Lock()
 			_ = s.applyTrafficResetsLocked(time.Now().UTC())
@@ -259,7 +288,8 @@ func (s *Service) subscriptionURL(r *http.Request, token string) (path, url stri
 			port = p
 		}
 	}
-	scheme := "http"
+	// CP builds always serve management/sub over HTTPS (CP TLS profile).
+	scheme := "https"
 	if s.cfg.Cfg != nil && s.cfg.Cfg.HasTLS() {
 		scheme = "https"
 	}
@@ -426,8 +456,77 @@ func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error)
 		if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
 			return domain.TLSProfile{}, err
 		}
+	} else if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
+		return domain.TLSProfile{}, err
 	}
 	return p, nil
+}
+
+func (s *Service) acmeWatchdog(ctx context.Context) {
+	p, err := s.ensureTLSProfile(false)
+	if err != nil {
+		return
+	}
+	if p.Mode != domain.TLSModeACMEDomain && p.Mode != domain.TLSModeACMEIP {
+		return
+	}
+	domains := []string{}
+	if p.ACME != nil {
+		domains = p.ACME.Domains
+	}
+	ready, _, _ := acmeCertificateReady(s.cfg.DataDir, domains)
+	s.noteACMEReady(ready)
+	if ready {
+		return
+	}
+	ok, reason := s.shouldACMEFallback()
+	if !ok {
+		return
+	}
+	s.forceSelfSignedFallback(ctx, reason)
+}
+
+func (s *Service) forceSelfSignedFallback(ctx context.Context, reason string) {
+	host := ""
+	if s.cfg.Cfg != nil {
+		host = s.cfg.Cfg.Controlplane.PublicHost
+	}
+	p := domain.DefaultSelfSigned(host)
+	if err := p.Validate(); err != nil {
+		if s.log != nil {
+			s.log.Error("acme fallback: invalid self_signed profile", "err", err, "reason", reason)
+		}
+		return
+	}
+	if err := s.store.SaveTLSProfile(p); err != nil {
+		if s.log != nil {
+			s.log.Error("acme fallback: save profile failed", "err", err, "reason", reason)
+		}
+		return
+	}
+	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, true); err != nil {
+		if s.log != nil {
+			s.log.Error("acme fallback: write pem failed", "err", err, "reason", reason)
+		}
+		return
+	}
+	// Reset ACME watch state after leaving ACME mode.
+	s.acmeWatch.mu.Lock()
+	s.acmeWatch.enteredAt = time.Time{}
+	s.acmeWatch.everReady = false
+	s.acmeWatch.lostSince = time.Time{}
+	s.acmeWatch.mu.Unlock()
+	s.mgmtTLS.mu.Lock()
+	s.mgmtTLS.cert = nil
+	s.mgmtTLS.source = ""
+	s.mgmtTLS.mu.Unlock()
+
+	if s.log != nil {
+		s.log.Error("ACME emergency fallback to self_signed", "reason", reason)
+	}
+	if err := s.rematerializeForce(ctx, true); err != nil && s.log != nil {
+		s.log.Error("acme fallback rematerialize failed", "err", err)
+	}
 }
 
 func okJSON(w http.ResponseWriter, code int, data any) {
@@ -1151,7 +1250,17 @@ func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Mode switch away from self_signed still needs Apply when CP owns the box.
 		forceReload = true
+		if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
+		if p.Mode == domain.TLSModeACMEDomain || p.Mode == domain.TLSModeACMEIP {
+			s.noteACMEModeEntered()
+		}
 	}
+	s.mgmtTLS.mu.Lock()
+	s.mgmtTLS.cert = nil
+	s.mgmtTLS.mu.Unlock()
 	if err := s.rematerializeForce(r.Context(), forceReload); err != nil {
 		failJSON(w, 422, "config_invalid", err.Error())
 		return
@@ -1213,6 +1322,7 @@ func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
 			domains = p.ACME.Domains
 		}
 		ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
+		s.noteACMEReady(ready)
 		status["ready"] = ready
 		status["acme_certs_found"] = found
 		status["acme_certs_missing"] = missing
@@ -1223,6 +1333,11 @@ func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
 		status["active_material"] = "unknown"
 		status["ready"] = false
 		status["ready_reason"] = "unknown mode"
+	}
+	status["mgmt_https"] = true
+	status["mgmt_cert_source"] = s.mgmtCertSource()
+	if _, _, src, err := s.mgmtMaterialPaths(); err == nil {
+		status["mgmt_cert_source"] = src
 	}
 	out["material_status"] = status
 	return out

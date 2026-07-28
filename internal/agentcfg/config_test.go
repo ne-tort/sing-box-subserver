@@ -78,7 +78,11 @@ node_id: edge-1
 token: secret
 listen: 0.0.0.0:8080
 `))
-	if err == nil {
+	if controlplaneProvidesMgmtTLS() {
+		if err != nil {
+			t.Fatalf("CP builds allow public bind without insecure flag: %v", err)
+		}
+	} else if err == nil {
 		t.Fatal("expected bind policy error")
 	}
 	cfg, err := Parse([]byte(`

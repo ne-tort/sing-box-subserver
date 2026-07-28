@@ -53,15 +53,26 @@ Emitted config:
 Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge`.  
 Outbounds: verify enabled (no `insecure`), SNI = domain.
 
+**Management API + `GET /v1/sub/{token}`** use the **same** profile material over HTTPS (no nginx required):
+
+| Mode | Management cert source |
+|------|------------------------|
+| `self_signed` | `{data_dir}/controlplane/tls/server.{crt,key}` |
+| `acme_*` + ready | certmagic PEMs under `controlplane/acme/certificates/` |
+| `acme_*` while obtaining | interim self_signed PEMs (always kept as safety net) |
+| ACME obtain/renewal emergency | profile mode forced to `self_signed` (persisted) + rematerialize |
+
+`subscription_url` scheme is always `https://` on CP builds. Clients (panel) should use `agent_tls_insecure` for self_signed / interim certs.
+
 When host `:80` is free, leave challenges at defaults (HTTP-01 + TLS-ALPN).  
 If host `:80` is taken, either:
 
 - `disable_http_challenge: true` and publish agent `:443` for TLS-ALPN, or
-- set `alternative_http_port` (e.g. `8088`) and forward public `80 → alternative_http_port` (iptables/DNAT or reverse-proxy `/.well-known/acme-challenge/`).
+- set `alternative_http_port` (e.g. `9080`) and forward public `80 → alternative_http_port`.
 
 Same for TLS-ALPN via `alternative_tls_port` when public `:443` cannot bind inside the agent.
 
-Important: when using `alternative_http_port`, do **not** also publish host `:80` to an idle container port — LE will hit empty `:80` (`connection refused`). Publish only the alt port and DNAT/proxy `80 → alternative_http_port`.
+Important: when using `alternative_http_port`, do **not** also publish host `:80` to an idle container port — LE will hit empty `:80` (`connection refused`). Prefer **host network** deploy.
 
 ### `acme_ip`
 

@@ -3,7 +3,7 @@
 # Host networking: ACME listens on host ALT; DNAT public 80 → ALT.
 set -eu
 TOKEN=vps-cp-token-dev-only
-BASE=http://127.0.0.1:8080
+BASE=https://127.0.0.1:8080
 H="Authorization: Bearer ${TOKEN}"
 CT="Content-Type: application/json"
 DOMAIN=wiki.ai-qwerty.ru
@@ -31,14 +31,14 @@ docker run -d --name subserver-cp --restart unless-stopped --network host \
   -v /opt/subserver/data:/var/lib/subserver \
   subserver-cp:local
 sleep 2
-curl -fsS "$BASE/v1/health" >/dev/null
+curl -fkSs "$BASE/v1/health" >/dev/null
 
-curl -fsS -X POST -H "$H" -H "$CT" -d '{"name":"alt-acme"}' "$BASE/v1/controlplane/users" >/dev/null
-curl -fsS -X POST -H "$H" -H "$CT" \
+curl -fkSs -X POST -H "$H" -H "$CT" -d '{"name":"alt-acme"}' "$BASE/v1/controlplane/users" >/dev/null
+curl -fkSs -X POST -H "$H" -H "$CT" \
   -d '{"name":"trojan-443","listen":"::","listen_port":443,"presets":["trojan-tcp"]}' \
   "$BASE/v1/controlplane/sets" >/dev/null
 
-curl -fsS -X PUT -H "$H" -H "$CT" -d "{
+curl -fkSs -X PUT -H "$H" -H "$CT" -d "{
   \"mode\":\"acme_domain\",
   \"acme\":{
     \"email\":\"${EMAIL}\",
@@ -49,7 +49,7 @@ curl -fsS -X PUT -H "$H" -H "$CT" -d "{
   }
 }" "$BASE/v1/controlplane/tls" >/dev/null
 
-curl -fsS -X POST -H "$H" "$BASE/v1/controlplane/sets/trojan-443/activate" >/tmp/act_alt.json || {
+curl -fkSs -X POST -H "$H" "$BASE/v1/controlplane/sets/trojan-443/activate" >/tmp/act_alt.json || {
   cat /tmp/act_alt.json; docker logs subserver-cp 2>&1 | tail -40; fail activate
 }
 
@@ -57,7 +57,7 @@ ss -lntp | grep ":${ALT} " || true
 
 ok=0
 for i in $(seq 1 20); do
-  TLS=$(curl -fsS -H "$H" "$BASE/v1/controlplane/tls")
+  TLS=$(curl -fkSs -H "$H" "$BASE/v1/controlplane/tls")
   READY=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["material_status"].get("ready"))' <<<"$TLS")
   if [ "$READY" = "True" ] || [ "$READY" = "true" ]; then
     if echo | openssl s_client -connect 127.0.0.1:443 -servername "$DOMAIN" 2>/dev/null \

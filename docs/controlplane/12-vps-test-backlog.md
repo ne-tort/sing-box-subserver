@@ -11,18 +11,14 @@ Captured from live tests on `163.5.180.181` (2026-07-28).
 - [x] presets catalog (13) + demux-recipes API (9) + `cp_invalid_demux`
 - [x] Deploy default = **host network** (`deploy/docker-compose.yml`, install-edge, VPS scripts)
 - [x] `material_status.ready` from certmagic PEM presence (ACME obtain gate)
+- [x] Management API + `/v1/sub` HTTPS from CP TLS profile (self_signed / ACME / interim)
+- [x] ACME emergency watchdog → persistent `self_signed` + rematerialize
 
 ## Gaps / follow-ups
 
-1. **ACME in-memory race**: even after PEM on disk, first handshakes can briefly fail until certmagic loads — clients should retry; optional TLS dial probe can be added later.
-2. **Parent sui submodule pin**: bump submodule SHA after this push.
-3. **Management TLS in production**:
-   - Lab default remains `insecure_public_bind` + `http://` AgentURL (panel bootstrap).
-   - Real scenarios:
-     1. `SUBSERVER_MGMT_TLS=self_signed` on install → agent `tls.cert/key`, panel `https://` + skip-verify (or pin CA).
-     2. Bind management to `127.0.0.1:8080` and reach via SSH tunnel / private overlay.
-     3. Terminate TLS on host reverse-proxy (Caddy/nginx) to loopback agent.
-   - Full LE for management API is out of scope (ADR 0007); dataplane certs stay on CP TLS profiles.
+1. **ACME in-memory race**: even after PEM on disk, first handshakes can briefly fail until certmagic loads — clients should retry.
+2. **Panel AgentURL**: new installs use `https://` + `agent_tls_insecure` (self_signed). Existing nodes may still have `http://` — migrate/probe.
+3. **ACME obtain grace** is 5m / lost grace 2m — tune for production if needed.
 
 ## Ops notes
 

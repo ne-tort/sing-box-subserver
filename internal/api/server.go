@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -38,6 +40,13 @@ type Server struct {
 // ControlplaneHandler mounts optional embedded CP routes.
 type ControlplaneHandler interface {
 	Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc)
+}
+
+// MgmtTLSProvider is optionally implemented by controlplane to terminate
+// management/subscription HTTPS from the CP TLS profile.
+type MgmtTLSProvider interface {
+	ServingHTTPS() bool
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
 }
 
 func New(cfg *agentcfg.Config, sup *supervisor.Supervisor, o *obs.Observability) *Server {
@@ -635,17 +644,43 @@ func readConfigBody(r *http.Request) ([]byte, configstore.Source, error) {
 }
 
 // ListenAndServe starts the management server (blocking).
+// Prefer controlplane TLS profile (HTTPS) when available; else agent.yaml tls.cert/key;
+// else plain HTTP (labs with insecure_public_bind).
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:              s.Cfg.Listen,
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	useTLS := false
+	var getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	if p, ok := s.Controlplane.(MgmtTLSProvider); ok && p != nil && p.ServingHTTPS() {
+		useTLS = true
+		getCert = p.GetCertificate
+	} else if s.Cfg.TLS.Cert != "" {
+		useTLS = true
+	}
+	if useTLS {
+		srv.TLSConfig = &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: getCert,
+		}
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		var err error
-		if s.Cfg.TLS.Cert != "" {
-			err = srv.ListenAndServeTLS(s.Cfg.TLS.Cert, s.Cfg.TLS.Key)
+		if useTLS {
+			ln, lerr := net.Listen("tcp", s.Cfg.Listen)
+			if lerr != nil {
+				errCh <- lerr
+				return
+			}
+			if getCert != nil {
+				err = srv.ServeTLS(ln, "", "")
+			} else {
+				err = srv.ServeTLS(ln, s.Cfg.TLS.Cert, s.Cfg.TLS.Key)
+			}
 		} else {
 			err = srv.ListenAndServe()
 		}
