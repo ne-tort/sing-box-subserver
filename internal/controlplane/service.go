@@ -644,7 +644,13 @@ func (s *Service) handleUsersGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secrets := r.URL.Query().Get("secrets") == "1"
-	okJSON(w, 200, redactUser(users[i], secrets))
+	data := redactUser(users[i], secrets)
+	if secrets {
+		path, url := s.subscriptionURL(r, users[i].SubToken)
+		data["subscription_path"] = path
+		data["subscription_url"] = url
+	}
+	okJSON(w, 200, data)
 }
 
 func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
@@ -1043,7 +1049,12 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !contains(st.ActiveSets, name) {
-		failJSON(w, 409, "cp_not_active", "set not active")
+		// Idempotent deactivate: already inactive is OK.
+		mode := "idle"
+		if s.cfg.Owner != nil {
+			mode = string(s.cfg.Owner.Owner())
+		}
+		okJSON(w, 200, map[string]any{"active_sets": st.ActiveSets, "config_mode": mode, "noop": true})
 		return
 	}
 	st.ActiveSets = removeStr(st.ActiveSets, name)

@@ -42,7 +42,7 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
 |--------|------|---------|
 | GET | `/v1/controlplane/users` | List (secrets redacted: no raw `sub_token` / password fields; show `has_token`, preset names present) |
 | POST | `/v1/controlplane/users` | Create `{name, enabled?, expires_at?, traffic_limit_bytes?, …}` → returns user **with** `sub_token` once + `subscription_path` + `subscription_url` |
-| GET | `/v1/controlplane/users/{id}` | Get (redacted; `?secrets=1` may return secrets for ops — default off) |
+| GET | `/v1/controlplane/users/{id}` | Get (redacted; `?secrets=1` returns `sub_token`, `creds`, `subscription_path`, `subscription_url`) |
 | PATCH | `/v1/controlplane/users/{id}` | Update mutable fields (not bulk creds replace) |
 | DELETE | `/v1/controlplane/users/{id}` | Delete; triggers rematerialize if any set active |
 | POST | `/v1/controlplane/users/{id}/rotate-token` | New `sub_token`; returns token once + URLs |
@@ -87,7 +87,7 @@ Read-only in v1. `404` if unknown.
 | PUT | `/v1/controlplane/sets/{name}` | Replace definition (`409` port conflict; if active → rematerialize) |
 | DELETE | `/v1/controlplane/sets/{name}` | Delete (`409` if active — deactivate first) |
 | POST | `/v1/controlplane/sets/{name}/activate` | Add to `active_sets`; Claim(controlplane); materialize + Apply |
-| POST | `/v1/controlplane/sets/{name}/deactivate` | Remove from `active_sets`; rematerialize or Claim(idle) if empty |
+| POST | `/v1/controlplane/sets/{name}/deactivate` | Remove from `active_sets` (idempotent if already inactive); rematerialize or Claim(idle) if empty |
 
 ### Activate responses
 
@@ -111,7 +111,7 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 |------|------|
 | `cp_disabled` | Binary without module (if stub returns explicit 404 body) |
 | `cp_port_conflict` | Set listen_port collision |
-| `cp_not_active` | Deactivate when set not in `active_sets` |
+| `cp_not_active` | _(removed)_ deactivate is idempotent |
 | `cp_no_active_set` | Sub fetch with no active sets |
 | `cp_user_ineligible` | Sub fetch for expired/limited user |
 | `cp_unknown_preset` | Set references missing preset |
