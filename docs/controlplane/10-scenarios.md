@@ -11,7 +11,41 @@ Happy-path flows. Assumes binary built with `with_controlplane` (+ `with_demux` 
 5. Activate both → `config_mode=controlplane`; materialize merges both ports.
 6. Client `GET /v1/sub/{token}` → outbounds for both sets.
 7. Optional: demux set with `trojan-tcp` + `vless-tcp` behind one port (requires `with_demux` + TLS profile — default self-signed PEM under `data_dir/controlplane/tls`).
+
+Example demux template (empty `tls:{}` is **invalid** — use `protocol: "tls"` or `tls.sni`):
+
+```json
+{
+  "name": "mixed-9443",
+  "listen": "0.0.0.0",
+  "listen_port": 9443,
+  "presets": ["trojan-tcp", "vless-tcp"],
+  "demux_template": {
+    "network": ["tcp"],
+    "rules": [
+      {
+        "name": "tls-to-trojan",
+        "match": { "protocol": "tls" },
+        "action": { "inbound": { "tag": "{{tag:trojan-tcp}}" } }
+      },
+      {
+        "name": "plain-to-vless",
+        "match": { "always": true },
+        "action": { "inbound": { "tag": "{{tag:vless-tcp}}" } }
+      }
+    ]
+  }
+}
+```
+
 8. Optional: `PUT /v1/controlplane/tls` with `acme_domain` / `acme_ip` → materialize emits `certificate_providers` tag `cp-tls` (needs `with_acme` in the binary).
+
+### ACME on a shared VPS (ops notes)
+
+- Let's Encrypt **HTTP-01** needs inbound **:80**. If host nginx (or anything else) owns :80, prefer **TLS-ALPN-01** only: `disable_http_challenge: true` and publish container **:443** (must be free on the host).
+- `alternative_http_port` / `alternative_tls_port` still require forwarding from 80/443 on the public path.
+- Right after switching to `acme_*`, handshakes may fail briefly (`no certificate available`) until certmagic finishes obtain — retry/wait; check agent logs for ACME errors.
+- Bare IP (`acme_ip`) uses LE shortlived; `provider` must be `letsencrypt`; DNS-01 is rejected by API validation.
 
 
 ## B. User expiry

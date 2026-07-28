@@ -50,6 +50,7 @@ flowchart TD
 | [09-build-and-ci.md](09-build-and-ci.md) | 03 | Tag, stubs, CI matrix |
 | [10-scenarios.md](10-scenarios.md) | 05–07 | Operator happy paths |
 | [11-tls.md](11-tls.md) | 04–06 | TLS profiles (self-signed / ACME) |
+| [12-vps-test-backlog.md](12-vps-test-backlog.md) | ops | Live VPS findings / follow-ups |
 | [adr/](adr/) | 01–08 | Locked module decisions |
 
 ## Read order
