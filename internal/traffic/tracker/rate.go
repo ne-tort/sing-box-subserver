@@ -19,7 +19,23 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/traffic/domain"
 )
 
-const rateLimitBurst = 1 << 20 // 1 MiB; WaitN rejects n > burst
+// Burst sized for realistic shaping: large enough for waitNChunked against
+// typical sing-box read sizes, small enough that a 1 MiB transfer is throttled.
+const (
+	rateLimitBurstMin = 16 << 10 // 16 KiB
+	rateLimitBurstMax = 64 << 10 // 64 KiB
+)
+
+func burstFor(bytesPerSec int64) int {
+	b := int(bytesPerSec)
+	if b < rateLimitBurstMin {
+		b = rateLimitBurstMin
+	}
+	if b > rateLimitBurstMax {
+		b = rateLimitBurstMax
+	}
+	return b
+}
 
 type userLiveLimiters struct {
 	up   *rate.Limiter
@@ -67,6 +83,17 @@ func (t *RateLimitTracker) Reset() {
 	t.live = make(map[string]*userLiveLimiters)
 }
 
+// Limits returns a copy of current shaping map (tests / diagnostics).
+func (t *RateLimitTracker) Limits() map[string]domain.SpeedLimit {
+	t.access.RLock()
+	defer t.access.RUnlock()
+	out := make(map[string]domain.SpeedLimit, len(t.limits))
+	for k, v := range t.limits {
+		out[k] = v
+	}
+	return out
+}
+
 // SetLimits replaces per-dataplane-key caps and updates live limiters.
 func (t *RateLimitTracker) SetLimits(m map[string]domain.SpeedLimit) {
 	t.access.Lock()
@@ -97,10 +124,10 @@ func (t *RateLimitTracker) SetLimits(m map[string]domain.SpeedLimit) {
 func newLiveLimiters(lim domain.SpeedLimit) *userLiveLimiters {
 	live := &userLiveLimiters{}
 	if lim.UpBytesPerSec > 0 {
-		live.up = rate.NewLimiter(rate.Limit(lim.UpBytesPerSec), rateLimitBurst)
+		live.up = rate.NewLimiter(rate.Limit(lim.UpBytesPerSec), burstFor(lim.UpBytesPerSec))
 	}
 	if lim.DownBytesPerSec > 0 {
-		live.down = rate.NewLimiter(rate.Limit(lim.DownBytesPerSec), rateLimitBurst)
+		live.down = rate.NewLimiter(rate.Limit(lim.DownBytesPerSec), burstFor(lim.DownBytesPerSec))
 	}
 	return live
 }
@@ -108,18 +135,20 @@ func newLiveLimiters(lim domain.SpeedLimit) *userLiveLimiters {
 func applyLiveLimiters(live *userLiveLimiters, lim domain.SpeedLimit) {
 	if lim.UpBytesPerSec > 0 {
 		if live.up == nil {
-			live.up = rate.NewLimiter(rate.Limit(lim.UpBytesPerSec), rateLimitBurst)
+			live.up = rate.NewLimiter(rate.Limit(lim.UpBytesPerSec), burstFor(lim.UpBytesPerSec))
 		} else {
 			live.up.SetLimit(rate.Limit(lim.UpBytesPerSec))
+			live.up.SetBurst(burstFor(lim.UpBytesPerSec))
 		}
 	} else {
 		live.up = nil
 	}
 	if lim.DownBytesPerSec > 0 {
 		if live.down == nil {
-			live.down = rate.NewLimiter(rate.Limit(lim.DownBytesPerSec), rateLimitBurst)
+			live.down = rate.NewLimiter(rate.Limit(lim.DownBytesPerSec), burstFor(lim.DownBytesPerSec))
 		} else {
 			live.down.SetLimit(rate.Limit(lim.DownBytesPerSec))
+			live.down.SetBurst(burstFor(lim.DownBytesPerSec))
 		}
 	} else {
 		live.down = nil
@@ -156,34 +185,16 @@ func (t *RateLimitTracker) RoutedConnection(ctx context.Context, conn net.Conn, 
 	if t.skip(metadata.Inbound) || metadata.User == "" {
 		return conn
 	}
-	t.access.RLock()
-	n := len(t.limits)
-	t.access.RUnlock()
-	if n == 0 {
-		return conn
-	}
-	live := t.lookupLive(metadata.User)
-	if live == nil || (live.up == nil && live.down == nil) {
-		return conn
-	}
-	return wrapRateLimitedConn(ctx, conn, live.up, live.down)
+	// Always wrap when a user is present: Read/Write re-lookup limiters so
+	// clearing speed_* immediately unthrottles without reconnect.
+	return wrapRateLimitedConn(ctx, conn, t, metadata.User)
 }
 
 func (t *RateLimitTracker) RoutedPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, _ adapter.Rule, _ adapter.Outbound) N.PacketConn {
 	if t.skip(metadata.Inbound) || metadata.User == "" {
 		return conn
 	}
-	t.access.RLock()
-	n := len(t.limits)
-	t.access.RUnlock()
-	if n == 0 {
-		return conn
-	}
-	live := t.lookupLive(metadata.User)
-	if live == nil || (live.up == nil && live.down == nil) {
-		return conn
-	}
-	return wrapRateLimitedPacketConn(ctx, conn, live.up, live.down)
+	return wrapRateLimitedPacketConn(ctx, conn, t, metadata.User)
 }
 
 func (t *RateLimitTracker) RoutedFlow(context.Context, adapter.InboundContext, adapter.Rule, adapter.Outbound) tun.FlowTracker {
@@ -207,32 +218,44 @@ func waitNChunked(ctx context.Context, lim *rate.Limiter, n int) error {
 type rateLimitedConn struct {
 	net.Conn
 	ctx  context.Context
-	up   *rate.Limiter
-	down *rate.Limiter
+	t    *RateLimitTracker
+	user string
 }
 
-func wrapRateLimitedConn(ctx context.Context, conn net.Conn, up, down *rate.Limiter) net.Conn {
-	return &rateLimitedConn{Conn: conn, ctx: ctx, up: up, down: down}
+func wrapRateLimitedConn(ctx context.Context, conn net.Conn, t *RateLimitTracker, user string) net.Conn {
+	return &rateLimitedConn{Conn: conn, ctx: ctx, t: t, user: user}
 }
 
-func (c *rateLimitedConn) Upstream() any { return c.Conn }
+func (c *rateLimitedConn) limiters() (up, down *rate.Limiter) {
+	live := c.t.lookupLive(c.user)
+	if live == nil {
+		return nil, nil
+	}
+	return live.up, live.down
+}
+
+func (c *rateLimitedConn) Upstream() any           { return c.Conn }
 func (c *rateLimitedConn) ReaderReplaceable() bool { return false }
 func (c *rateLimitedConn) WriterReplaceable() bool { return false }
 
 func (c *rateLimitedConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
-	if err != nil || n == 0 || c.down == nil {
+	// Inbound: Read = bytes from client = user upload.
+	up, _ := c.limiters()
+	if err != nil || n == 0 || up == nil {
 		return n, err
 	}
-	if werr := waitNChunked(c.ctx, c.down, n); werr != nil {
+	if werr := waitNChunked(c.ctx, up, n); werr != nil {
 		return n, werr
 	}
 	return n, err
 }
 
 func (c *rateLimitedConn) Write(p []byte) (int, error) {
-	if c.up != nil {
-		if err := waitNChunked(c.ctx, c.up, len(p)); err != nil {
+	// Inbound: Write = bytes to client = user download.
+	_, down := c.limiters()
+	if down != nil {
+		if err := waitNChunked(c.ctx, down, len(p)); err != nil {
 			return 0, err
 		}
 	}
@@ -252,15 +275,17 @@ func (c *rateLimitedConn) ReadBuffer(buffer *buf.Buffer) error {
 			err = readErr
 		}
 	}
-	if err != nil || buffer.Len() == 0 || c.down == nil {
+	up, _ := c.limiters()
+	if err != nil || buffer.Len() == 0 || up == nil {
 		return err
 	}
-	return waitNChunked(c.ctx, c.down, buffer.Len())
+	return waitNChunked(c.ctx, up, buffer.Len())
 }
 
 func (c *rateLimitedConn) WriteBuffer(buffer *buf.Buffer) error {
-	if c.up != nil && buffer.Len() > 0 {
-		if err := waitNChunked(c.ctx, c.up, buffer.Len()); err != nil {
+	_, down := c.limiters()
+	if down != nil && buffer.Len() > 0 {
+		if err := waitNChunked(c.ctx, down, buffer.Len()); err != nil {
 			return err
 		}
 	}
@@ -274,28 +299,40 @@ func (c *rateLimitedConn) WriteBuffer(buffer *buf.Buffer) error {
 type rateLimitedPacketConn struct {
 	N.PacketConn
 	ctx  context.Context
-	up   *rate.Limiter
-	down *rate.Limiter
+	t    *RateLimitTracker
+	user string
 }
 
-func wrapRateLimitedPacketConn(ctx context.Context, conn N.PacketConn, up, down *rate.Limiter) N.PacketConn {
-	return &rateLimitedPacketConn{PacketConn: conn, ctx: ctx, up: up, down: down}
+func wrapRateLimitedPacketConn(ctx context.Context, conn N.PacketConn, t *RateLimitTracker, user string) N.PacketConn {
+	return &rateLimitedPacketConn{PacketConn: conn, ctx: ctx, t: t, user: user}
+}
+
+func (c *rateLimitedPacketConn) limiters() (up, down *rate.Limiter) {
+	live := c.t.lookupLive(c.user)
+	if live == nil {
+		return nil, nil
+	}
+	return live.up, live.down
 }
 
 func (c *rateLimitedPacketConn) ReadPacket(buffer *buf.Buffer) (destination M.Socksaddr, err error) {
 	destination, err = c.PacketConn.ReadPacket(buffer)
-	if err != nil || buffer.Len() == 0 || c.down == nil {
+	// Inbound packet: Read = from client = upload.
+	up, _ := c.limiters()
+	if err != nil || buffer.Len() == 0 || up == nil {
 		return
 	}
-	if werr := waitNChunked(c.ctx, c.down, buffer.Len()); werr != nil {
+	if werr := waitNChunked(c.ctx, up, buffer.Len()); werr != nil {
 		err = werr
 	}
 	return
 }
 
 func (c *rateLimitedPacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
-	if c.up != nil && buffer.Len() > 0 {
-		if err := waitNChunked(c.ctx, c.up, buffer.Len()); err != nil {
+	// Inbound packet: Write = to client = download.
+	_, down := c.limiters()
+	if down != nil && buffer.Len() > 0 {
+		if err := waitNChunked(c.ctx, down, buffer.Len()); err != nil {
 			return err
 		}
 	}

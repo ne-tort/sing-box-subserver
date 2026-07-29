@@ -3,16 +3,19 @@
 package service
 
 import (
-	"strings"
-
 	"github.com/ne-tort/sing-box-subserver/internal/traffic/domain"
 )
 
 // SyncAutoDiscoverSubjects registers observed dataplane users and inbound aggregates
 // for subscribe/direct modes (consumer "auto"). Does not overwrite controlplane subjects.
+// When a controlplane manifest is present, auto subjects are cleared to avoid
+// double-counting the same dataplane keys under both cp:user:* and dataplane_user:*.
 func (s *Service) SyncAutoDiscoverSubjects() error {
 	if s == nil {
 		return nil
+	}
+	if s.hasConsumer("controlplane") {
+		return s.store.ReplaceSubjects("auto", nil)
 	}
 	users := s.DiscoverObservedUsers()
 	subjects := make([]domain.Subject, 0, len(users)+8)
@@ -37,25 +40,11 @@ func (s *Service) SyncAutoDiscoverSubjects() error {
 	return s.store.ReplaceSubjects("auto", subjects)
 }
 
-// SetInboundCaps applies shaping to a synthetic key used when callers pass inbound-level limits.
-// Keys should be dataplane user names; for inbound-only caps use a reserved prefix "inboundcap:".
-func (s *Service) SetInboundCaps(caps map[string]domain.SpeedLimit) {
-	if s == nil || len(caps) == 0 {
-		return
-	}
-	s.mu.Lock()
-	merged := make(map[string]domain.SpeedLimit, len(s.limits)+len(caps))
-	for k, v := range s.limits {
-		merged[k] = v
-	}
-	for k, v := range caps {
-		k = strings.TrimSpace(k)
-		if k == "" {
-			continue
+func (s *Service) hasConsumer(consumer string) bool {
+	for _, sub := range s.store.Subjects() {
+		if sub.Labels != nil && sub.Labels["consumer"] == consumer {
+			return true
 		}
-		merged[k] = v
 	}
-	s.limits = merged
-	s.mu.Unlock()
-	s.rate.SetLimits(merged)
+	return false
 }

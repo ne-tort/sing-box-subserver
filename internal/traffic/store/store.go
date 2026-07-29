@@ -134,16 +134,10 @@ func (s *Store) ReplaceSubjects(consumer string, subjects []domain.Subject) erro
 			s.subjects[sub.ID] = sub
 		}
 	} else {
-		prefix := consumer + ":"
-		for id := range s.subjects {
-			if strings.HasPrefix(id, prefix) || (len(subjects) > 0 && subjectBelongs(s.subjects[id], consumer)) {
-				// drop old ids from this consumer by label
-			}
-		}
-		// Rebuild: keep subjects without matching consumer label, add new.
+		// Rebuild: drop previous subjects for this consumer, keep others, add new.
 		next := make(map[string]domain.Subject)
 		for id, sub := range s.subjects {
-			if sub.Labels != nil && sub.Labels["consumer"] == consumer {
+			if subjectBelongs(sub, consumer) {
 				continue
 			}
 			next[id] = sub
@@ -274,17 +268,25 @@ func (s *Store) AllCounters() []domain.CounterTotal {
 	return out
 }
 
-// SubjectUsage sums dataplane_user counters for the subject's keys (+ subject series if present).
+// SubjectUsage returns usage for a registered subject.
+//
+// Source of truth is the sum of dataplane_user counters for the subject's keys.
+// When that sum is below the subject-series cumulative (e.g. after admin
+// SetSubjectUsage wrote an absolute baseline onto SeriesSubject while keys were
+// zeroed), the subject-series total wins so PATCH sync is not lost before the
+// next live traffic overtakes it.
 func (s *Store) SubjectUsage(id string) domain.Usage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	u := domain.Usage{SubjectID: id}
 	sub, ok := s.subjects[id]
+	var serUp, serDown int64
+	if c, ok := s.counters[counterKey(domain.SeriesSubject, id)]; ok {
+		serUp, serDown = c.Up, c.Down
+	}
 	if !ok {
-		if c, ok := s.counters[counterKey(domain.SeriesSubject, id)]; ok {
-			u.Up, u.Down = c.Up, c.Down
-			u.Total = u.Up + u.Down
-		}
+		u.Up, u.Down = serUp, serDown
+		u.Total = u.Up + u.Down
 		return u
 	}
 	for _, k := range sub.DataplaneKeys {
@@ -294,6 +296,10 @@ func (s *Store) SubjectUsage(id string) domain.Usage {
 		}
 	}
 	u.Total = u.Up + u.Down
+	serTotal := serUp + serDown
+	if serTotal > u.Total {
+		u.Up, u.Down, u.Total = serUp, serDown, serTotal
+	}
 	return u
 }
 

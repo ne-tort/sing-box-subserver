@@ -1,0 +1,8 @@
+# Runtime-only image for traffic-only (no controlplane) local matrix.
+# Expects dist/subserver-traffic-linux (build/tags.server.traffic).
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates wget || true
+COPY dist/subserver-traffic-linux /usr/local/bin/subserver
+RUN chmod +x /usr/local/bin/subserver && mkdir -p /var/lib/subserver
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/subserver", "-config", "/etc/subserver/agent.yaml"]

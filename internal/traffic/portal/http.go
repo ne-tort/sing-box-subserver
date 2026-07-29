@@ -37,6 +37,9 @@ func Register(mux *http.ServeMux, svc *service.Service, requireAuth func(func(ht
 	mux.HandleFunc("GET /v1/traffic/onlines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		okJSON(w, svc.Onlines())
 	}))
+	mux.HandleFunc("GET /v1/traffic/limits", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		okJSON(w, svc.LimitsPayload())
+	}))
 	mux.HandleFunc("PUT /v1/traffic/limits", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Limits map[string]domain.SpeedLimit `json:"limits"`
@@ -45,8 +48,44 @@ func Register(mux *http.ServeMux, svc *service.Service, requireAuth func(func(ht
 			failJSON(w, 400, "bad_request", err.Error())
 			return
 		}
-		svc.SetLimits(body.Limits)
-		okJSON(w, map[string]any{"ok": true})
+		svc.SetManualLimits(body.Limits)
+		okJSON(w, svc.LimitsPayload())
+	}))
+	// Lab/smoke only: inject live counters then flush (requires traffic.allow_inject).
+	mux.HandleFunc("POST /v1/traffic/inject", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if !svc.InjectAllowed() {
+			failJSON(w, 404, "not_found", "inject disabled")
+			return
+		}
+		var body struct {
+			User    string `json:"user"`
+			Inbound string `json:"inbound"`
+			Up      int64  `json:"up"`
+			Down    int64  `json:"down"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			failJSON(w, 400, "bad_request", err.Error())
+			return
+		}
+		if body.User == "" && body.Inbound == "" {
+			failJSON(w, 400, "bad_request", "user or inbound required")
+			return
+		}
+		if body.User != "" {
+			svc.InjectUserTraffic(body.User, body.Up, body.Down)
+		}
+		if body.Inbound != "" {
+			svc.InjectInboundTraffic(body.Inbound, body.Up, body.Down)
+		}
+		if err := svc.Flush(); err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
+		out := map[string]any{"flushed": true}
+		if body.User != "" {
+			out["usage"] = svc.PollSubjectUsageByDataplaneKey(body.User)
+		}
+		okJSON(w, out)
 	}))
 }
 

@@ -22,7 +22,7 @@ Captured from live tests on `163.5.180.181` (2026-07-28).
 4. **Protocol preset semantics phase**: pause here before expanding cross-protocol preset variants. Next stage should define per-protocol semantic contracts (inbound/outbound symmetry rules, variant scopes, client profile constraints) and only then widen variant catalogs beyond current VLESS flow model.
 5. **Ownership/observability hardening**: done — owner transition log, `materialize_status`, `ownership_health`, boot orphan/stale reconcile, strict subscription filters, aggregate `/subscription-tags`, unified `UserVariantsForProtocol`. Deferred (needs per-protocol contracts first): variant catalogs beyond VLESS; ClientProfile outbound override runtime (profiles today are subscription selection tags only).
 6. **`TestRun_PullDisabledKeepsServing`**: fixed — was not flaky timing; with `with_controlplane` mgmt is HTTPS and the test previously probed plain HTTP (always failed after 8s). Now probes scheme from build tags.
-7. **Traffic module (`with_traffic`)**: core trackers + store + CP bridge + `/v1/traffic/*` landed. Still TODO: WG IpcGet path, live disconnect on quota, production retention tuning under load.
+7. **Traffic module (`with_traffic`)**: core trackers + store + CP bridge + `/v1/traffic/*` + ConnTracker kick on ineligible landed. Still TODO: WG IpcGet path, production retention tuning under load, real SS-client throttle smoke.
 
 ## Ops notes
 

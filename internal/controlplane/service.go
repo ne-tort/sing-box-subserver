@@ -133,7 +133,9 @@ func (s *Service) Run(ctx context.Context) {
 			s.acmeWatchdog(ctx)
 		case <-t.C:
 			s.mu.Lock()
+			beforeElig := s.eligibilityMapLocked()
 			_ = s.applyTrafficResetsLocked(time.Now().UTC())
+			s.notifyBecameIneligibleLocked(beforeElig)
 			fp := s.eligibilityFingerprintLocked()
 			needRealityRefresh := time.Since(s.realityLastValidation) >= realityValidationInterval
 			if needRealityRefresh {
@@ -183,6 +185,37 @@ func (s *Service) eligibilityFingerprintLocked() string {
 		}
 	}
 	return strings.Join(parts, ",")
+}
+
+func (s *Service) eligibilityMapLocked() map[string]bool {
+	users, err := s.store.LoadUsers()
+	if err != nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	out := make(map[string]bool, len(users))
+	for _, u := range users {
+		out[u.ID] = u.Eligible(now)
+	}
+	return out
+}
+
+// notifyBecameIneligibleLocked kicks sessions for users that transitioned eligible→ineligible.
+func (s *Service) notifyBecameIneligibleLocked(before map[string]bool) {
+	if s.trafficHooks == nil || before == nil {
+		return
+	}
+	after := s.eligibilityMapLocked()
+	var ids []string
+	for id, was := range before {
+		if was && !after[id] {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	s.trafficHooks.OnBecameIneligible(ids)
 }
 
 func (s *Service) applyTrafficResetsLocked(now time.Time) bool {
@@ -251,6 +284,7 @@ func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint
 		return false, err
 	}
 	now := time.Now().UTC()
+	beforeElig := s.eligibilityMapLocked()
 	before := s.eligibilityFingerprintLocked()
 	changed := false
 	for i := range users {
@@ -270,6 +304,7 @@ func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint
 	if err := s.store.SaveUsers(users); err != nil {
 		return false, err
 	}
+	s.notifyBecameIneligibleLocked(beforeElig)
 	after := s.eligibilityFingerprintLocked()
 	if before == after {
 		return false, nil
@@ -489,8 +524,26 @@ func (s *Service) rematerializeForce(ctx context.Context, forceReload bool) erro
 	return s.rematerializeLocked(ctx, forceReload)
 }
 
+// publishTrafficPolicyLocked pushes users/sets into the traffic module (subjects + shaping).
+// Uses all known sets so variant dataplane keys stay registered even when inactive.
+func (s *Service) publishTrafficPolicyLocked() {
+	if s.trafficHooks == nil {
+		return
+	}
+	users, err := s.store.LoadUsers()
+	if err != nil {
+		return
+	}
+	sets, err := s.store.LoadSets()
+	if err != nil {
+		return
+	}
+	s.trafficHooks.OnMaterialize(users, sets)
+}
+
 func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) error {
 	if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
+		s.publishTrafficPolicyLocked()
 		return nil
 	}
 	sets, err := s.activeSetObjects()
@@ -498,6 +551,7 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		return err
 	}
 	if len(sets) == 0 {
+		s.publishTrafficPolicyLocked()
 		return nil
 	}
 	users, err := s.eligibleUsers(time.Now().UTC())
@@ -558,10 +612,7 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		return err
 	}
 	s.recordMaterializeResult(true, nil, res.Noop, res.SHA256, "")
-	if s.trafficHooks != nil {
-		allUsers, _ := s.store.LoadUsers()
-		s.trafficHooks.OnMaterialize(allUsers, sets)
-	}
+	s.publishTrafficPolicyLocked()
 	return nil
 }
 
@@ -1036,6 +1087,7 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := &users[i]
+	wasEligible := u.Eligible(time.Now().UTC())
 	if v, ok := body["name"].(string); ok && v != "" {
 		if v != u.Name {
 			for j := range users {
@@ -1070,8 +1122,10 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 			u.TrafficLimitBytes = &u64
 		}
 	}
+	usedPatched := false
 	if v, ok := body["traffic_used_bytes"].(float64); ok {
 		u.TrafficUsedBytes = uint64(v)
+		usedPatched = true
 	}
 	if v, ok := body["speed_up_bytes_per_sec"].(float64); ok {
 		u.SpeedUpBytesPerSec = int64(v)
@@ -1104,6 +1158,12 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	if usedPatched && s.trafficHooks != nil {
+		s.trafficHooks.OnTrafficUsedPatched(u.ID, u.TrafficUsedBytes)
+	}
+	if wasEligible && !u.Eligible(time.Now().UTC()) && s.trafficHooks != nil {
+		s.trafficHooks.OnBecameIneligible([]string{u.ID})
+	}
 	if err := s.rematerialize(r.Context()); err != nil {
 		failJSON(w, 422, "config_invalid", err.Error())
 		return
@@ -1121,10 +1181,14 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	deletedID := users[i].ID
 	users = append(users[:i], users[i+1:]...)
 	if err := s.store.SaveUsers(users); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
+	}
+	if s.trafficHooks != nil {
+		s.trafficHooks.OnBecameIneligible([]string{deletedID})
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
 		failJSON(w, 422, "config_invalid", err.Error())

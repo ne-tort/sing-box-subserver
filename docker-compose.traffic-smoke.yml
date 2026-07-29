@@ -1,0 +1,21 @@
+# Traffic + controlplane matrix using host-built linux binary.
+services:
+  subserver-traffic-cp:
+    build:
+      context: .
+      dockerfile: Dockerfile.traffic.controlplane.runtime
+    container_name: subserver-traffic-cp-smoke
+    ports:
+      - "18082:8080"
+      - "18444:8443"
+    volumes:
+      - ./testdata/docker/agent.traffic.controlplane.yaml:/etc/subserver/agent.yaml:ro
+      - subserver-traffic-cp-data:/var/lib/subserver
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://127.0.0.1:8080/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+
+volumes:
+  subserver-traffic-cp-data:

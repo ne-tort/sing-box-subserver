@@ -166,6 +166,27 @@ func (c *StatsTracker) AddInboundTraffic(inbound string, up, down int64) {
 	}
 }
 
+// DiscardUserKeys zeros live user counters without emitting a flush sample.
+// Used after admin/reset so the next Flush cannot resurrect discarded bytes.
+func (c *StatsTracker) DiscardUserKeys(keys []string) {
+	if c == nil || len(keys) == 0 {
+		return
+	}
+	c.access.Lock()
+	defer c.access.Unlock()
+	for _, k := range keys {
+		if ctr, ok := c.users[k]; ok {
+			ctr.read.Store(0)
+			ctr.write.Store(0)
+		}
+	}
+}
+
+// InjectUserTraffic is a test/helper to add live bytes for a dataplane user key.
+func (c *StatsTracker) InjectUserTraffic(user string, up, down int64) {
+	c.AddUserTraffic(user, up, down)
+}
+
 // SwapDeltas atomically resets live counters and returns non-zero deltas.
 func (c *StatsTracker) SwapDeltas() (inbounds, outbounds, users []Delta) {
 	c.access.Lock()

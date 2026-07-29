@@ -4,6 +4,8 @@ package materialize
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -242,7 +244,11 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			userArr = append(userArr, entry)
 		}
 		ib["users"] = userArr
-		if p.Protocol == "shadowsocks" {
+		if len(userArr) == 0 {
+			if err := applyZeroEligibleFallback(ib, p.Protocol); err != nil {
+				return nil, fmt.Errorf("set %q preset %q: %w", set.Name, pn, err)
+			}
+		} else if p.Protocol == "shadowsocks" {
 			delete(ib, "password")
 		}
 		if presetHasTrait(p, "reality") {
@@ -258,6 +264,61 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		out = append(out, ib)
 	}
 	return out, nil
+}
+
+// applyZeroEligibleFallback keeps Apply/validate succeeding when no eligible users
+// remain, without leaving an open proxy or a known shared password.
+func applyZeroEligibleFallback(ib map[string]any, protocol string) error {
+	secret, err := randomSecret(16)
+	if err != nil {
+		return err
+	}
+	switch protocol {
+	case "shadowsocks":
+		// Multi-user SS with empty users[] fails validate ("missing password").
+		delete(ib, "users")
+		ib["password"] = secret
+	case "socks", "http":
+		// Empty users[] often means open proxy — fail closed with inert creds.
+		ib["users"] = []any{
+			map[string]any{"username": "cp-inert", "password": secret},
+		}
+	case "trojan", "hysteria", "hysteria2", "anytls":
+		ib["users"] = []any{
+			map[string]any{"name": "cp-inert", "password": secret},
+		}
+	case "vless", "vmess", "tuic":
+		id, err := randomUUID()
+		if err != nil {
+			return err
+		}
+		entry := map[string]any{"name": "cp-inert", "uuid": id}
+		if protocol == "tuic" {
+			entry["password"] = secret
+		}
+		ib["users"] = []any{entry}
+	default:
+		// Unknown protocols: leave as-is (caller/tests may assert empty).
+	}
+	return nil
+}
+
+func randomUUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+
+func randomSecret(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func presetNeedsTLS(p domain.ProtocolPreset) bool {

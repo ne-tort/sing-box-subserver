@@ -7,3 +7,5 @@ dist/
 *.log
 agent.local.yaml
 /data/
+testdata/docker/client/*.json
+!testdata/docker/client/.gitkeep

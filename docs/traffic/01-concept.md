@@ -28,7 +28,7 @@ and `outbound` series.
 ## Shaping
 
 Per-dataplane-key token bucket (bytes/sec), same semantics as s-ui
-`RateLimitTracker` (1 MiB burst). Empty `metadata.User` → no per-user shaping
+`RateLimitTracker` (burst clamped to 16–64 KiB from the configured rate). Empty `metadata.User` → no per-user shaping
 (inbound aggregate accounting only).
 
 WireGuard peer Mbps / IpcGet path is Phase 3+.
@@ -38,5 +38,5 @@ WireGuard peer Mbps / IpcGet path is Phase 3+.
 | Mode | Accounting | Shaping |
 |------|------------|---------|
 | controlplane + traffic | per CP user via bridge | per user speed fields |
-| subscribed / direct | inbound (+ user if present) | via `/v1/traffic/limits` or inbound caps |
+| subscribed / direct | inbound (+ user if present) | via `/v1/traffic/limits` (dataplane `metadata.User` keys) |
 | idle / no traffic tag | n/a | n/a |

@@ -6,15 +6,18 @@ flowchart TB
     Hook[box.TrafficHook]
     ST[StatsTracker]
     RL[RateLimitTracker]
+    CT[ConnTracker]
     Svc[Service flush]
     Store[(traffic store)]
     Hook --> ST
     Hook --> RL
+    Hook --> CT
     ST --> Svc --> Store
+    CP[cpbridge] -->|OnBecameIneligible| CT
   end
   App[app.Run] --> Hook
   Sup[supervisor.Apply] --> Hook
-  CP[cpbridge] --> Svc
+  CP --> Svc
   API[portal HTTP] --> Svc
 ```
 
@@ -23,11 +26,13 @@ flowchart TB
 On `box.Engine.Start`:
 
 1. `singbox.New`
-2. `router.AppendTracker` for module trackers (before Start)
+2. `router.AppendTracker` for module trackers (before Start): stats → rate → conn
 3. `box.Start`
 4. `Hook.OnBoxStarted`
 
 On stop / Apply swap: flush → `OnBoxStopped` → close instance.
+
+When a CP user becomes ineligible, `OnBecameIneligible` closes matching live sessions **before** rematerialize, so traffic stops without waiting for a full box restart (Apply still reloads config carefully to omit creds).
 
 ## Package layout
 
@@ -46,5 +51,5 @@ On stop / Apply swap: flush → `OnBoxStopped` → close instance.
 | Mode | Accounting | Shaping |
 |------|------------|---------|
 | controlplane | subject + inbound/outbound | per-user speed |
-| subscribed/direct | auto-discover user + inbound | API limits / inbound caps |
+| subscribed/direct | auto-discover user + inbound | `PUT /v1/traffic/limits` (dataplane user keys) |
 | idle | module idle | n/a |

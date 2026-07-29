@@ -20,6 +20,7 @@ type Deps struct {
 	DataDir       string
 	FlushInterval time.Duration
 	RetentionDays int
+	AllowInject   bool
 	Logger        *slog.Logger
 }
 
@@ -34,6 +35,7 @@ func New(d Deps) *Module {
 		DataDir:       d.DataDir,
 		FlushInterval: d.FlushInterval,
 		RetentionDays: d.RetentionDays,
+		AllowInject:   d.AllowInject,
 		Logger:        d.Logger,
 	})
 	if err != nil {
@@ -98,7 +100,13 @@ func (m *Module) RegisterManifest(consumer string, subjects []domain.Subject) er
 
 func (m *Module) SetLimits(limits map[string]domain.SpeedLimit) {
 	if m != nil && m.svc != nil {
-		m.svc.SetLimits(limits)
+		m.svc.SetManualLimits(limits)
+	}
+}
+
+func (m *Module) SetCPLimits(limits map[string]domain.SpeedLimit) {
+	if m != nil && m.svc != nil {
+		m.svc.SetCPLimits(limits)
 	}
 }
 
@@ -114,6 +122,27 @@ func (m *Module) ZeroSubject(subjectID string) error {
 		return nil
 	}
 	return m.svc.ZeroSubject(subjectID)
+}
+
+func (m *Module) SetSubjectUsage(subjectID string, total uint64) error {
+	if m == nil || m.svc == nil {
+		return nil
+	}
+	return m.svc.SetSubjectUsage(subjectID, total)
+}
+
+func (m *Module) Flush() error {
+	if m == nil || m.svc == nil {
+		return nil
+	}
+	return m.svc.Flush()
+}
+
+func (m *Module) CloseConnByUsers(keys []string) int {
+	if m == nil || m.svc == nil {
+		return 0
+	}
+	return m.svc.CloseConnByUsers(keys)
 }
 
 func (m *Module) DiscoverObservedUsers() []string {

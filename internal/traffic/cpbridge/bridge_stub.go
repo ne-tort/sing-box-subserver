@@ -16,3 +16,4 @@ func Attach(cp any, mod any, log *slog.Logger) *Bridge {
 }
 
 func (b *Bridge) Run(context.Context) {}
+func (b *Bridge) SyncNow(context.Context) {}

@@ -1,0 +1,13 @@
+# Edge agent: traffic module without controlplane (subscribe + direct PUT).
+node_id: "docker-traffic-edge-1"
+token: "smoke-token-not-for-prod"
+listen: "0.0.0.0:8080"
+data_dir: "/var/lib/subserver"
+insecure_public_bind: true
+probe_ms: 100
+log:
+  level: info
+traffic:
+  flush_interval_sec: 5
+  retention_days: 7
+  allow_inject: true

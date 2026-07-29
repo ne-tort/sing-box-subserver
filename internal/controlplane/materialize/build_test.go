@@ -191,6 +191,138 @@ func TestBuildACMEProvidersOnlyWhenTLSPreset(t *testing.T) {
 	}
 }
 
+func TestBuildShadowsocksEmptyUsersInertPassword(t *testing.T) {
+	t.Parallel()
+	raw, err := Build(Input{
+		PublicHost: "1.2.3.4",
+		DataDir:    "/data",
+		TLS:        domain.DefaultSelfSigned("1.2.3.4"),
+		ActiveSets: []domain.InboundSet{{
+			Name:       "a",
+			Listen:     "0.0.0.0",
+			ListenPort: 8443,
+			Presets:    []string{"shadowsocks-tcp"},
+		}},
+		Users: nil, // all ineligible → empty
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	inbounds, _ := doc["inbounds"].([]any)
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds=%v", inbounds)
+	}
+	ib := inbounds[0].(map[string]any)
+	pw, _ := ib["password"].(string)
+	if pw == "" || pw == "cp-no-eligible-users" || len(pw) < 16 {
+		t.Fatalf("want random inert password, got %q", pw)
+	}
+	if _, ok := ib["users"]; ok {
+		t.Fatal("users must be omitted for inert SS")
+	}
+}
+
+func TestBuildSocksEmptyUsersFailClosed(t *testing.T) {
+	t.Parallel()
+	raw, err := Build(Input{
+		PublicHost: "1.2.3.4",
+		DataDir:    "/data",
+		TLS:        domain.DefaultSelfSigned("1.2.3.4"),
+		ActiveSets: []domain.InboundSet{{
+			Name: "a", Listen: "0.0.0.0", ListenPort: 1080, Presets: []string{"socks"},
+		}},
+		Users: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	_ = json.Unmarshal(raw, &doc)
+	ib := doc["inbounds"].([]any)[0].(map[string]any)
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("want inert socks user, got %v", users)
+	}
+	u := users[0].(map[string]any)
+	if u["username"] != "cp-inert" {
+		t.Fatalf("%v", u)
+	}
+	pw, _ := u["password"].(string)
+	if len(pw) < 16 {
+		t.Fatalf("weak inert password %q", pw)
+	}
+}
+
+func TestBuildTrojanEmptyUsersInert(t *testing.T) {
+	t.Parallel()
+	raw, err := Build(Input{
+		PublicHost: "1.2.3.4",
+		DataDir:    "/data",
+		TLS:        domain.DefaultSelfSigned("1.2.3.4"),
+		TLSCertPath: "/data/cert.pem",
+		TLSKeyPath:  "/data/key.pem",
+		ActiveSets: []domain.InboundSet{{
+			Name: "a", Listen: "0.0.0.0", ListenPort: 443, Presets: []string{"trojan-tcp"},
+		}},
+		Users: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	_ = json.Unmarshal(raw, &doc)
+	ib := doc["inbounds"].([]any)[0].(map[string]any)
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("want inert trojan user, got %v", users)
+	}
+	u := users[0].(map[string]any)
+	if u["name"] != "cp-inert" {
+		t.Fatalf("%v", u)
+	}
+	pw, _ := u["password"].(string)
+	if len(pw) < 16 {
+		t.Fatalf("weak inert password %q", pw)
+	}
+}
+
+func TestBuildVlessEmptyUsersInert(t *testing.T) {
+	t.Parallel()
+	raw, err := Build(Input{
+		PublicHost:  "1.2.3.4",
+		DataDir:     "/data",
+		TLS:         domain.DefaultSelfSigned("1.2.3.4"),
+		TLSCertPath: "/data/cert.pem",
+		TLSKeyPath:  "/data/key.pem",
+		ActiveSets: []domain.InboundSet{{
+			Name: "a", Listen: "0.0.0.0", ListenPort: 443, Presets: []string{"vless-tcp"},
+		}},
+		Users: nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	_ = json.Unmarshal(raw, &doc)
+	ib := doc["inbounds"].([]any)[0].(map[string]any)
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("want inert vless user, got %v", users)
+	}
+	u := users[0].(map[string]any)
+	if u["name"] != "cp-inert" {
+		t.Fatalf("%v", u)
+	}
+	id, _ := u["uuid"].(string)
+	if len(id) < 32 {
+		t.Fatalf("bad inert uuid %q", id)
+	}
+}
+
 func TestBuildShadowsocksNoTLS(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()

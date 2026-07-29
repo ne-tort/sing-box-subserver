@@ -61,9 +61,14 @@ Default `build/tags.server` omits the tag ([controlplane/09-build-and-ci](contro
 
 When building with `with_traffic`, see:
 
-**[traffic/00-index.md](traffic/00-index.md)** — subjects, trackers, time-series, `/v1/traffic/*`, CP bridge.
+- **Operators:** [`guides/traffic/00-index.md`](guides/traffic/00-index.md) — enable, modes, shaping, quotas, examples.
+- **Design / FR / ADR:** [`traffic/00-index.md`](traffic/00-index.md) — subjects, trackers, store, API contract.
 
 Default `build/tags.server` omits the tag ([traffic/adr/0001](traffic/adr/0001-optional-build-tag.md)).
+
+## Operator guides (all modules)
+
+**[`guides/00-index.md`](guides/00-index.md)** — how-tos separated from design docs.
 
 ## Quality bar vs panel monoliths
 

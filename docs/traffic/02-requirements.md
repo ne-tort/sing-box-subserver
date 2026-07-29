@@ -10,10 +10,17 @@ Applies when built with `with_traffic`.
 | FR-T-2 | Count bytes for inbound / outbound / dataplane_user (`metadata.User`). |
 | FR-T-3 | Persist cumulative counters and time-series under `{data_dir}/traffic/`. |
 | FR-T-4 | Flush interval configurable (default 10s); retention configurable (default 30d). |
-| FR-T-5 | RegisterSubjectManifest / PollSubjectUsage / SetLimits in-process API. |
+| FR-T-5 | `RegisterManifest` / `PollSubjectUsage` / `SetCPLimits` + `SetManualLimits` in-process API. |
 | FR-T-6 | Management REST `/v1/traffic/*` (agent Bearer). |
 | FR-T-7 | With controlplane: bridge maps users → subjects, syncs `traffic_used_bytes`, applies `speed_*` limits. |
 | FR-T-8 | Without `with_traffic`: stubs; agent and CP behave as today. |
+| FR-T-9 | Admin PATCH `traffic_used_bytes` syncs traffic store (live discard + absolute set) so bridge cannot resurrect. |
+| FR-T-10 | Periodic/admin traffic reset zeroes store+live and rematerializes so creds return to config. |
+| FR-T-11 | Ineligible users (disabled / expired / over quota) omitted from materialize; sub fetch → 403. |
+| FR-T-12 | OnMaterialize / publishTrafficPolicy runs even when rematerialize early-returns (idle / no active sets) so shaping still applies. |
+| FR-T-13 | ConnTracker kicks live sessions by dataplane key when a user becomes ineligible (before rematerialize). |
+| FR-T-14 | Rate wrappers re-lookup limiters on each Read/Write so clearing `speed_*` unthrottles without reconnect. |
+| FR-T-15 | Shaping layers: CP `speed_*` and manual PUT limits merge (manual wins); CP rematerialize must not wipe manual. |
 
 ## Non-goals (v1)
 

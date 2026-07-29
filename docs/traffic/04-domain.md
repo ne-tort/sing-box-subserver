@@ -31,8 +31,15 @@ outbound wrap), **down** = server→client (write), matching s-ui convention.
 | `up_bytes_per_sec` | 0 = unlimited |
 | `down_bytes_per_sec` | 0 = unlimited |
 
-Applied per **dataplane_key** (not subject_id) so variant names share policy
-when bridge sets the same limit on each key.
+Applied per **dataplane_key** (not subject_id).
+
+Layers (effective = merge):
+
+| Layer | Source | Notes |
+|-------|--------|-------|
+| `controlplane` | user `speed_*` via cpbridge | only eligible users |
+| `manual` | `PUT /v1/traffic/limits` | ops override; survives rematerialize |
+| `effective` | CP ∪ manual | manual wins on key conflict |
 
 ## Store layout (`{data_dir}/traffic/`)
 

@@ -1,0 +1,94 @@
+# Multi-mode traffic matrix: controlplane + edge + VLESS shaping via SOCKS.
+# Host-built linux binaries under dist/ (see scripts/traffic_modes_docker.ps1).
+services:
+  mock-panel:
+    image: python:3.12-slim
+    container_name: traffic-modes-mock-panel
+    command: ["python", "/app/mock_panel.py"]
+    environment:
+      MOCK_CONFIG_DIR: /configs
+      PORT: "8080"
+    volumes:
+      - ./testdata/docker/mock_panel.py:/app/mock_panel.py:ro
+      - ./testdata/docker/configs:/configs:ro
+    networks: [front]
+
+  # Large object for timed download through VLESS (only reachable from agents).
+  httpsink:
+    image: python:3.12-slim
+    container_name: traffic-modes-httpsink
+    working_dir: /www
+    command:
+      - python
+      - -c
+      - |
+        import os, http.server
+        os.makedirs('/www', exist_ok=True)
+        open('/www/blob.bin','wb').write(os.urandom(2*1024*1024))
+        http.server.ThreadingHTTPServer(('0.0.0.0', 8088), http.server.SimpleHTTPRequestHandler).serve_forever()
+    networks: [dataplane]
+
+  iperf:
+    image: networkstatic/iperf3
+    container_name: traffic-modes-iperf
+    command: ["-s", "-p", "5201"]
+    networks: [dataplane]
+
+  subserver-cp:
+    build:
+      context: .
+      dockerfile: Dockerfile.traffic.controlplane.runtime
+    container_name: traffic-modes-cp
+    ports:
+      - "18082:8080"
+      - "18444:8443"
+    volumes:
+      - ./testdata/docker/agent.traffic.controlplane.yaml:/etc/subserver/agent.yaml:ro
+      - traffic-modes-cp-data:/var/lib/subserver
+    networks: [front, dataplane]
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://127.0.0.1:8080/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+
+  subserver-edge:
+    build:
+      context: .
+      dockerfile: Dockerfile.traffic.runtime
+    container_name: traffic-modes-edge
+    depends_on: [mock-panel]
+    ports:
+      - "18083:8080"
+      - "18445:8443"
+    volumes:
+      - ./testdata/docker/agent.traffic.edge.yaml:/etc/subserver/agent.yaml:ro
+      - traffic-modes-edge-data:/var/lib/subserver
+    networks: [front, dataplane]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.traffic.client
+    container_name: traffic-modes-client
+    depends_on: [subserver-cp, subserver-edge, httpsink, iperf]
+    volumes:
+      - ./testdata/docker/client:/client
+    # Client is ONLY on front — cannot reach httpsink/iperf without going via VLESS agent.
+    networks: [front]
+
+volumes:
+  traffic-modes-cp-data:
+  traffic-modes-edge-data:
+
+networks:
+  front:
+    driver: bridge
+  dataplane:
+    driver: bridge
+    internal: true

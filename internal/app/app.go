@@ -51,11 +51,15 @@ func Run(opts Options) error {
 		DataDir:       cfg.DataDir,
 		FlushInterval: time.Duration(cfg.Traffic.FlushIntervalSec) * time.Second,
 		RetentionDays: cfg.Traffic.RetentionDays,
+		AllowInject:   cfg.Traffic.AllowInject,
 		Logger:        o.Logger,
 	})
 	if trafficMod != nil {
 		engine.SetTrafficHook(trafficMod)
 		o.Logger.Info("traffic module enabled")
+		if cfg.Traffic.AllowInject {
+			o.Logger.Warn("traffic.allow_inject enabled: POST /v1/traffic/inject is available")
+		}
 	}
 	sup := supervisor.NewWithOptions(store, engine, o.Logger, o.Metrics, supervisor.Options{
 		Probe: cfg.ProbeDuration(),
@@ -174,6 +178,11 @@ func Run(opts Options) error {
 	select {
 	case <-ctx.Done():
 		o.Logger.Info("shutting down")
+		if trafficBridge != nil {
+			trafficBridge.SyncNow(context.Background())
+		} else if trafficMod != nil {
+			_ = trafficMod.Flush()
+		}
 		sup.Shutdown()
 		return nil
 	case err := <-apiErr:

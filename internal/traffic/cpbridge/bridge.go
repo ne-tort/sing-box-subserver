@@ -41,7 +41,7 @@ func (b *Bridge) OnMaterialize(users []cpdomain.User, sets []cpdomain.InboundSet
 	subjects := make([]domain.Subject, 0, len(users))
 	limits := make(map[string]domain.SpeedLimit)
 	for _, u := range users {
-		keys := dataplaneKeysForUser(u, sets)
+		keys := DataplaneKeysForUser(u, sets)
 		subjects = append(subjects, domain.Subject{
 			ID:            "cp:user:" + u.ID,
 			Kinds:         []domain.SubjectKind{domain.KindControlplaneUser, domain.KindDataplaneUser},
@@ -56,7 +56,8 @@ func (b *Bridge) OnMaterialize(users []cpdomain.User, sets []cpdomain.InboundSet
 			UpBytesPerSec:   u.SpeedUpBytesPerSec,
 			DownBytesPerSec: u.SpeedDownBytesPerSec,
 		}
-		if lim.UpBytesPerSec > 0 || lim.DownBytesPerSec > 0 {
+		// Only shape eligible users; ineligible are kicked and omitted from config.
+		if u.Eligible(time.Now().UTC()) && (lim.UpBytesPerSec > 0 || lim.DownBytesPerSec > 0) {
 			for _, k := range keys {
 				limits[k] = lim
 			}
@@ -65,10 +66,11 @@ func (b *Bridge) OnMaterialize(users []cpdomain.User, sets []cpdomain.InboundSet
 	if err := b.mod.RegisterManifest(consumerID, subjects); err != nil && b.log != nil {
 		b.log.Warn("traffic cpbridge register manifest failed", "err", err)
 	}
-	b.mod.SetLimits(limits)
+	b.mod.SetCPLimits(limits)
 }
 
-func dataplaneKeysForUser(u cpdomain.User, sets []cpdomain.InboundSet) []string {
+// DataplaneKeysForUser returns metadata.User keys materialize will emit for this user.
+func DataplaneKeysForUser(u cpdomain.User, sets []cpdomain.InboundSet) []string {
 	seen := map[string]struct{}{}
 	var keys []string
 	add := func(k string) {
@@ -101,6 +103,8 @@ func dataplaneKeysForUser(u cpdomain.User, sets []cpdomain.InboundSet) []string 
 }
 
 // Run polls usage into controlplane users until ctx cancels.
+// Flush ownership stays with traffic.Service.Run — this loop only reads the store
+// so GET /v1/traffic/onlines is not wiped by a second flush ticker.
 func (b *Bridge) Run(ctx context.Context) {
 	if b == nil {
 		return
@@ -110,11 +114,23 @@ func (b *Bridge) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Final flush+sync so last live bytes reach users.json before exit.
+			_ = b.mod.Flush()
+			b.syncOnce(context.Background())
 			return
 		case <-t.C:
 			b.syncOnce(ctx)
 		}
 	}
+}
+
+// SyncNow flushes traffic counters and pushes usage into controlplane (shutdown / tests).
+func (b *Bridge) SyncNow(ctx context.Context) {
+	if b == nil {
+		return
+	}
+	_ = b.mod.Flush()
+	b.syncOnce(ctx)
 }
 
 func (b *Bridge) syncOnce(ctx context.Context) {
@@ -143,4 +159,49 @@ func (b *Bridge) OnTrafficReset(userID string) {
 		return
 	}
 	_ = b.mod.ZeroSubject("cp:user:" + userID)
+}
+
+// OnTrafficUsedPatched syncs absolute admin-patched usage into the traffic store.
+func (b *Bridge) OnTrafficUsedPatched(userID string, used uint64) {
+	if b == nil {
+		return
+	}
+	if err := b.mod.SetSubjectUsage("cp:user:"+userID, used); err != nil && b.log != nil {
+		b.log.Warn("traffic cpbridge set usage failed", "user_id", userID, "err", err)
+	}
+}
+
+// OnBecameIneligible kicks live sessions for dataplane keys of newly ineligible users.
+func (b *Bridge) OnBecameIneligible(userIDs []string) {
+	if b == nil || len(userIDs) == 0 {
+		return
+	}
+	var keys []string
+	seen := map[string]struct{}{}
+	for _, id := range userIDs {
+		for _, k := range b.dataplaneKeysForSubject("cp:user:" + id) {
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			keys = append(keys, k)
+		}
+	}
+	n := b.mod.CloseConnByUsers(keys)
+	if n > 0 && b.log != nil {
+		b.log.Info("traffic cpbridge kicked sessions for ineligible users", "users", len(userIDs), "conns", n)
+	}
+}
+
+func (b *Bridge) dataplaneKeysForSubject(subjectID string) []string {
+	svc := b.mod.Service()
+	if svc == nil {
+		return nil
+	}
+	for _, sub := range svc.Subjects() {
+		if sub.ID == subjectID {
+			return append([]string{}, sub.DataplaneKeys...)
+		}
+	}
+	return nil
 }

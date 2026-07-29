@@ -18,6 +18,7 @@ type Deps struct {
 	DataDir       string
 	FlushInterval time.Duration
 	RetentionDays int
+	AllowInject   bool
 	Logger        *slog.Logger
 }
 
@@ -36,9 +37,13 @@ func (m *Module) Register(mux *http.ServeMux, requireAuth func(func(http.Respons
 }
 func (m *Module) RegisterManifest(string, []domain.Subject) error { return nil }
 func (m *Module) SetLimits(map[string]domain.SpeedLimit)          {}
+func (m *Module) SetCPLimits(map[string]domain.SpeedLimit)        {}
 func (m *Module) PollSubjectUsage(subjectID string) domain.Usage {
 	return domain.Usage{SubjectID: subjectID}
 }
-func (m *Module) ZeroSubject(string) error          { return nil }
-func (m *Module) DiscoverObservedUsers() []string { return nil }
-func (m *Module) Service() any                      { return nil }
+func (m *Module) ZeroSubject(string) error                 { return nil }
+func (m *Module) SetSubjectUsage(string, uint64) error     { return nil }
+func (m *Module) Flush() error                             { return nil }
+func (m *Module) CloseConnByUsers([]string) int            { return 0 }
+func (m *Module) DiscoverObservedUsers() []string          { return nil }
+func (m *Module) Service() any                             { return nil }

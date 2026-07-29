@@ -3,6 +3,9 @@
 Optional dataplane accounting and shaping for sing-box-subserver.
 Build tag: **`with_traffic`** (omit from default [`build/tags.server`](../../build/tags.server)).
 
+> **Operators:** start at [`docs/guides/traffic/`](../guides/traffic/00-index.md)
+> (enable, modes, examples). This tree is the **design / FR / ADR** ladder.
+
 ```mermaid
 flowchart TD
   idx[00_index]

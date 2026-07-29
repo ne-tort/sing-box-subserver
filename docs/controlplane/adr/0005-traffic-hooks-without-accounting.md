@@ -28,6 +28,17 @@ When the agent is built with `with_traffic` **and** controlplane is enabled,
 `traffic_used_bytes` (and syncs `speed_*` shaping). Hooks and eligibility
 semantics remain; metering is no longer manual-only.
 
+Contract:
+
+| Event | Traffic module | Controlplane |
+|-------|----------------|--------------|
+| Materialize / user PATCH (speed) | `OnMaterialize` → subjects + `SetCPLimits` | publish even if Apply early-returns |
+| Flush poll | Service flush ticker; bridge polls cumulative usage (~10s) | `ApplyTrafficUsage` → rematerialize iff eligibility fingerprint changes |
+| Admin PATCH `traffic_used_bytes` | `OnTrafficUsedPatched` → discard live + absolute store | rematerialize (omit/restore creds) |
+| Eligible → ineligible | `OnBecameIneligible` → `CloseConnByUsers` | then rematerialize omits creds |
+| `traffic_reset_at` tick | `OnTrafficReset` → `ZeroSubject` | used=0 + rematerialize |
+| Shutdown | final `Flush` + sync | last used bytes persisted |
+
 Without `with_traffic`, decision (4) still holds: PATCH or external updater only.
 
 ## Consequences

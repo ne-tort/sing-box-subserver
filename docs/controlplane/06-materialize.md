@@ -41,6 +41,10 @@ flowchart LR
      - `flow=""` via `creds[preset].uuid`
      - `flow="xtls-rprx-vision"` via `creds[preset].uuid_xtls`
      - `flow="xtls-rprx-vision-udp443"` via `creds[preset].uuid_udp`
+   - When **zero** eligible users remain:
+     - Shadowsocks: random single-user `password` (unguessable per Apply); `users` omitted.
+     - SOCKS/HTTP: one inert `cp-inert` user with random password (empty users would be an open proxy).
+     - Trojan/VLESS/…: empty `users[]` (auth rejects).
 5. `outbounds` — at least `direct` (and `block` if required by route).
 5. `route` / `dns` — minimal defaults so validate succeeds.
 6. If TLS profile mode is `acme_*`: emit `certificate_providers` with tag `cp-tls`.

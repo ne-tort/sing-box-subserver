@@ -3,14 +3,10 @@
 package tracker_test
 
 import (
-	"context"
-	"io"
 	"testing"
-	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/traffic/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/traffic/tracker"
-	"golang.org/x/time/rate"
 )
 
 func TestStatsTrackerSwapDeltas(t *testing.T) {
@@ -34,19 +30,29 @@ func TestStatsTrackerSwapDeltas(t *testing.T) {
 	}
 }
 
-func TestRateLimitTrackerThrottles(t *testing.T) {
+func TestDiscardUserKeysPreventsFlushResurrection(t *testing.T) {
+	t.Parallel()
+	st := tracker.NewStatsTracker()
+	st.AddUserTraffic("alice", 100, 200)
+	st.DiscardUserKeys([]string{"alice"})
+	_, _, users := st.SwapDeltas()
+	if len(users) != 0 {
+		t.Fatalf("expected no deltas after discard, got %v", users)
+	}
+}
+
+func TestRateLimitTrackerSetLimitsReplace(t *testing.T) {
 	t.Parallel()
 	rt := tracker.NewRateLimitTracker()
 	rt.SetLimits(map[string]domain.SpeedLimit{
 		"bob": {UpBytesPerSec: 1024, DownBytesPerSec: 1024},
 	})
-	// Exercising limiter WaitN via a tiny write path is heavy; check SetLimits does not panic
-	// and burst constant matches s-ui (1 MiB).
-	lim := rate.NewLimiter(rate.Limit(1024), 1<<20)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := lim.WaitN(ctx, 512); err != nil {
-		t.Fatal(err)
+	got := rt.Limits()
+	if got["bob"].UpBytesPerSec != 1024 {
+		t.Fatalf("%+v", got)
 	}
-	_ = io.Discard
+	rt.SetLimits(nil)
+	if len(rt.Limits()) != 0 {
+		t.Fatalf("expected empty after nil, got %v", rt.Limits())
+	}
 }

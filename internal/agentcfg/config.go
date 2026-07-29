@@ -31,6 +31,8 @@ type Config struct {
 type TrafficConfig struct {
 	FlushIntervalSec int `yaml:"flush_interval_sec" json:"flush_interval_sec"`
 	RetentionDays    int `yaml:"retention_days" json:"retention_days"`
+	// AllowInject enables POST /v1/traffic/inject (smoke/lab only; never enable in prod).
+	AllowInject bool `yaml:"allow_inject" json:"allow_inject"`
 }
 
 // ControlplaneConfig seeds optional embedded CP (with_controlplane).
