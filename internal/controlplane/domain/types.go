@@ -77,11 +77,33 @@ func (s InboundSet) EffectiveBindings() []SetBinding {
 	return out
 }
 
+// MaterializeStatus tracks the latest controlplane materialize/apply attempt.
+type MaterializeStatus struct {
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+	LastAttemptAt *time.Time `json:"last_attempt_at,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
+	LastErrorCode string     `json:"last_error_code,omitempty"`
+	LastApplyNoop bool       `json:"last_apply_noop,omitempty"`
+}
+
+// OwnerTransition records a config_mode ownership change initiated by controlplane.
+type OwnerTransition struct {
+	From    string    `json:"from"`
+	To      string    `json:"to"`
+	At      time.Time `json:"at"`
+	Reason  string    `json:"reason,omitempty"`
+	Trigger string    `json:"trigger,omitempty"`
+	Success bool      `json:"success"`
+	Error   string    `json:"error,omitempty"`
+}
+
 // State is persisted runtime for active sets.
 type State struct {
-	ActiveSets             []string   `json:"active_sets"`
-	LastMaterializeSHA256  string     `json:"last_materialize_sha256,omitempty"`
-	LastMaterializeAt      *time.Time `json:"last_materialize_at,omitempty"`
+	ActiveSets            []string            `json:"active_sets"`
+	LastMaterializeSHA256 string              `json:"last_materialize_sha256,omitempty"`
+	LastMaterializeAt     *time.Time          `json:"last_materialize_at,omitempty"`
+	Materialize           *MaterializeStatus  `json:"materialize,omitempty"`
+	OwnerTransitions      []OwnerTransition   `json:"owner_transitions,omitempty"`
 }
 
 // ProtocolPreset is an embedded catalog entry.

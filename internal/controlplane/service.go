@@ -89,17 +89,10 @@ func (s *Service) Bootstrap(ctx context.Context) {
 			}
 		}
 	}
-	if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
+	if s.cfg.Owner == nil {
 		return
 	}
-	s.scrubStaleActiveSets()
-	st, err := s.store.LoadState()
-	if err != nil || len(st.ActiveSets) == 0 {
-		return
-	}
-	if err := s.rematerialize(ctx); err != nil && s.log != nil {
-		s.log.Warn("controlplane boot rematerialize failed", "err", err)
-	}
+	s.reconcileOwnershipOnBoot(ctx)
 }
 
 func (s *Service) Run(ctx context.Context) {
@@ -209,6 +202,7 @@ func (s *Service) applyTrafficResetsLocked(now time.Time) bool {
 
 func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc) {
 	mux.HandleFunc("GET /v1/controlplane/status", requireAuth(s.handleStatus))
+	mux.HandleFunc("GET /v1/controlplane/status/details", requireAuth(s.handleStatusDetails))
 	mux.HandleFunc("GET /v1/controlplane/users", requireAuth(s.handleUsersList))
 	mux.HandleFunc("POST /v1/controlplane/users", requireAuth(s.handleUsersCreate))
 	mux.HandleFunc("GET /v1/controlplane/users/{id}", requireAuth(s.handleUsersGet))
@@ -224,6 +218,7 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("GET /v1/controlplane/sets", requireAuth(s.handleSetsList))
 	mux.HandleFunc("POST /v1/controlplane/sets", requireAuth(s.handleSetsCreate))
 	mux.HandleFunc("GET /v1/controlplane/sets/{name}", requireAuth(s.handleSetsGet))
+	mux.HandleFunc("GET /v1/controlplane/subscription-tags", requireAuth(s.handleSubscriptionTags))
 	mux.HandleFunc("GET /v1/controlplane/sets/{name}/subscription-tags", requireAuth(s.handleSetSubscriptionTags))
 	mux.HandleFunc("PUT /v1/controlplane/sets/{name}", requireAuth(s.handleSetsPut))
 	mux.HandleFunc("DELETE /v1/controlplane/sets/{name}", requireAuth(s.handleSetsDelete))
@@ -470,6 +465,7 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	}
 	raw, err := materialize.Build(in)
 	if err != nil {
+		s.recordMaterializeResult(false, err, false, "", materializeErrorCode(err))
 		return err
 	}
 	res, err := s.cfg.Supervisor.Apply(ctx, supervisor.ApplyRequest{
@@ -478,16 +474,11 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		Force:  forceReload || pemChanged,
 	})
 	if err != nil {
+		s.recordMaterializeResult(false, err, false, "", "cp_apply_failed")
 		return err
 	}
-	st, err := s.store.LoadState()
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	st.LastMaterializeSHA256 = res.SHA256
-	st.LastMaterializeAt = &now
-	return s.store.SaveState(st)
+	s.recordMaterializeResult(true, nil, res.Noop, res.SHA256, "")
+	return nil
 }
 
 func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error) {
@@ -674,6 +665,14 @@ func parseTimePtr(s string) (*time.Time, error) {
 }
 
 func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	okJSON(w, http.StatusOK, s.buildStatusPayload(false))
+}
+
+func (s *Service) handleStatusDetails(w http.ResponseWriter, _ *http.Request) {
+	okJSON(w, http.StatusOK, s.buildStatusPayload(true))
+}
+
+func (s *Service) buildStatusPayload(details bool) map[string]any {
 	users, _ := s.store.LoadUsers()
 	sets, _ := s.store.LoadSets()
 	st, _ := s.store.LoadState()
@@ -700,6 +699,16 @@ func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"last_materialize_sha256": st.LastMaterializeSHA256,
 		"last_materialize_at":     st.LastMaterializeAt,
 	}
+	if st.Materialize != nil {
+		out["materialize_status"] = st.Materialize
+	}
+	if len(st.OwnerTransitions) > 0 {
+		n := len(st.OwnerTransitions)
+		if n > 5 {
+			n = 5
+		}
+		out["owner_transitions_recent"] = st.OwnerTransitions[len(st.OwnerTransitions)-n:]
+	}
 	if p, err := s.ensureTLSProfile(false); err == nil {
 		tls := s.tlsStatusPayload(p)
 		if ms, ok := tls["material_status"]; ok {
@@ -710,7 +719,74 @@ func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	if rc, err := s.loadRealityConfig(); err == nil {
 		out["reality"] = s.realityStatusPayload(rc)
 	}
-	okJSON(w, http.StatusOK, out)
+	out["ownership_health"] = s.ownershipHealth(st)
+	if details {
+		out["owner_transitions"] = st.OwnerTransitions
+		out["active_set_details"] = s.buildActiveSetDetails(st.ActiveSets, sets)
+		if s.cfg.Supervisor != nil {
+			snap := s.cfg.Supervisor.Status()
+			out["supervisor"] = map[string]any{
+				"state":           snap.State,
+				"revision":        snap.Revision,
+				"content_sha256":  snap.ContentSHA256,
+				"last_apply":      snap.LastApply,
+			}
+		}
+	}
+	return out
+}
+
+func (s *Service) buildActiveSetDetails(active []string, sets []domain.InboundSet) []any {
+	if len(active) == 0 {
+		return nil
+	}
+	byName := map[string]domain.InboundSet{}
+	for _, set := range sets {
+		byName[set.Name] = set
+	}
+	out := make([]any, 0, len(active))
+	for _, name := range active {
+		set, ok := byName[name]
+		if !ok {
+			out = append(out, map[string]any{"name": name, "missing": true})
+			continue
+		}
+		bindings := set.EffectiveBindings()
+		bindingDetails := make([]any, 0, len(bindings))
+		for _, b := range bindings {
+			p, err := presets.Get(b.Preset)
+			if err != nil {
+				continue
+			}
+			variantNames := []string{}
+			for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b) {
+				variantNames = append(variantNames, vv.Name)
+			}
+			bindingDetails = append(bindingDetails, map[string]any{
+				"inbound_tag":             fmt.Sprintf("cp-in-%s-%s", set.Name, b.Preset),
+				"preset":                  b.Preset,
+				"protocol":                p.Protocol,
+				"enabled_user_variants":   variantNames,
+				"enabled_client_profiles": b.EnabledClientProfiles,
+				"subscription_tags":       b.SubscriptionTags,
+			})
+		}
+		out = append(out, map[string]any{
+			"name":        set.Name,
+			"listen":      set.Listen,
+			"listen_port": set.ListenPort,
+			"has_demux":   set.HasDemux(),
+			"bindings":    bindingDetails,
+		})
+	}
+	return out
+}
+
+func (s *Service) rollbackFirstActivate(wasOwner bool, prev []string, trigger string) {
+	if s.cfg.Owner == nil || wasOwner || len(prev) > 0 {
+		return
+	}
+	_ = s.claimOwnership(configowner.ModeIdle, "activate_rollback", trigger)
 }
 
 func (s *Service) handleUsersList(w http.ResponseWriter, _ *http.Request) {
@@ -1232,36 +1308,7 @@ func (s *Service) handleSetSubscriptionTags(w http.ResponseWriter, r *http.Reque
 		if set.Name != name {
 			continue
 		}
-		bindings := set.EffectiveBindings()
-		out := make([]any, 0, len(bindings))
-		for _, b := range bindings {
-			p, err := presets.Get(b.Preset)
-			if err != nil {
-				continue
-			}
-			var variantNames []string
-			var queryTags []string
-			if p.Protocol == "vless" {
-				for _, vv := range vlessVariantsForBindingMeta(b) {
-					variantNames = append(variantNames, vv.Name)
-					queryTags = append(queryTags, vv.QueryTags...)
-				}
-			}
-			queryTags = append(queryTags, b.SubscriptionTags...)
-			out = append(out, map[string]any{
-				"inbound_tag":              fmt.Sprintf("cp-in-%s-%s", set.Name, b.Preset),
-				"preset":                   b.Preset,
-				"protocol":                 p.Protocol,
-				"subscription_tags":        dedupeStrings(queryTags),
-				"enabled_user_variants":    dedupeStrings(variantNames),
-				"enabled_client_profiles":  dedupeStrings(b.EnabledClientProfiles),
-				"credential_instance_policy": b.CredentialInstancePolicy,
-			})
-		}
-		okJSON(w, 200, map[string]any{
-			"set":      set.Name,
-			"bindings": out,
-		})
+		okJSON(w, 200, s.buildSetSubscriptionTagsPayload(set))
 		return
 	}
 	failJSON(w, 404, "not_found", "set not found")
@@ -1383,14 +1430,15 @@ func (s *Service) handleSetsActivate(w http.ResponseWriter, r *http.Request) {
 	}
 	wasOwner := s.cfg.Owner != nil && s.cfg.Owner.Owner() == configowner.ModeControlplane
 	if s.cfg.Owner != nil {
-		if err := s.cfg.Owner.Claim(configowner.ModeControlplane); err != nil {
-			failJSON(w, 409, "conflict", err.Error())
+		if err := s.claimOwnership(configowner.ModeControlplane, "activate", name); err != nil {
+			failJSON(w, 409, "cp_claim_failed", err.Error())
 			return
 		}
 	}
 	s.scrubStaleActiveSets()
 	st, err := s.store.LoadState()
 	if err != nil {
+		s.rollbackFirstActivate(wasOwner, nil, name)
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
@@ -1398,18 +1446,18 @@ func (s *Service) handleSetsActivate(w http.ResponseWriter, r *http.Request) {
 	if !contains(st.ActiveSets, name) {
 		st.ActiveSets = append(st.ActiveSets, name)
 		if err := s.store.SaveState(st); err != nil {
+			s.rollbackFirstActivate(wasOwner, prev, name)
 			failJSON(w, 500, "internal", err.Error())
 			return
 		}
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		st.ActiveSets = prev
-		_ = s.store.SaveState(st)
-		// First activate that just claimed ownership: do not leave orphan controlplane mode.
-		if !wasOwner && len(prev) == 0 && s.cfg.Owner != nil {
-			_ = s.cfg.Owner.Claim(configowner.ModeIdle)
+		if cur, loadErr := s.store.LoadState(); loadErr == nil {
+			cur.ActiveSets = prev
+			_ = s.store.SaveState(cur)
 		}
-		failJSON(w, 422, "config_invalid", err.Error())
+		s.rollbackFirstActivate(wasOwner, prev, name)
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	mode := string(configowner.ModeControlplane)
@@ -1443,7 +1491,9 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(st.ActiveSets) == 0 {
 		if s.cfg.Owner != nil {
-			_ = s.cfg.Owner.Claim(configowner.ModeIdle)
+			if err := s.claimOwnership(configowner.ModeIdle, "deactivate_last_set", name); err != nil && s.log != nil {
+				s.log.Warn("controlplane deactivate claim idle failed", "err", err, "set", name)
+			}
 		}
 	} else {
 		_ = s.rematerialize(r.Context())
@@ -1746,6 +1796,7 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	filterProfiles := parseRepeatCommaQuery(r, "profile")
 	filterFlow := parseRepeatCommaQuery(r, "flow")
 	filterNetwork := strings.TrimSpace(r.URL.Query().Get("network"))
+	strictFilters := parseBoolQuery(r, "strict_filters", false)
 	host := s.publicHost(r)
 	profile, err := s.ensureTLSProfile(false)
 	if err != nil {
@@ -1758,15 +1809,20 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, err := materialize.RenderSubscription(*user, sets, host, profile, materialize.SubscriptionFilters{
-		Set:      filterSet,
-		Presets:  filterPresets,
-		Variants: filterVariants,
-		Tags:     filterTags,
-		Profiles: filterProfiles,
-		Flow:     filterFlow,
-		Network:  filterNetwork,
+		Set:           filterSet,
+		Presets:       filterPresets,
+		Variants:      filterVariants,
+		Tags:          filterTags,
+		Profiles:      filterProfiles,
+		Flow:          filterFlow,
+		Network:       filterNetwork,
+		StrictFilters: strictFilters,
 	}, assignments)
 	if err != nil {
+		if strictFilters && strings.Contains(err.Error(), "cp_invalid_sub_filter") {
+			failJSON(w, 400, "cp_invalid_sub_filter", err.Error())
+			return
+		}
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
@@ -1814,32 +1870,6 @@ func normalizeSetCompat(set *domain.InboundSet) {
 	if len(set.Presets) == 0 && len(set.Bindings) > 0 {
 		set.Presets = uniqueSetPresets(set.Bindings)
 	}
-}
-
-func vlessVariantsForBindingMeta(b domain.SetBinding) []domain.UserVariantSpec {
-	all := domain.VLESSUserVariantSpecs
-	if len(b.EnabledUserVariants) == 0 {
-		return all
-	}
-	out := make([]domain.UserVariantSpec, 0, len(b.EnabledUserVariants))
-	seen := map[string]struct{}{}
-	for _, n := range b.EnabledUserVariants {
-		for _, vv := range all {
-			if vv.Name != n {
-				continue
-			}
-			if _, ok := seen[n]; ok {
-				break
-			}
-			seen[n] = struct{}{}
-			out = append(out, vv)
-			break
-		}
-	}
-	if len(out) == 0 {
-		return all
-	}
-	return out
 }
 
 func dedupeStrings(in []string) []string {

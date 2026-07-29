@@ -78,3 +78,45 @@ var VLESSUserVariantSpecs = []UserVariantSpec{
 	},
 }
 
+// UserVariantsForProtocol returns enabled user variants for a binding.
+// When enabled_user_variants is empty or unknown, the full protocol catalog is used.
+func UserVariantsForProtocol(protocol string, b SetBinding) []UserVariantSpec {
+	switch protocol {
+	case "vless":
+		return resolveEnabledUserVariants(b.EnabledUserVariants, VLESSUserVariantSpecs)
+	default:
+		return nil
+	}
+}
+
+func resolveEnabledUserVariants(enabled []string, catalog []UserVariantSpec) []UserVariantSpec {
+	if len(catalog) == 0 {
+		return nil
+	}
+	if len(enabled) == 0 {
+		out := make([]UserVariantSpec, len(catalog))
+		copy(out, catalog)
+		return out
+	}
+	seen := map[string]struct{}{}
+	out := make([]UserVariantSpec, 0, len(enabled))
+	for _, n := range enabled {
+		for _, vv := range catalog {
+			if vv.Name != n {
+				continue
+			}
+			if _, ok := seen[n]; ok {
+				break
+			}
+			seen[n] = struct{}{}
+			out = append(out, vv)
+			break
+		}
+	}
+	if len(out) == 0 {
+		out = make([]UserVariantSpec, len(catalog))
+		copy(out, catalog)
+	}
+	return out
+}
+

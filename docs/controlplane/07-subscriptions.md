@@ -13,14 +13,15 @@ This is **not** the agent subscribe/pull feature (`POST /v1/subscribe`).
 GET /v1/sub/{token}
 ```
 
-Selection discovery helper (management API):
+Selection discovery helpers (management API):
 
 ```
+GET /v1/controlplane/subscription-tags?active_only=true
 GET /v1/controlplane/sets/{name}/subscription-tags
 ```
 
-This endpoint lets UI/operators discover which `variant/tag/profile` values can be
-combined in subscription query parameters for a specific inbound set.
+The aggregate endpoint lists tags/variants/profiles for all active sets (or all sets when `active_only=false`).
+Per-set endpoint scopes discovery to one inbound set.
 
 | Property | Value |
 |----------|-------|
@@ -41,7 +42,10 @@ combined in subscription query parameters for a specific inbound set.
 | `variant` | Optional repeatable/comma-separated logical variant filter (`flow-none`, `flow-xtls-rprx-vision`, `flow-udp-vision`). |
 | `tag` | Optional repeatable/comma-separated binding/variant query tag filter. |
 | `profile` | Optional repeatable/comma-separated outbound-only client profile filter. |
+| `strict_filters` | When `true`, unknown/disallowed `set`/`preset`/`variant`/`tag`/`profile`/`flow`/`network` values → `400` `cp_invalid_sub_filter` instead of silently empty result. Default `false`. |
 | `format` | Default `sing-box-json`. No other formats in v1 (reserved). |
+
+Outbounds in the response are sorted by outbound `tag` for deterministic output.
 
 ## Default body (`format=sing-box-json`)
 
@@ -75,6 +79,7 @@ For `vless-reality-tcp`, controlplane additionally injects:
 | 200 | Body as above |
 | 404 | Unknown token |
 | 403 | User exists but ineligible (`cp_user_ineligible`) |
+| 400 | Invalid subscription filter with `strict_filters=true` (`cp_invalid_sub_filter`) |
 | 409 | No active sets (`cp_no_active_set`) |
 | 405 | Method not GET |
 

@@ -20,6 +20,7 @@ Captured from live tests on `163.5.180.181` (2026-07-28).
 2. **Panel AgentURL**: new installs use `https://` + `agent_tls_insecure` (self_signed). Existing nodes may still have `http://` — migrate/probe.
 3. **ACME obtain grace** is 5m / lost grace 2m — tune for production if needed.
 4. **Protocol preset semantics phase**: pause here before expanding cross-protocol preset variants. Next stage should define per-protocol semantic contracts (inbound/outbound symmetry rules, variant scopes, client profile constraints) and only then widen variant catalogs beyond current VLESS flow model.
+5. **Ownership/observability hardening**: done — owner transition log, `materialize_status`, `ownership_health`, boot orphan/stale reconcile, strict subscription filters, aggregate `/subscription-tags`, unified `UserVariantsForProtocol`. Deferred (needs per-protocol contracts first): variant catalogs beyond VLESS; ClientProfile outbound override runtime (profiles today are subscription selection tags only).
 
 ## Ops notes
 

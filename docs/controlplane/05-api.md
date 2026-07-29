@@ -15,6 +15,7 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/status` | Module status |
+| GET | `/v1/controlplane/status/details` | Extended status with active set breakdown, owner transition log, supervisor snapshot |
 
 ```json
 {
@@ -30,6 +31,18 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
     "demux_in_binary": true,
     "tls_mode": "self_signed",
     "tls_material_status": { "ready": true, "active_material": "self_signed_pem" },
+    "materialize_status": {
+      "last_success_at": "2026-07-29T10:00:00Z",
+      "last_attempt_at": "2026-07-29T10:00:00Z",
+      "last_apply_noop": false
+    },
+    "owner_transitions_recent": [
+      { "from": "idle", "to": "controlplane", "reason": "activate", "trigger": "s1", "success": true }
+    ],
+    "ownership_health": {
+      "status": "ok",
+      "issues": []
+    },
     "reality": {
       "using_user_overrides": false,
       "effective_profiles": [{ "sni": "www.microsoft.com", "handshake_server": "www.microsoft.com", "handshake_port": 443 }],
@@ -40,6 +53,18 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
   }
 }
 ```
+
+`GET /status/details` additionally returns:
+- `owner_transitions` (full recent log, up to 20 entries),
+- `active_set_details` (per active set: bindings, inbound tags, enabled variants/profiles),
+- `supervisor` snapshot (`state`, `revision`, `content_sha256`, `last_apply`).
+
+`ownership_health` summarizes config-owner vs active-set consistency:
+- `status`: `ok` | `degraded`,
+- `issues`: e.g. `controlplane_mode_without_active_sets`, `active_sets_without_controlplane_ownership`, `last_materialize_failed`, `never_materialized`.
+
+On bootstrap, if `config_mode=controlplane` but `active_sets` is empty (orphan after crash), ownership is rolled back to `idle` with reason `boot_reconcile_orphan`.
+If `config_mode` is not `controlplane` but `active_sets` is non-empty, stale entries are cleared on bootstrap.
 
 `config_mode` is the **global** owner value from `configowner` (may be `direct` / `subscribed` / `idle` even if CP data exists).
 `demux_in_binary` reflects compile-time `with_demux`. `tls_material_status` mirrors `GET /tls` readiness (ops polling).
@@ -150,6 +175,7 @@ Named demux_template skeletons (separate from protocol presets). Operators copy 
 | POST | `/v1/controlplane/sets` | Create set (`demux_template` optional; port unique) |
 | GET | `/v1/controlplane/sets/{name}` | Get |
 | GET | `/v1/controlplane/sets/{name}/subscription-tags` | List available subscription selection tags/variants/profiles per inbound binding |
+| GET | `/v1/controlplane/subscription-tags` | Aggregate subscription-tags across sets (`?active_only=true` default; `false` lists all sets) |
 | PUT | `/v1/controlplane/sets/{name}` | Replace definition (`409` port conflict; if active → rematerialize) |
 | DELETE | `/v1/controlplane/sets/{name}` | Delete (`409` if active — deactivate first) |
 | POST | `/v1/controlplane/sets/{name}/activate` | Add to `active_sets`; Claim(controlplane); materialize + Apply |
@@ -180,6 +206,9 @@ Named demux_template skeletons (separate from protocol presets). Operators copy 
 - returns discoverable `subscription_tags`, `enabled_user_variants`, `enabled_client_profiles`,
 - this endpoint is for subscription UI/client selection only; server inbounds already keep all required user entries by variant policy.
 
+`GET /subscription-tags` returns `{ "sets": [ { "set", "active", "bindings": [...] }, ... ] }`.
+With `active_only=true` (default), only currently active sets are included.
+
 Activate side effects: cancel subscribe; `config_mode=controlplane`. On **first** activate failure after Claim, ownership rolls back to `idle` and `active_sets` are restored.
 
 Deactivate last active set: `config_mode=idle`; does not delete last-good.
@@ -197,6 +226,10 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_user_ineligible` | Sub fetch for expired/limited user |
 | `cp_unknown_preset` | Set references missing preset |
 | `cp_invalid_creds` | Manual creds: unknown preset/field or empty/non-string value |
+| `cp_claim_failed` | `configowner.Claim(controlplane)` failed during activate |
+| `cp_materialize_failed` | Materialize build/validate failed before Apply |
+| `cp_apply_failed` | Supervisor Apply failed after materialize |
+| `cp_invalid_sub_filter` | Subscription query filter unknown/disallowed when `strict_filters=true` |
 | `unsupported_build_tag` | Same family as root validate 422 |
 
 ---

@@ -4,7 +4,9 @@ package controlplane
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -689,6 +691,305 @@ func TestSetSubscriptionTagsAPI(t *testing.T) {
 	tags, _ := b["subscription_tags"].([]any)
 	if len(tags) < 2 {
 		t.Fatalf("tags=%v", b["subscription_tags"])
+	}
+}
+
+func TestActivateRollbackOnApplyFailure(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	fe := &testutil.FakeEngine{ValidateErr: errors.New("validate boom")}
+	sup := supervisor.NewWithOptions(store, fe, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader([]byte(`{"name":"u1"}`))))
+	if rr.Code != 200 {
+		t.Fatalf("create user: %d %s", rr.Code, rr.Body.String())
+	}
+	setBody := []byte(`{"name":"s1","listen":"0.0.0.0","listen_port":8443,"presets":["shadowsocks-tcp"]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets/s1/activate", nil))
+	if rr.Code != 422 {
+		t.Fatalf("activate should fail: %d %s", rr.Code, rr.Body.String())
+	}
+	if owner.Owner() != configowner.ModeIdle {
+		t.Fatalf("owner should rollback to idle, got %s", owner.Owner())
+	}
+	st, err := svc.store.LoadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.ActiveSets) != 0 {
+		t.Fatalf("active_sets should be empty after rollback: %v", st.ActiveSets)
+	}
+	if st.Materialize == nil || st.Materialize.LastErrorCode == "" {
+		t.Fatalf("materialize status not recorded: %#v", st.Materialize)
+	}
+}
+
+func TestStatusDetailsEndpoint(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader([]byte(`{"name":"u2"}`))))
+	if rr.Code != 200 {
+		t.Fatalf("create user: %d %s", rr.Code, rr.Body.String())
+	}
+	setBody := []byte(`{"name":"s2","listen":"0.0.0.0","listen_port":9443,"presets":["vless-tcp"]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets/s2/activate", nil))
+	if rr.Code != 200 {
+		t.Fatalf("activate: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/status/details", nil))
+	if rr.Code != 200 {
+		t.Fatalf("status details: %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["materialize_status"] == nil {
+		t.Fatalf("missing materialize_status: %#v", env.Data)
+	}
+	details, _ := env.Data["active_set_details"].([]any)
+	if len(details) != 1 {
+		t.Fatalf("active_set_details=%v", env.Data["active_set_details"])
+	}
+	transitions, _ := env.Data["owner_transitions"].([]any)
+	if len(transitions) == 0 {
+		t.Fatalf("owner_transitions=%v", env.Data["owner_transitions"])
+	}
+	if env.Data["supervisor"] == nil {
+		t.Fatalf("missing supervisor snapshot")
+	}
+	if env.Data["ownership_health"] == nil {
+		t.Fatalf("missing ownership_health")
+	}
+}
+
+func TestBootReconcileOrphanOwnership(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Claim(configowner.ModeControlplane); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	svc.Bootstrap(context.Background())
+	if owner.Owner() != configowner.ModeIdle {
+		t.Fatalf("owner=%s want idle", owner.Owner())
+	}
+}
+
+func TestBootReconcileStaleActiveSetsWhenIdle(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	setBody := []byte(`{"name":"stale-set","listen":"0.0.0.0","listen_port":8443,"presets":["vless-tcp"]}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	if err := svc.store.SaveState(domain.State{ActiveSets: []string{"stale-set"}}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Bootstrap(context.Background())
+	st, err := svc.store.LoadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.ActiveSets) != 0 {
+		t.Fatalf("active_sets=%v want empty", st.ActiveSets)
+	}
+}
+
+func TestSubStrictFiltersRejectUnknown(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader([]byte(`{"name":"strict-user"}`))))
+	if rr.Code != 200 {
+		t.Fatalf("create user: %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &env)
+	tok, _ := env.Data["sub_token"].(string)
+
+	setBody := []byte(`{"name":"strict-set","listen":"0.0.0.0","listen_port":8443,"presets":["vless-tcp"]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets/strict-set/activate", nil))
+	if rr.Code != 200 {
+		t.Fatalf("activate: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/sub/"+tok+"?strict_filters=true&variant=flow-nope", nil))
+	if rr.Code != 400 {
+		t.Fatalf("strict sub: want 400 got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestSubscriptionTagsAggregateAPI(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	store, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	setBody := []byte(`{"name":"agg1","listen":"0.0.0.0","listen_port":9443,"presets":["vless-tcp"]}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	setBody2 := []byte(`{"name":"agg2","listen":"0.0.0.0","listen_port":9444,"presets":["trojan-tcp"]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody2)))
+	if rr.Code != 200 {
+		t.Fatalf("create set2: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets/agg1/activate", nil))
+	if rr.Code != 200 {
+		t.Fatalf("activate: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/subscription-tags?active_only=true", nil))
+	if rr.Code != 200 {
+		t.Fatalf("aggregate tags: %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	sets, _ := env.Data["sets"].([]any)
+	if len(sets) != 1 {
+		t.Fatalf("sets=%v", env.Data["sets"])
+	}
+	first, _ := sets[0].(map[string]any)
+	if first["set"] != "agg1" || first["active"] != true {
+		t.Fatalf("first=%v", first)
 	}
 }
 

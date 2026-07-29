@@ -27,13 +27,14 @@ type Input struct {
 }
 
 type SubscriptionFilters struct {
-	Set      string
-	Presets  []string
-	Variants []string
-	Tags     []string
-	Profiles []string
-	Flow     []string
-	Network  string
+	Set           string
+	Presets       []string
+	Variants      []string
+	Tags          []string
+	Profiles      []string
+	Flow          []string
+	Network       string
+	StrictFilters bool
 }
 
 var leftoverToken = regexp.MustCompile(`\{\{[^{}]+\}\}`)
@@ -216,8 +217,9 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			if creds == nil {
 				continue
 			}
-			if p.Protocol == "vless" {
-				for _, vv := range vlessVariantsForBinding(b) {
+			variants := domain.UserVariantsForProtocol(p.Protocol, b)
+			if len(variants) > 0 {
+				for _, vv := range variants {
 					id := creds[vv.CredentialField]
 					if id == nil || id == "" {
 						continue
@@ -359,6 +361,12 @@ func substituteMap(m map[string]any, vars map[string]string) (map[string]any, er
 
 // RenderSubscription builds client outbounds JSON for one user.
 func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost string, tls domain.TLSProfile, filters SubscriptionFilters, realityAssignments map[string]domain.RealityAssignment) ([]byte, error) {
+	if filters.StrictFilters {
+		cat := BuildSubscriptionCatalog(sets)
+		if err := cat.Validate(filters); err != nil {
+			return nil, fmt.Errorf("cp_invalid_sub_filter: %w", err)
+		}
+	}
 	serverName := tls.ServerNameForTLS(publicHost)
 	insecure := tls.NeedsTLSReportsInsecure()
 	presetOK := func(pn string) bool {
@@ -437,7 +445,8 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 			if creds == nil {
 				continue
 			}
-			if p.Protocol == "vless" {
+			variants := domain.UserVariantsForProtocol(p.Protocol, b)
+			if len(variants) > 0 {
 				baseTag := fmt.Sprintf("cp-out-%s-%s", set.Name, pn)
 				addVlessOutbound := func(tag string, uuid any, flow string) error {
 					if uuid == nil || uuid == "" {
@@ -502,7 +511,7 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					return nil
 				}
 
-				for _, vv := range vlessVariantsForBinding(b) {
+				for _, vv := range variants {
 					if !variantOK(vv.Name) {
 						continue
 					}
@@ -583,6 +592,7 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 			outbounds = append(outbounds, ob)
 		}
 	}
+	sortOutboundsByTag(outbounds)
 	doc := map[string]any{"outbounds": outbounds}
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -623,31 +633,6 @@ func uniqueBindingPresets(bindings []domain.SetBinding) []string {
 		}
 		seen[b.Preset] = struct{}{}
 		out = append(out, b.Preset)
-	}
-	return out
-}
-
-func vlessVariantsForBinding(b domain.SetBinding) []domain.UserVariantSpec {
-	all := domain.VLESSUserVariantSpecs
-	if len(b.EnabledUserVariants) == 0 {
-		return all
-	}
-	seen := map[string]struct{}{}
-	out := make([]domain.UserVariantSpec, 0, len(b.EnabledUserVariants))
-	for _, n := range b.EnabledUserVariants {
-		for _, vv := range all {
-			if vv.Name == n {
-				if _, ok := seen[n]; ok {
-					break
-				}
-				seen[n] = struct{}{}
-				out = append(out, vv)
-				break
-			}
-		}
-	}
-	if len(out) == 0 {
-		return all
 	}
 	return out
 }

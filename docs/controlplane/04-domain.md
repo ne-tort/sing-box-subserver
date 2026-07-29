@@ -122,6 +122,8 @@ Initial v1 user variants for `vless`:
 - `flow-xtls-rprx-vision` → `creds[preset].uuid_xtls`, `flow="xtls-rprx-vision"`
 - `flow-udp-vision` → `creds[preset].uuid_udp`, `flow="xtls-rprx-vision-udp443"`
 
+Resolver: `domain.UserVariantsForProtocol(protocol, binding)` — single entry point for materialize, subscription catalog, and discovery APIs. Empty or unknown `enabled_user_variants` falls back to the full protocol catalog.
+
 ### Port exclusivity
 
 No two **stored** sets may share the same `listen_port` (create/update → `409` `cp_port_conflict`).
@@ -142,8 +144,12 @@ Runtime `state.json` holds `active_sets: string[]` (names).
 | `active_sets` | string[] | |
 | `last_materialize_sha256` | string | |
 | `last_materialize_at` | RFC3339 \| null | |
+| `materialize` | object \| null | Last materialize attempt: `last_success_at`, `last_attempt_at`, `last_error`, `last_error_code`, `last_apply_noop` |
+| `owner_transitions` | array | Recent ownership changes (max 20): `from`, `to`, `at`, `reason`, `trigger`, `success`, `error` |
 
 Global `config_mode` is **not** duplicated here — see root [`config-owner.json`](../adr/0008-exclusive-config-owner.md) / `internal/configowner`.
+
+Boot reconciliation (see [05-api](05-api.md)): orphan `controlplane` without `active_sets` → `idle`; stale `active_sets` while not `controlplane` → cleared.
 
 ## TLSProfile (`tls_profile.json`)
 
