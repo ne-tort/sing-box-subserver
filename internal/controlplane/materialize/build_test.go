@@ -4,6 +4,7 @@ package materialize
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -233,7 +234,7 @@ func TestRenderSubscriptionInsecureOnlySelfSigned(t *testing.T) {
 	user := trojanUser(now)
 	user.SubToken = "tok"
 
-	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), "", "")
+	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), SubscriptionFilters{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,11 +244,281 @@ func TestRenderSubscriptionInsecureOnlySelfSigned(t *testing.T) {
 		Mode: domain.TLSModeACMEDomain,
 		ACME: &domain.ACMESpec{Email: "a@b.c", Domains: []string{"vpn.example.com"}},
 	}
-	body, err = RenderSubscription(user, sets, "vpn.example.com", acme, "", "")
+	body, err = RenderSubscription(user, sets, "vpn.example.com", acme, SubscriptionFilters{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertSubInsecure(t, body, false)
+}
+
+func TestRenderSubscriptionPresetFilterMulti(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "mixed", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"trojan-tcp", "vless-tcp", "shadowsocks-tcp"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"trojan-tcp":      {"password": "t"},
+			"vless-tcp":       {"uuid": "11111111-2222-3333-4444-555555555555", "uuid_xtls": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"},
+			"shadowsocks-tcp": {"password": "s"},
+		},
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp", "trojan-tcp"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := doc["outbounds"].([]any)
+	if len(outs) != 3 {
+		t.Fatalf("outbounds=%d want 2 body=%s", len(outs), body)
+	}
+	tags := map[string]bool{}
+	for _, o := range outs {
+		m, _ := o.(map[string]any)
+		tags[fmt.Sprint(m["tag"])] = true
+	}
+	if !tags["cp-out-mixed-vless-tcp-none"] || !tags["cp-out-mixed-vless-tcp-xtls-rprx-vision"] || !tags["cp-out-mixed-trojan-tcp"] {
+		t.Fatalf("tags=%v", tags)
+	}
+	if tags["cp-out-mixed-shadowsocks-tcp"] {
+		t.Fatal("shadowsocks should be filtered out")
+	}
+}
+
+func TestBuildAndSubscriptionReality(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "r1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"vless-reality-tcp"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"vless-reality-tcp": {
+				"uuid":      "11111111-2222-3333-4444-555555555555",
+				"uuid_xtls": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+			},
+		},
+	}
+	assignments := map[string]domain.RealityAssignment{
+		"r1/vless-reality-tcp": {
+			InboundKey:       "r1/vless-reality-tcp",
+			SNI:              "www.microsoft.com",
+			HandshakeServer:  "www.microsoft.com",
+			HandshakePort:    443,
+			PrivateKeyBase64: "Mzi3RBq4Eb3L-ic-8z9yqV3Xcg7G7xUqKdEH7DKn-1Q",
+			PublicKeyBase64:  "jQfCMZZk0RwJQK1qlf0LUFUphdE4jE6JIutIlAzxPVo",
+			ShortID:          "aabbccddeeff0011",
+			UpdatedAt:        now,
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost:         "198.51.100.10",
+		DataDir:            "/data",
+		TLS:                domain.DefaultSelfSigned("198.51.100.10"),
+		TLSCertPath:        "/data/controlplane/tls/server.crt",
+		TLSKeyPath:         "/data/controlplane/tls/server.key",
+		ActiveSets:         []domain.InboundSet{set},
+		Users:              []domain.User{user},
+		RealityAssignments: assignments,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	tlsObj, _ := ib["tls"].(map[string]any)
+	if tlsObj["server_name"] != "www.microsoft.com" {
+		t.Fatalf("inbound reality server_name=%v", tlsObj["server_name"])
+	}
+	realityObj, _ := tlsObj["reality"].(map[string]any)
+	if realityObj["private_key"] != assignments["r1/vless-reality-tcp"].PrivateKeyBase64 {
+		t.Fatalf("private_key=%v", realityObj["private_key"])
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "198.51.100.10", domain.DefaultSelfSigned("198.51.100.10"), SubscriptionFilters{}, assignments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := sub["outbounds"].([]any)
+	if len(outs) != 2 {
+		t.Fatalf("outbounds=%d", len(outs))
+	}
+	foundFlowNone, foundFlowX := false, false
+	for _, o := range outs {
+		ob, _ := o.(map[string]any)
+		otls, _ := ob["tls"].(map[string]any)
+		if otls["server_name"] != "www.microsoft.com" {
+			t.Fatalf("sub server_name=%v", otls["server_name"])
+		}
+		if ob["flow"] != nil {
+			foundFlowX = true
+			if ob["flow"] != "xtls-rprx-vision" {
+				t.Fatalf("flow=%v", ob["flow"])
+			}
+		} else {
+			foundFlowNone = true
+		}
+		realityOut, _ := otls["reality"].(map[string]any)
+		if realityOut["public_key"] != assignments["r1/vless-reality-tcp"].PublicKeyBase64 {
+			t.Fatalf("public_key=%v", realityOut["public_key"])
+		}
+	}
+	if !foundFlowNone || !foundFlowX {
+		t.Fatalf("expected both flow variants; none=%v xtls=%v outs=%#v", foundFlowNone, foundFlowX, outs)
+	}
+}
+
+func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "v1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"vless-tcp"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"vless-tcp": {
+				"uuid":      "11111111-2222-3333-4444-555555555555",
+				"uuid_xtls": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+			},
+		},
+	}
+
+	t.Run("flow xtls only", func(t *testing.T) {
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			t.Fatal(err)
+		}
+		outs, _ := doc["outbounds"].([]any)
+		if len(outs) != 1 {
+			t.Fatalf("outbounds=%d want 1", len(outs))
+		}
+		ob, _ := outs[0].(map[string]any)
+		if ob["tag"] != "cp-out-v1-vless-tcp-xtls-rprx-vision" {
+			t.Fatalf("tag=%v", ob["tag"])
+		}
+		if ob["flow"] != "xtls-rprx-vision" {
+			t.Fatalf("flow=%v", ob["flow"])
+		}
+		if ob["uuid"] != "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" {
+			t.Fatalf("uuid=%v", ob["uuid"])
+		}
+	})
+
+	t.Run("flow none only", func(t *testing.T) {
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"none"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			t.Fatal(err)
+		}
+		outs, _ := doc["outbounds"].([]any)
+		if len(outs) != 1 {
+			t.Fatalf("outbounds=%d want 1", len(outs))
+		}
+		ob, _ := outs[0].(map[string]any)
+		if ob["tag"] != "cp-out-v1-vless-tcp-none" {
+			t.Fatalf("tag=%v", ob["tag"])
+		}
+		if ob["flow"] != nil {
+			t.Fatalf("flow=%v (expected nil)", ob["flow"])
+		}
+		if ob["uuid"] != "11111111-2222-3333-4444-555555555555" {
+			t.Fatalf("uuid=%v", ob["uuid"])
+		}
+	})
+
+	t.Run("network udp", func(t *testing.T) {
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}, Network: "udp"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			t.Fatal(err)
+		}
+		outs, _ := doc["outbounds"].([]any)
+		if len(outs) != 1 {
+			t.Fatalf("outbounds=%d want 1", len(outs))
+		}
+		ob, _ := outs[0].(map[string]any)
+		if ob["network"] != "udp" {
+			t.Fatalf("network=%v", ob["network"])
+		}
+	})
+}
+
+func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name:       "vb",
+		Listen:     "0.0.0.0",
+		ListenPort: 443,
+		Bindings: []domain.SetBinding{
+			{
+				Preset:                "vless-tcp",
+				SubscriptionTags:      []string{"mobile", "stable"},
+				EnabledUserVariants:   []string{"flow-none", "flow-udp-vision"},
+				EnabledClientProfiles: []string{"profile-mobile"},
+			},
+		},
+		Presets: []string{"vless-tcp"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"vless-tcp": {
+				"uuid":     "11111111-2222-3333-4444-555555555555",
+				"uuid_udp": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+			},
+		},
+	}
+
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
+		SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"profile-mobile"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := doc["outbounds"].([]any)
+	if len(outs) != 1 {
+		t.Fatalf("outbounds=%d want 1 body=%s", len(outs), body)
+	}
+	ob, _ := outs[0].(map[string]any)
+	if ob["flow"] != "xtls-rprx-vision-udp443" {
+		t.Fatalf("flow=%v", ob["flow"])
+	}
+	if ob["uuid"] != "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" {
+		t.Fatalf("uuid=%v", ob["uuid"])
+	}
 }
 
 func firstInbound(t *testing.T, doc map[string]any) map[string]any {

@@ -23,6 +23,17 @@ type Input struct {
 	TLS            domain.TLSProfile
 	TLSCertPath    string // set for self_signed after ensure
 	TLSKeyPath     string
+	RealityAssignments map[string]domain.RealityAssignment
+}
+
+type SubscriptionFilters struct {
+	Set      string
+	Presets  []string
+	Variants []string
+	Tags     []string
+	Profiles []string
+	Flow     []string
+	Network  string
 }
 
 var leftoverToken = regexp.MustCompile(`\{\{[^{}]+\}\}`)
@@ -124,7 +135,7 @@ func certificateProviders(in Input) []any {
 
 func activeSetsNeedTLS(sets []domain.InboundSet) bool {
 	for _, set := range sets {
-		for _, pn := range set.Presets {
+		for _, pn := range uniqueBindingPresets(set.EffectiveBindings()) {
 			p, err := presets.Get(pn)
 			if err != nil {
 				continue
@@ -138,13 +149,15 @@ func activeSetsNeedTLS(sets []domain.InboundSet) bool {
 }
 
 func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error) {
-	if len(set.Presets) == 0 {
+	bindings := set.EffectiveBindings()
+	if len(bindings) == 0 {
 		return nil, fmt.Errorf("set %q: empty presets", set.Name)
 	}
-	if !set.HasDemux() && len(set.Presets) != 1 {
+	presetsList := uniqueBindingPresets(bindings)
+	if !set.HasDemux() && len(presetsList) != 1 {
 		return nil, fmt.Errorf("set %q: without demux exactly one preset required", set.Name)
 	}
-	out := make([]any, 0, len(set.Presets)+1)
+	out := make([]any, 0, len(presetsList)+1)
 	if set.HasDemux() {
 		demux, err := cloneMap(set.DemuxTemplate)
 		if err != nil {
@@ -156,7 +169,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		demux["listen_port"] = set.ListenPort
 		raw, _ := json.Marshal(demux)
 		s := string(raw)
-		for _, pn := range set.Presets {
+		for _, pn := range presetsList {
 			s = strings.ReplaceAll(s, "{{tag:"+pn+"}}", fmt.Sprintf("cp-in-%s-%s", set.Name, pn))
 		}
 		if leftoverToken.MatchString(s) {
@@ -167,7 +180,8 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		}
 		out = append(out, demux)
 	}
-	for _, pn := range set.Presets {
+	for _, b := range bindings {
+		pn := b.Preset
 		p, err := presets.Get(pn)
 		if err != nil {
 			return nil, err
@@ -202,6 +216,23 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			if creds == nil {
 				continue
 			}
+			if p.Protocol == "vless" {
+				for _, vv := range vlessVariantsForBinding(b) {
+					id := creds[vv.CredentialField]
+					if id == nil || id == "" {
+						continue
+					}
+					entry := map[string]any{
+						"name": u.Name + "-" + vv.Name,
+						"uuid": id,
+					}
+					if vv.FlowValue != "" {
+						entry["flow"] = vv.FlowValue
+					}
+					userArr = append(userArr, entry)
+				}
+				continue
+			}
 			entry := map[string]any{"name": u.Name}
 			for k, v := range creds {
 				entry[k] = v
@@ -212,7 +243,14 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		if p.Protocol == "shadowsocks" {
 			delete(ib, "password")
 		}
-		if presetNeedsTLS(p) {
+		if presetHasTrait(p, "reality") {
+			rk := set.Name + "/" + pn
+			assignment, ok := in.RealityAssignments[rk]
+			if !ok {
+				return nil, fmt.Errorf("missing reality assignment for %s", rk)
+			}
+			attachInboundReality(ib, assignment)
+		} else if presetNeedsTLS(p) {
 			attachInboundTLS(ib, in, serverName)
 		}
 		out = append(out, ib)
@@ -221,8 +259,12 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 }
 
 func presetNeedsTLS(p domain.ProtocolPreset) bool {
+	return presetHasTrait(p, "tls")
+}
+
+func presetHasTrait(p domain.ProtocolPreset, want string) bool {
 	for _, t := range p.Traits {
-		if t == "tls" {
+		if t == want {
 			return true
 		}
 	}
@@ -247,6 +289,30 @@ func attachInboundTLS(ib map[string]any, in Input, serverName string) {
 		tlsObj["key_path"] = in.TLSKeyPath
 	case domain.TLSModeACMEDomain, domain.TLSModeACMEIP:
 		tlsObj["certificate_provider"] = domain.TLSProviderTag
+	}
+	ib["tls"] = tlsObj
+}
+
+func attachInboundReality(ib map[string]any, assignment domain.RealityAssignment) {
+	tlsObj, _ := ib["tls"].(map[string]any)
+	if tlsObj == nil {
+		tlsObj = map[string]any{}
+	}
+	tlsObj["enabled"] = true
+	tlsObj["server_name"] = assignment.SNI
+	delete(tlsObj, "certificate_path")
+	delete(tlsObj, "key_path")
+	delete(tlsObj, "certificate_provider")
+	delete(tlsObj, "certificate")
+	delete(tlsObj, "key")
+	tlsObj["reality"] = map[string]any{
+		"enabled":     true,
+		"private_key": assignment.PrivateKeyBase64,
+		"short_id":    []any{assignment.ShortID},
+		"handshake": map[string]any{
+			"server":      assignment.HandshakeServer,
+			"server_port": assignment.HandshakePort,
+		},
 	}
 	ib["tls"] = tlsObj
 }
@@ -292,16 +358,75 @@ func substituteMap(m map[string]any, vars map[string]string) (map[string]any, er
 }
 
 // RenderSubscription builds client outbounds JSON for one user.
-func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost string, tls domain.TLSProfile, filterSet, filterPreset string) ([]byte, error) {
+func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost string, tls domain.TLSProfile, filters SubscriptionFilters, realityAssignments map[string]domain.RealityAssignment) ([]byte, error) {
 	serverName := tls.ServerNameForTLS(publicHost)
 	insecure := tls.NeedsTLSReportsInsecure()
+	presetOK := func(pn string) bool {
+		if len(filters.Presets) == 0 {
+			return true
+		}
+		for _, f := range filters.Presets {
+			if f == pn {
+				return true
+			}
+		}
+		return false
+	}
 	outbounds := make([]any, 0)
+	variantOK := func(name string) bool {
+		if len(filters.Variants) == 0 {
+			return true
+		}
+		for _, v := range filters.Variants {
+			if v == name {
+				return true
+			}
+		}
+		return false
+	}
+	tagAnyOK := func(tags []string) bool {
+		if len(filters.Tags) == 0 {
+			return true
+		}
+		for _, t := range tags {
+			for _, ft := range filters.Tags {
+				if t == ft {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	flowAllowed := func(flowKey string) bool {
+		if len(filters.Flow) == 0 {
+			return true
+		}
+		for _, f := range filters.Flow {
+			if f == flowKey {
+				return true
+			}
+			// small aliases
+			if flowKey == "xtls-rprx-vision" && f == "xtls" {
+				return true
+			}
+			if flowKey == "none" && (f == "" || f == "tcp") {
+				// "tcp" alias isn't meaningful for VLESS flow, but keeps accidental
+				// mixes from breaking filters hard.
+				return true
+			}
+		}
+		return false
+	}
 	for _, set := range sets {
-		if filterSet != "" && set.Name != filterSet {
+		if filters.Set != "" && set.Name != filters.Set {
 			continue
 		}
-		for _, pn := range set.Presets {
-			if filterPreset != "" && pn != filterPreset {
+		for _, b := range set.EffectiveBindings() {
+			pn := b.Preset
+			if !presetOK(pn) {
+				continue
+			}
+			if len(filters.Profiles) > 0 && !hasAny(filters.Profiles, b.EnabledClientProfiles) {
 				continue
 			}
 			p, err := presets.Get(pn)
@@ -312,6 +437,95 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 			if creds == nil {
 				continue
 			}
+			if p.Protocol == "vless" {
+				baseTag := fmt.Sprintf("cp-out-%s-%s", set.Name, pn)
+				addVlessOutbound := func(tag string, uuid any, flow string) error {
+					if uuid == nil || uuid == "" {
+						return nil
+					}
+					ob, err := cloneMap(p.OutboundTemplate)
+					if err != nil {
+						return err
+					}
+					vars := map[string]string{
+						"{{tag}}":           tag,
+						"{{server}}":        serverName,
+						"{{user.name}}":     user.Name,
+						"{{user.password}}": fmt.Sprint(creds["password"]),
+						"{{user.uuid}}":     fmt.Sprint(uuid),
+						"{{user.username}}": fmt.Sprint(creds["username"]),
+					}
+					ob, err = substituteMap(ob, vars)
+					if err != nil {
+						return err
+					}
+					ob["tag"] = tag
+					ob["server"] = publicHost
+					if publicHost == "" {
+						ob["server"] = serverName
+					}
+					ob["server_port"] = set.ListenPort
+					ob["uuid"] = uuid
+					if filters.Network == "udp" || filters.Network == "tcp" {
+						ob["network"] = filters.Network
+					}
+
+					if flow == "" {
+						delete(ob, "flow")
+					} else {
+						ob["flow"] = flow
+					}
+
+					if presetHasTrait(p, "reality") {
+						rk := set.Name + "/" + pn
+						assignment, ok := realityAssignments[rk]
+						if !ok {
+							return fmt.Errorf("missing reality assignment for %s", rk)
+						}
+						attachOutboundReality(ob, assignment)
+					} else if presetNeedsTLS(p) {
+						tlsObj, _ := ob["tls"].(map[string]any)
+						if tlsObj == nil {
+							tlsObj = map[string]any{}
+						}
+						tlsObj["enabled"] = true
+						tlsObj["server_name"] = serverName
+						if insecure {
+							tlsObj["insecure"] = true
+						} else {
+							delete(tlsObj, "insecure")
+						}
+						ob["tls"] = tlsObj
+					}
+
+					outbounds = append(outbounds, ob)
+					return nil
+				}
+
+				for _, vv := range vlessVariantsForBinding(b) {
+					if !variantOK(vv.Name) {
+						continue
+					}
+					bindingTags := append([]string{}, b.SubscriptionTags...)
+					allTags := append(bindingTags, vv.QueryTags...)
+					if !tagAnyOK(allTags) {
+						continue
+					}
+					flowKey := "none"
+					if vv.FlowValue != "" {
+						flowKey = vv.FlowValue
+					}
+					if !flowAllowed(flowKey) {
+						continue
+					}
+					tagSuffix := strings.ReplaceAll(vv.Name, "flow-", "")
+					if err := addVlessOutbound(baseTag+"-"+tagSuffix, creds[vv.CredentialField], vv.FlowValue); err != nil {
+						return nil, err
+					}
+				}
+				continue
+			}
+
 			ob, err := cloneMap(p.OutboundTemplate)
 			if err != nil {
 				return nil, err
@@ -340,17 +554,19 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					ob["password"] = pw
 				}
 			}
-			if p.Protocol == "vless" {
-				if id, ok := creds["uuid"]; ok {
-					ob["uuid"] = id
-				}
-			}
 			if p.Protocol == "trojan" {
 				if pw, ok := creds["password"]; ok {
 					ob["password"] = pw
 				}
 			}
-			if presetNeedsTLS(p) {
+			if presetHasTrait(p, "reality") {
+				rk := set.Name + "/" + pn
+				assignment, ok := realityAssignments[rk]
+				if !ok {
+					return nil, fmt.Errorf("missing reality assignment for %s", rk)
+				}
+				attachOutboundReality(ob, assignment)
+			} else if presetNeedsTLS(p) {
 				tlsObj, _ := ob["tls"].(map[string]any)
 				if tlsObj == nil {
 					tlsObj = map[string]any{}
@@ -376,4 +592,76 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 		return nil, fmt.Errorf("unresolved template tokens in subscription")
 	}
 	return raw, nil
+}
+
+func attachOutboundReality(ob map[string]any, assignment domain.RealityAssignment) {
+	tlsObj, _ := ob["tls"].(map[string]any)
+	if tlsObj == nil {
+		tlsObj = map[string]any{}
+	}
+	tlsObj["enabled"] = true
+	tlsObj["server_name"] = assignment.SNI
+	delete(tlsObj, "insecure")
+	tlsObj["utls"] = map[string]any{"enabled": true}
+	tlsObj["reality"] = map[string]any{
+		"enabled":    true,
+		"public_key": assignment.PublicKeyBase64,
+		"short_id":   assignment.ShortID,
+	}
+	ob["tls"] = tlsObj
+}
+
+func uniqueBindingPresets(bindings []domain.SetBinding) []string {
+	out := make([]string, 0, len(bindings))
+	seen := map[string]struct{}{}
+	for _, b := range bindings {
+		if b.Preset == "" {
+			continue
+		}
+		if _, ok := seen[b.Preset]; ok {
+			continue
+		}
+		seen[b.Preset] = struct{}{}
+		out = append(out, b.Preset)
+	}
+	return out
+}
+
+func vlessVariantsForBinding(b domain.SetBinding) []domain.UserVariantSpec {
+	all := domain.VLESSUserVariantSpecs
+	if len(b.EnabledUserVariants) == 0 {
+		return all
+	}
+	seen := map[string]struct{}{}
+	out := make([]domain.UserVariantSpec, 0, len(b.EnabledUserVariants))
+	for _, n := range b.EnabledUserVariants {
+		for _, vv := range all {
+			if vv.Name == n {
+				if _, ok := seen[n]; ok {
+					break
+				}
+				seen[n] = struct{}{}
+				out = append(out, vv)
+				break
+			}
+		}
+	}
+	if len(out) == 0 {
+		return all
+	}
+	return out
+}
+
+func hasAny(filter []string, values []string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	for _, f := range filter {
+		for _, v := range values {
+			if f == v {
+				return true
+			}
+		}
+	}
+	return false
 }

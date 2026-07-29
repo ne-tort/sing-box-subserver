@@ -118,7 +118,7 @@ func load() {
     "protocol": "vless",
     "description": "VLESS over TCP without TLS (lab / demux inject target)",
     "traits": ["tcp"],
-    "cred_fields": ["uuid"],
+    "cred_fields": ["uuid", "uuid_xtls", "uuid_udp"],
     "inbound_template": {
       "type": "vless",
       "tag": "{{tag}}",
@@ -139,7 +139,30 @@ func load() {
     "protocol": "vless",
     "description": "VLESS over TCP with TLS (controlplane TLS profile)",
     "traits": ["tcp", "tls"],
-    "cred_fields": ["uuid"],
+    "cred_fields": ["uuid", "uuid_xtls", "uuid_udp"],
+    "inbound_template": {
+      "type": "vless",
+      "tag": "{{tag}}",
+      "listen": "{{listen}}",
+      "listen_port": 0,
+      "users": [],
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    },
+    "outbound_template": {
+      "type": "vless",
+      "tag": "{{tag}}",
+      "server": "{{server}}",
+      "server_port": 0,
+      "uuid": "{{user.uuid}}",
+      "tls": { "enabled": true, "server_name": "{{server}}" }
+    }
+  },
+  {
+    "name": "vless-reality-tcp",
+    "protocol": "vless",
+    "description": "VLESS over TCP with Reality (per-inbound generated keys, randomized SNI profile)",
+    "traits": ["tcp", "tls", "reality"],
+    "cred_fields": ["uuid", "uuid_xtls", "uuid_udp"],
     "inbound_template": {
       "type": "vless",
       "tag": "{{tag}}",

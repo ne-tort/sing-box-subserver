@@ -8,6 +8,7 @@ Produce a **complete** server-side sing-box JSON document from:
 - embedded `ProtocolPreset`s referenced by those sets
 - **eligible** local users
 - agent `controlplane.public_host`
+- validated Reality profile pool + sticky Reality assignments
 
 Then `supervisor.Apply` with `source=controlplane`.
 
@@ -34,12 +35,22 @@ flowchart LR
 2. For each active set (stable name sort for determinism):
    - If `demux_template` present: demux inbound on set listen/port; protocol inbounds inject-only (no public bind conflict).
    - If demux null: single protocol inbound binds set listen/port.
-3. Attach `users[]` on each protocol inbound from eligible users' `creds[preset]` (lazy backfill first).
-4. `outbounds` — at least `direct` (and `block` if required by route).
+3. Expand logical set `bindings[]` (or compatibility `presets[]`) into physical preset inbounds.
+4. Attach `users[]` on each protocol inbound from eligible users' `creds[preset]` (lazy backfill first).
+   - For VLESS presets, `users[]` is expanded into symmetric flow variants:
+     - `flow=""` via `creds[preset].uuid`
+     - `flow="xtls-rprx-vision"` via `creds[preset].uuid_xtls`
+     - `flow="xtls-rprx-vision-udp443"` via `creds[preset].uuid_udp`
+5. `outbounds` — at least `direct` (and `block` if required by route).
 5. `route` / `dns` — minimal defaults so validate succeeds.
 6. If TLS profile mode is `acme_*`: emit `certificate_providers` with tag `cp-tls`.
 7. Attach TLS to each TLS-capable inbound (`certificate_path`/`key_path` or `certificate_provider`) — see [11-tls](11-tls.md).
-8. Omit Clash experimental; omit panel-only objects.
+8. For `reality` trait presets:
+   - choose sticky assignment `{set}/{preset}` from validated profile pool,
+   - generate key material per inbound (private/public key + short_id) on first use,
+   - render inbound `tls.reality` and subscription outbound `tls.reality`.
+9. Persist sticky assignments and reuse them across rematerialize until profile becomes invalid/unavailable.
+10. Omit Clash experimental; omit panel-only objects.
 
 Exact default dns/route JSON is fixed in implementation tests as golden files.
 

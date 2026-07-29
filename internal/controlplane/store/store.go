@@ -76,6 +76,10 @@ type setsFile struct {
 	Sets []domain.InboundSet `json:"sets"`
 }
 
+type realityAssignmentsFile struct {
+	Assignments map[string]domain.RealityAssignment `json:"assignments"`
+}
+
 func (s *Store) LoadUsers() ([]domain.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -163,6 +167,52 @@ func (s *Store) SaveTLSProfile(p domain.TLSProfile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return writeJSON(s.path("tls_profile.json"), p)
+}
+
+func (s *Store) LoadRealityConfig() (domain.RealityConfig, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var cfg domain.RealityConfig
+	err := readJSON(s.path("reality_config.json"), &cfg)
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.RealityConfig{}, false, nil
+	}
+	if err != nil {
+		return domain.RealityConfig{}, false, err
+	}
+	return cfg, true, nil
+}
+
+func (s *Store) SaveRealityConfig(cfg domain.RealityConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeJSON(s.path("reality_config.json"), cfg)
+}
+
+func (s *Store) LoadRealityAssignments() (map[string]domain.RealityAssignment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var f realityAssignmentsFile
+	err := readJSON(s.path("reality_assignments.json"), &f)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]domain.RealityAssignment{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if f.Assignments == nil {
+		f.Assignments = map[string]domain.RealityAssignment{}
+	}
+	return f.Assignments, nil
+}
+
+func (s *Store) SaveRealityAssignments(assignments map[string]domain.RealityAssignment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if assignments == nil {
+		assignments = map[string]domain.RealityAssignment{}
+	}
+	return writeJSON(s.path("reality_assignments.json"), realityAssignmentsFile{Assignments: assignments})
 }
 
 func (s *Store) Dir() string { return s.dir }

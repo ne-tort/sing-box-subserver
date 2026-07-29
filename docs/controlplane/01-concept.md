@@ -41,7 +41,7 @@ local product surface behind `with_controlplane`.
 |------|---------|
 | **Protocol preset** | Named inbound+outbound JSON templates + traits + description |
 | **Inbound set** | Named ordered list of presets + listen + demux template for **one** port |
-| **Active set** | At most one set whose materialize currently owns the box (when mode=controlplane) |
+| **Active set** | One of possibly many sets currently materializing into the box (when mode=controlplane) |
 | **Local user** | Agent-local account; static per-preset creds; optional expiry / traffic hooks |
 | **Traits** | Declared connection characteristics (tcp/udp/h2/h3/…) used when authoring demux rules |
 | **Materialize** | Build full sing-box server JSON from active set + eligible users → Apply |
@@ -70,7 +70,7 @@ flowchart LR
 ## Success picture
 
 1. Build agent with `with_controlplane` (+ `with_demux` if sets use demux).
-2. Create users via API → creds auto-generated for all known presets.
+2. Create users via API → optional manual `creds`; missing presets/fields auto-filled.
 3. Define/select an inbound set; activate → `config_mode=controlplane`, box hot-applies.
 4. Client opens `GET /v1/sub/{token}` → outbounds for that user.
 5. User expires or hits traffic limit hook → creds omitted on next materialize + Apply.

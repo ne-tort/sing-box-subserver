@@ -32,8 +32,37 @@ func acmeCertificateReady(dataDir string, domains []string) (ready bool, missing
 }
 
 func acmeDomainHasCert(certificatesRoot, domain string) bool {
-	_, _, ok := acmeCertKeyPaths(certificatesRoot, domain)
-	return ok
+	entries, err := os.ReadDir(certificatesRoot)
+	if err != nil {
+		return false
+	}
+	for _, iss := range entries {
+		if !iss.IsDir() {
+			continue
+		}
+		exactCert := filepath.Join(certificatesRoot, iss.Name(), domain, domain+".crt")
+		if st, err := os.Stat(exactCert); err == nil && st.Size() > 0 {
+			return true
+		}
+		dir := filepath.Join(certificatesRoot, iss.Name(), domain)
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			name := strings.ToLower(f.Name())
+			if strings.HasSuffix(name, ".crt") {
+				full := filepath.Join(dir, f.Name())
+				if st, err := os.Stat(full); err == nil && st.Size() > 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // acmeCertKeyPaths returns certmagic PEM paths for domain under certificatesRoot.

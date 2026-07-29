@@ -27,7 +27,7 @@ func TestCatalogLoads(t *testing.T) {
 	}
 	for _, want := range []string{
 		"shadowsocks-tcp", "shadowsocks-aes-256-gcm", "shadowsocks-chacha20",
-		"trojan-tcp", "vless-tcp", "vless-tls", "vmess-tcp", "vmess-tls",
+		"trojan-tcp", "vless-tcp", "vless-tls", "vless-reality-tcp", "vmess-tcp", "vmess-tls",
 		"hysteria2", "tuic", "anytls", "socks", "http",
 	} {
 		if _, err := Get(want); err != nil {

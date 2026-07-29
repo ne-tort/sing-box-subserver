@@ -20,12 +20,14 @@ Normative types for implementation and API. Field names are JSON/`snake_case` un
 
 ### Credential map
 
-On user create, generate and persist credentials for **every known protocol preset**
-in the embedded catalog (stable until rotated).
+On user create (and `PUT /users/{id}/creds`), the operator may supply partial
+`creds` for known presets/fields. Missing presets and empty fields are
+**auto-filled** from the embedded catalog (field-level), so materialize/sub always
+see a full map. Values stay stable until rotate or a later PUT.
 
-**Lazy backfill:** if the catalog later gains new preset names, materialize/activate
-(or user read/update paths) generate missing `creds[preset]` keys once and persist —
-do not fail old users.
+**Lazy backfill:** if the catalog later gains new preset names or fields,
+materialize/activate (or user read/update paths) generate missing keys once and
+persist — do not fail old users.
 
 ### Eligibility
 
@@ -94,8 +96,31 @@ Used when authoring demux `match` blocks — stored/returned by API; not a runti
 | `listen` | string | e.g. `::` or `0.0.0.0` |
 | `listen_port` | uint16 | Public port |
 | `presets` | string[] | Ordered preset names (must exist; ≥1) |
+| `bindings` | object[] | Optional logical bindings. Backward-compatible layer over `presets[]` (if absent, each preset becomes one default binding). |
 | `demux_template` | object \| null | Optional. If set: demux listens on port; protocol inbounds inject-only. If null: **exactly one** preset; that inbound binds `listen`/`listen_port` directly |
 | `created_at` / `updated_at` | RFC3339 | |
+
+### SetBinding (logical)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `preset` | string | Required preset key |
+| `subscription_tags` | string[] | Optional query tags for subscription selection |
+| `enabled_user_variants` | string[] | Optional allowed user-symmetric variants for this binding |
+| `enabled_client_profiles` | string[] | Optional outbound-only profile keys for this binding |
+| `credential_instance_policy` | string | Optional future policy hint |
+
+### Variant metadata (v1)
+
+First-class metadata classifies fields/scopes:
+- `user_symmetric`: appears in inbound user entry **and** outbound.
+- `peer_symmetric`: preset/runtime-level symmetric state (e.g. Reality assignment).
+- `outbound_only`: only outbound/client side.
+
+Initial v1 user variants for `vless`:
+- `flow-none` → `creds[preset].uuid`, outbound/inbound `flow=""`
+- `flow-xtls-rprx-vision` → `creds[preset].uuid_xtls`, `flow="xtls-rprx-vision"`
+- `flow-udp-vision` → `creds[preset].uuid_udp`, `flow="xtls-rprx-vision-udp443"`
 
 ### Port exclusivity
 
@@ -132,6 +157,31 @@ One active profile for all TLS-capable inbounds. See [11-tls](11-tls.md).
 
 Defaults on first boot: `self_signed` from `controlplane.public_host` (IP → `ip_sans`).
 
+## Reality config (`reality_config.json`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `user_profiles` | `RealityEndpoint[]` | Operator overrides from `PUT /reality` |
+| `effective_profiles` | `RealityEndpoint[]` | Validated pool currently used by runtime |
+| `using_user_overrides` | bool | `true` only when validated user pool is non-empty |
+| `updated_at` | RFC3339 \| null | Last validation/update time |
+
+### RealityEndpoint
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `sni` | string | Required domain |
+| `handshake_server` | string | Optional; default = `sni` |
+| `handshake_port` | uint16 | Optional; default = `443` |
+
+## Reality assignments (`reality_assignments.json`)
+
+Map `inbound_key` (`{set}/{preset}`) → assignment object:
+
+- `sni`, `handshake_server`, `handshake_port` (chosen endpoint)
+- `private_key_base64`, `public_key_base64`, `short_id` (generated per inbound)
+- `updated_at`
+
 ## Tag scheme
 
 For set `S` and preset `P`:
@@ -142,9 +192,9 @@ For set `S` and preset `P`:
 
 ## Invariants (checklist)
 
-1. User create ⇒ creds for all catalog presets; later → lazy backfill.
+1. User create / PUT creds ⇒ merge overrides then field-level auto-fill for all catalog presets; later → lazy backfill.
 2. Materialize `users[]` ⇒ only eligible users.
 3. First activate while not CP → `Claim(controlplane)` then Apply; further activates rematerialize.
 4. Port unique among sets; many active sets OK.
 5. Demux present + binary without `with_demux` → activate `422`.
-6. Demux null ⇒ `len(presets)==1`.
+6. Demux null ⇒ exactly one effective preset binding.

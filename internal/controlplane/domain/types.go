@@ -41,6 +41,7 @@ type InboundSet struct {
 	Listen        string         `json:"listen"`
 	ListenPort    uint16         `json:"listen_port"`
 	Presets       []string       `json:"presets"`
+	Bindings      []SetBinding   `json:"bindings,omitempty"`
 	DemuxTemplate map[string]any `json:"demux_template,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
@@ -49,6 +50,31 @@ type InboundSet struct {
 // HasDemux reports whether the set uses a demux front.
 func (s InboundSet) HasDemux() bool {
 	return len(s.DemuxTemplate) > 0
+}
+
+// EffectiveBindings returns logical bindings with backward compatibility.
+// Old `presets[]` are treated as bindings with default variant policy.
+func (s InboundSet) EffectiveBindings() []SetBinding {
+	if len(s.Bindings) > 0 {
+		out := make([]SetBinding, 0, len(s.Bindings))
+		for _, b := range s.Bindings {
+			if b.Preset == "" {
+				continue
+			}
+			out = append(out, b)
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	out := make([]SetBinding, 0, len(s.Presets))
+	for _, pn := range s.Presets {
+		if pn == "" {
+			continue
+		}
+		out = append(out, SetBinding{Preset: pn})
+	}
+	return out
 }
 
 // State is persisted runtime for active sets.

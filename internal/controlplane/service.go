@@ -35,6 +35,7 @@ type Service struct {
 	store *store.Store
 	log   *slog.Logger
 	mu    sync.Mutex
+	realityLastValidation time.Time
 
 	mgmtTLS   mgmtCertCache
 	acmeWatch struct {
@@ -91,6 +92,7 @@ func (s *Service) Bootstrap(ctx context.Context) {
 	if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
 		return
 	}
+	s.scrubStaleActiveSets()
 	st, err := s.store.LoadState()
 	if err != nil || len(st.ActiveSets) == 0 {
 		return
@@ -128,10 +130,25 @@ func (s *Service) Run(ctx context.Context) {
 			s.mu.Lock()
 			_ = s.applyTrafficResetsLocked(time.Now().UTC())
 			fp := s.eligibilityFingerprintLocked()
+			needRealityRefresh := time.Since(s.realityLastValidation) >= realityValidationInterval
+			if needRealityRefresh {
+				s.realityLastValidation = time.Now().UTC()
+			}
 			s.mu.Unlock()
 			if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
 				lastFP = fp
 				continue
+			}
+			if needRealityRefresh {
+				sets, err := s.activeSetObjects()
+				if err == nil && hasRealityPreset(sets) {
+					cfg, changed, err := s.refreshRealityConfig(ctx, true)
+					if err == nil {
+						if _, aChanged, err := s.ensureRealityAssignments(sets, cfg.EffectiveProfiles); err == nil && (changed || aChanged) {
+							_ = s.rematerialize(ctx)
+						}
+					}
+				}
 			}
 			if fp != lastFP {
 				lastFP = fp
@@ -199,6 +216,7 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("DELETE /v1/controlplane/users/{id}", requireAuth(s.handleUsersDelete))
 	mux.HandleFunc("POST /v1/controlplane/users/{id}/rotate-token", requireAuth(s.handleUsersRotateToken))
 	mux.HandleFunc("POST /v1/controlplane/users/{id}/rotate-creds", requireAuth(s.handleUsersRotateCreds))
+	mux.HandleFunc("PUT /v1/controlplane/users/{id}/creds", requireAuth(s.handleUsersPutCreds))
 	mux.HandleFunc("GET /v1/controlplane/presets", requireAuth(s.handlePresetsList))
 	mux.HandleFunc("GET /v1/controlplane/presets/{name}", requireAuth(s.handlePresetsGet))
 	mux.HandleFunc("GET /v1/controlplane/demux-recipes", requireAuth(s.handleDemuxRecipesList))
@@ -206,6 +224,7 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("GET /v1/controlplane/sets", requireAuth(s.handleSetsList))
 	mux.HandleFunc("POST /v1/controlplane/sets", requireAuth(s.handleSetsCreate))
 	mux.HandleFunc("GET /v1/controlplane/sets/{name}", requireAuth(s.handleSetsGet))
+	mux.HandleFunc("GET /v1/controlplane/sets/{name}/subscription-tags", requireAuth(s.handleSetSubscriptionTags))
 	mux.HandleFunc("PUT /v1/controlplane/sets/{name}", requireAuth(s.handleSetsPut))
 	mux.HandleFunc("DELETE /v1/controlplane/sets/{name}", requireAuth(s.handleSetsDelete))
 	mux.HandleFunc("POST /v1/controlplane/sets/{name}/activate", requireAuth(s.handleSetsActivate))
@@ -213,6 +232,8 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("GET /v1/controlplane/tls", requireAuth(s.handleTLSGet))
 	mux.HandleFunc("PUT /v1/controlplane/tls", requireAuth(s.handleTLSPut))
 	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
+	mux.HandleFunc("GET /v1/controlplane/reality", requireAuth(s.handleRealityGet))
+	mux.HandleFunc("PUT /v1/controlplane/reality", requireAuth(s.handleRealityPut))
 	mux.HandleFunc("GET /v1/sub/{token}", s.handleSub)
 }
 
@@ -238,27 +259,26 @@ func (s *Service) ensureCreds(u *domain.User) (bool, error) {
 	}
 	changed := false
 	for _, p := range presets.All() {
-		if u.Creds[p.Name] != nil {
-			continue
+		creds := u.Creds[p.Name]
+		if creds == nil {
+			creds = map[string]any{}
 		}
-		creds := map[string]any{}
+		presetChanged := false
 		for _, f := range p.CredFields {
-			if f == "uuid" {
-				tok, err := randomToken()
-				if err != nil {
-					return false, err
-				}
-				creds["uuid"] = fmt.Sprintf("%s-%s-%s-%s-%s", tok[0:8], tok[8:12], tok[12:16], tok[16:20], tok[20:32])
-			} else {
-				pw, err := randomPassword()
-				if err != nil {
-					return false, err
-				}
-				creds[f] = pw
+			if !credFieldEmpty(creds[f]) {
+				continue
 			}
+			val, err := generateCredField(f)
+			if err != nil {
+				return false, err
+			}
+			creds[f] = val
+			presetChanged = true
 		}
-		u.Creds[p.Name] = creds
-		changed = true
+		if presetChanged || u.Creds[p.Name] == nil {
+			u.Creds[p.Name] = creds
+			changed = true
+		}
 	}
 	return changed, nil
 }
@@ -301,7 +321,41 @@ func (s *Service) subscriptionURL(r *http.Request, token string) (path, url stri
 	return path, url
 }
 
+// scrubStaleActiveSets drops active_sets names that no longer exist in sets.json.
+func (s *Service) scrubStaleActiveSets() {
+	st, err := s.store.LoadState()
+	if err != nil {
+		return
+	}
+	sets, err := s.store.LoadSets()
+	if err != nil {
+		return
+	}
+	byName := map[string]struct{}{}
+	for _, set := range sets {
+		byName[set.Name] = struct{}{}
+	}
+	cleaned := make([]string, 0, len(st.ActiveSets))
+	changed := false
+	for _, n := range st.ActiveSets {
+		if _, ok := byName[n]; ok {
+			cleaned = append(cleaned, n)
+			continue
+		}
+		changed = true
+		if s.log != nil {
+			s.log.Warn("controlplane scrubbing unknown active set", "name", n)
+		}
+	}
+	if !changed {
+		return
+	}
+	st.ActiveSets = cleaned
+	_ = s.store.SaveState(st)
+}
+
 func (s *Service) activeSetObjects() ([]domain.InboundSet, error) {
+	s.scrubStaleActiveSets()
 	st, err := s.store.LoadState()
 	if err != nil {
 		return nil, err
@@ -383,12 +437,24 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	if err != nil {
 		return err
 	}
+	realityAssignments := map[string]domain.RealityAssignment{}
+	if hasRealityPreset(sets) {
+		realityCfg, _, err := s.refreshRealityConfig(ctx, false)
+		if err != nil {
+			return err
+		}
+		realityAssignments, _, err = s.ensureRealityAssignments(sets, realityCfg.EffectiveProfiles)
+		if err != nil {
+			return err
+		}
+	}
 	in := materialize.Input{
-		ActiveSets: sets,
-		Users:      users,
-		PublicHost: host,
-		DataDir:    s.cfg.DataDir,
-		TLS:        profile,
+		ActiveSets:         sets,
+		Users:              users,
+		PublicHost:         host,
+		DataDir:            s.cfg.DataDir,
+		TLS:                profile,
+		RealityAssignments: realityAssignments,
 	}
 	pemChanged := false
 	if profile.Mode == domain.TLSModeSelfSigned {
@@ -622,17 +688,29 @@ func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	if s.cfg.Owner != nil {
 		mode = string(s.cfg.Owner.Owner())
 	}
-	okJSON(w, http.StatusOK, map[string]any{
-		"config_mode":              mode,
-		"active_sets":              st.ActiveSets,
-		"users_total":              len(users),
-		"users_eligible":           elig,
-		"presets_count":            len(presets.All()),
-		"demux_recipes_count":      len(demuxrecipes.All()),
-		"sets_count":               len(sets),
-		"last_materialize_sha256":  st.LastMaterializeSHA256,
-		"last_materialize_at":      st.LastMaterializeAt,
-	})
+	out := map[string]any{
+		"config_mode":             mode,
+		"active_sets":             st.ActiveSets,
+		"users_total":             len(users),
+		"users_eligible":          elig,
+		"presets_count":           len(presets.All()),
+		"demux_recipes_count":     len(demuxrecipes.All()),
+		"sets_count":              len(sets),
+		"demux_in_binary":         demuxInBinary,
+		"last_materialize_sha256": st.LastMaterializeSHA256,
+		"last_materialize_at":     st.LastMaterializeAt,
+	}
+	if p, err := s.ensureTLSProfile(false); err == nil {
+		tls := s.tlsStatusPayload(p)
+		if ms, ok := tls["material_status"]; ok {
+			out["tls_material_status"] = ms
+		}
+		out["tls_mode"] = p.Mode
+	}
+	if rc, err := s.loadRealityConfig(); err == nil {
+		out["reality"] = s.realityStatusPayload(rc)
+	}
+	okJSON(w, http.StatusOK, out)
 }
 
 func (s *Service) handleUsersList(w http.ResponseWriter, _ *http.Request) {
@@ -650,10 +728,13 @@ func (s *Service) handleUsersList(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name              string  `json:"name"`
-		Enabled           *bool   `json:"enabled"`
-		ExpiresAt         *string `json:"expires_at"`
-		TrafficLimitBytes *uint64 `json:"traffic_limit_bytes"`
+		Name                  string                    `json:"name"`
+		Enabled               *bool                     `json:"enabled"`
+		ExpiresAt             *string                   `json:"expires_at"`
+		TrafficLimitBytes     *uint64                   `json:"traffic_limit_bytes"`
+		TrafficResetAt        *string                   `json:"traffic_reset_at"`
+		TrafficResetPeriodSec *uint64                   `json:"traffic_reset_period_sec"`
+		Creds                 map[string]map[string]any `json:"creds"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		failJSON(w, 400, "bad_request", err.Error())
@@ -661,6 +742,10 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(body.Name) == "" {
 		failJSON(w, 400, "bad_request", "name required")
+		return
+	}
+	if err := validateCreds(body.Creds); err != nil {
+		failJSON(w, 400, "cp_invalid_creds", strings.TrimPrefix(err.Error(), "cp_invalid_creds: "))
 		return
 	}
 	users, err := s.store.LoadUsers()
@@ -706,6 +791,16 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		u.ExpiresAt = t
 	}
 	u.TrafficLimitBytes = body.TrafficLimitBytes
+	u.TrafficResetPeriodSec = body.TrafficResetPeriodSec
+	if body.TrafficResetAt != nil {
+		t, err := parseTimePtr(*body.TrafficResetAt)
+		if err != nil {
+			failJSON(w, 400, "bad_request", err.Error())
+			return
+		}
+		u.TrafficResetAt = t
+	}
+	mergeUserCreds(&u, body.Creds)
 	if _, err := s.ensureCreds(&u); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
@@ -715,7 +810,10 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	_ = s.rematerialize(r.Context())
+	if err := s.rematerialize(r.Context()); err != nil {
+		failJSON(w, 422, "config_invalid", err.Error())
+		return
+	}
 	path, url := s.subscriptionURL(r, u.SubToken)
 	data := redactUser(u, true)
 	data["subscription_path"] = path
@@ -773,6 +871,14 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	u := &users[i]
 	if v, ok := body["name"].(string); ok && v != "" {
+		if v != u.Name {
+			for j := range users {
+				if j != i && users[j].Name == v {
+					failJSON(w, 409, "conflict", "name already exists")
+					return
+				}
+			}
+		}
 		u.Name = v
 	}
 	if v, ok := body["enabled"].(bool); ok {
@@ -801,6 +907,26 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	if v, ok := body["traffic_used_bytes"].(float64); ok {
 		u.TrafficUsedBytes = uint64(v)
 	}
+	if _, ok := body["traffic_reset_at"]; ok {
+		if body["traffic_reset_at"] == nil {
+			u.TrafficResetAt = nil
+		} else if v, ok := body["traffic_reset_at"].(string); ok {
+			t, err := parseTimePtr(v)
+			if err != nil {
+				failJSON(w, 400, "bad_request", err.Error())
+				return
+			}
+			u.TrafficResetAt = t
+		}
+	}
+	if _, ok := body["traffic_reset_period_sec"]; ok {
+		if body["traffic_reset_period_sec"] == nil {
+			u.TrafficResetPeriodSec = nil
+		} else if v, ok := body["traffic_reset_period_sec"].(float64); ok {
+			u64 := uint64(v)
+			u.TrafficResetPeriodSec = &u64
+		}
+	}
 	u.UpdatedAt = time.Now().UTC()
 	if err := s.store.SaveUsers(users); err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -828,7 +954,10 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	_ = s.rematerialize(r.Context())
+	if err := s.rematerialize(r.Context()); err != nil {
+		failJSON(w, 422, "config_invalid", err.Error())
+		return
+	}
 	okJSON(w, 200, map[string]any{"deleted": true})
 }
 
@@ -881,7 +1010,52 @@ func (s *Service) handleUsersRotateCreds(w http.ResponseWriter, r *http.Request)
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	_ = s.rematerialize(r.Context())
+	if err := s.rematerialize(r.Context()); err != nil {
+		failJSON(w, 422, "config_invalid", err.Error())
+		return
+	}
+	okJSON(w, 200, redactUser(users[i], true))
+}
+
+func (s *Service) handleUsersPutCreds(w http.ResponseWriter, r *http.Request) {
+	users, i, err := s.findUser(r.PathValue("id"))
+	if err != nil {
+		if err == store.ErrNotFound {
+			failJSON(w, 404, "not_found", "user not found")
+			return
+		}
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	var body struct {
+		Creds map[string]map[string]any `json:"creds"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		failJSON(w, 400, "bad_request", err.Error())
+		return
+	}
+	if body.Creds == nil {
+		failJSON(w, 400, "bad_request", "creds required")
+		return
+	}
+	if err := validateCreds(body.Creds); err != nil {
+		failJSON(w, 400, "cp_invalid_creds", strings.TrimPrefix(err.Error(), "cp_invalid_creds: "))
+		return
+	}
+	mergeUserCreds(&users[i], body.Creds)
+	if _, err := s.ensureCreds(&users[i]); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	users[i].UpdatedAt = time.Now().UTC()
+	if err := s.store.SaveUsers(users); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if err := s.rematerialize(r.Context()); err != nil {
+		failJSON(w, 422, "config_invalid", err.Error())
+		return
+	}
 	okJSON(w, 200, redactUser(users[i], true))
 }
 
@@ -929,19 +1103,28 @@ func (s *Service) handleDemuxRecipesGet(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet) error {
-	if set.Name == "" || set.ListenPort == 0 || len(set.Presets) == 0 {
+	bindings := set.EffectiveBindings()
+	if set.Name == "" || set.ListenPort == 0 || len(bindings) == 0 {
 		return fmt.Errorf("name, listen_port, presets required")
 	}
 	if set.Listen == "" {
 		set.Listen = "::"
 	}
-	if !set.HasDemux() && len(set.Presets) != 1 {
+	presetsList := uniqueSetPresets(bindings)
+	if !set.HasDemux() && len(presetsList) != 1 {
 		return fmt.Errorf("without demux exactly one preset required")
 	}
-	for _, pn := range set.Presets {
+	for _, pn := range presetsList {
 		if _, err := presets.Get(pn); err != nil {
 			return fmt.Errorf("cp_unknown_preset: %w", err)
 		}
+	}
+	seenBindingPreset := map[string]struct{}{}
+	for _, b := range bindings {
+		if _, ok := seenBindingPreset[b.Preset]; ok {
+			return fmt.Errorf("cp_invalid_bindings: duplicate preset binding %q", b.Preset)
+		}
+		seenBindingPreset[b.Preset] = struct{}{}
 	}
 	if set.HasDemux() {
 		if err := demuxrecipes.ValidateTemplate(set.DemuxTemplate); err != nil {
@@ -965,9 +1148,10 @@ func (s *Service) handleSetsList(w http.ResponseWriter, _ *http.Request) {
 	st, _ := s.store.LoadState()
 	out := make([]any, 0, len(sets))
 	for _, set := range sets {
+		bindings := set.EffectiveBindings()
 		m := map[string]any{
 			"name": set.Name, "description": set.Description, "listen": set.Listen,
-			"listen_port": set.ListenPort, "presets": set.Presets,
+			"listen_port": set.ListenPort, "presets": uniqueSetPresets(bindings), "bindings": bindings,
 			"has_demux": set.HasDemux(), "active": contains(st.ActiveSets, set.Name),
 		}
 		out = append(out, m)
@@ -981,6 +1165,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 400, "bad_request", err.Error())
 		return
 	}
+	normalizeSetCompat(&set)
 	sets, err := s.store.LoadSets()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -1036,6 +1221,52 @@ func (s *Service) handleSetsGet(w http.ResponseWriter, r *http.Request) {
 	failJSON(w, 404, "not_found", "set not found")
 }
 
+func (s *Service) handleSetSubscriptionTags(w http.ResponseWriter, r *http.Request) {
+	sets, err := s.store.LoadSets()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	name := r.PathValue("name")
+	for _, set := range sets {
+		if set.Name != name {
+			continue
+		}
+		bindings := set.EffectiveBindings()
+		out := make([]any, 0, len(bindings))
+		for _, b := range bindings {
+			p, err := presets.Get(b.Preset)
+			if err != nil {
+				continue
+			}
+			var variantNames []string
+			var queryTags []string
+			if p.Protocol == "vless" {
+				for _, vv := range vlessVariantsForBindingMeta(b) {
+					variantNames = append(variantNames, vv.Name)
+					queryTags = append(queryTags, vv.QueryTags...)
+				}
+			}
+			queryTags = append(queryTags, b.SubscriptionTags...)
+			out = append(out, map[string]any{
+				"inbound_tag":              fmt.Sprintf("cp-in-%s-%s", set.Name, b.Preset),
+				"preset":                   b.Preset,
+				"protocol":                 p.Protocol,
+				"subscription_tags":        dedupeStrings(queryTags),
+				"enabled_user_variants":    dedupeStrings(variantNames),
+				"enabled_client_profiles":  dedupeStrings(b.EnabledClientProfiles),
+				"credential_instance_policy": b.CredentialInstancePolicy,
+			})
+		}
+		okJSON(w, 200, map[string]any{
+			"set":      set.Name,
+			"bindings": out,
+		})
+		return
+	}
+	failJSON(w, 404, "not_found", "set not found")
+}
+
 func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var set domain.InboundSet
@@ -1044,6 +1275,7 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	set.Name = name
+	normalizeSetCompat(&set)
 	sets, err := s.store.LoadSets()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -1145,15 +1377,18 @@ func (s *Service) handleSetsActivate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 404, "not_found", "set not found")
 		return
 	}
-	if found.HasDemux() {
-		// Require with_demux in binary; Start fails with clear error if missing.
+	if found.HasDemux() && !demuxInBinary {
+		failJSON(w, 422, "unsupported_build_tag", "demux set requires binary built with with_demux")
+		return
 	}
+	wasOwner := s.cfg.Owner != nil && s.cfg.Owner.Owner() == configowner.ModeControlplane
 	if s.cfg.Owner != nil {
 		if err := s.cfg.Owner.Claim(configowner.ModeControlplane); err != nil {
-			failJSON(w, 500, "internal", err.Error())
+			failJSON(w, 409, "conflict", err.Error())
 			return
 		}
 	}
+	s.scrubStaleActiveSets()
 	st, err := s.store.LoadState()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -1170,6 +1405,10 @@ func (s *Service) handleSetsActivate(w http.ResponseWriter, r *http.Request) {
 	if err := s.rematerialize(r.Context()); err != nil {
 		st.ActiveSets = prev
 		_ = s.store.SaveState(st)
+		// First activate that just claimed ownership: do not leave orphan controlplane mode.
+		if !wasOwner && len(prev) == 0 && s.cfg.Owner != nil {
+			_ = s.cfg.Owner.Claim(configowner.ModeIdle)
+		}
 		failJSON(w, 422, "config_invalid", err.Error())
 		return
 	}
@@ -1363,6 +1602,95 @@ func redactACME(a *domain.ACMESpec) any {
 	return cp
 }
 
+func (s *Service) realityStatusPayload(cfg domain.RealityConfig) map[string]any {
+	payload := map[string]any{
+		"user_overrides":       cfg.UserProfiles,
+		"effective_profiles":   cfg.EffectiveProfiles,
+		"using_user_overrides": cfg.UsingUserOverrides,
+		"updated_at":           cfg.UpdatedAt,
+	}
+	assignments, err := s.store.LoadRealityAssignments()
+	if err == nil {
+		active := make([]any, 0, len(assignments))
+		for _, a := range assignments {
+			active = append(active, map[string]any{
+				"inbound_key":      a.InboundKey,
+				"sni":              a.SNI,
+				"handshake_server": a.HandshakeServer,
+				"handshake_port":   a.HandshakePort,
+				"short_id":         a.ShortID,
+				"updated_at":       a.UpdatedAt,
+			})
+		}
+		sort.Slice(active, func(i, j int) bool {
+			ai := active[i].(map[string]any)["inbound_key"].(string)
+			aj := active[j].(map[string]any)["inbound_key"].(string)
+			return ai < aj
+		})
+		payload["active_assignments"] = active
+	}
+	return payload
+}
+
+func (s *Service) handleRealityGet(w http.ResponseWriter, _ *http.Request) {
+	cfg, err := s.loadRealityConfig()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	okJSON(w, 200, s.realityStatusPayload(cfg))
+}
+
+func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Profiles []domain.RealityEndpoint `json:"profiles"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		failJSON(w, 400, "bad_request", err.Error())
+		return
+	}
+	normalized := make([]domain.RealityEndpoint, 0, len(body.Profiles))
+	for _, p := range body.Profiles {
+		ep, err := normalizeRealityEndpoint(p)
+		if err != nil {
+			continue
+		}
+		normalized = append(normalized, ep)
+	}
+	cfg, err := s.loadRealityConfig()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	cfg.UserProfiles = normalized
+	cfg.UsingUserOverrides = len(normalized) > 0
+	now := time.Now().UTC()
+	cfg.UpdatedAt = &now
+	if err := s.store.SaveRealityConfig(cfg); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	refreshed, _, err := s.refreshRealityConfig(ctx, true)
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	sets, err := s.activeSetObjects()
+	if err == nil {
+		if _, _, err := s.ensureRealityAssignments(sets, refreshed.EffectiveProfiles); err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
+	}
+	if err := s.rematerialize(r.Context()); err != nil {
+		failJSON(w, 422, "config_invalid", err.Error())
+		return
+	}
+	okJSON(w, 200, s.realityStatusPayload(refreshed))
+}
+
 func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		failJSON(w, 405, "method_not_allowed", "GET only")
@@ -1398,16 +1726,46 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 409, "cp_no_active_set", "no active sets")
 		return
 	}
-	_, _ = s.ensureCreds(user)
+	if changed, err := s.ensureCreds(user); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	} else if changed {
+		// Persist lazy backfill so sub and materialize stay consistent.
+		for i := range users {
+			if users[i].ID == user.ID {
+				users[i] = *user
+				break
+			}
+		}
+		_ = s.store.SaveUsers(users)
+	}
 	filterSet := r.URL.Query().Get("set")
-	filterPreset := r.URL.Query().Get("preset")
+	filterPresets := parsePresetQuery(r)
+	filterVariants := parseRepeatCommaQuery(r, "variant")
+	filterTags := parseRepeatCommaQuery(r, "tag")
+	filterProfiles := parseRepeatCommaQuery(r, "profile")
+	filterFlow := parseRepeatCommaQuery(r, "flow")
+	filterNetwork := strings.TrimSpace(r.URL.Query().Get("network"))
 	host := s.publicHost(r)
 	profile, err := s.ensureTLSProfile(false)
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	body, err := materialize.RenderSubscription(*user, sets, host, profile, filterSet, filterPreset)
+	assignments, err := s.store.LoadRealityAssignments()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	body, err := materialize.RenderSubscription(*user, sets, host, profile, materialize.SubscriptionFilters{
+		Set:      filterSet,
+		Presets:  filterPresets,
+		Variants: filterVariants,
+		Tags:     filterTags,
+		Profiles: filterProfiles,
+		Flow:     filterFlow,
+		Network:  filterNetwork,
+	}, assignments)
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
@@ -1415,6 +1773,112 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 	_, _ = w.Write(body)
+}
+
+// parsePresetQuery collects repeatable and comma-separated ?preset= filters.
+func parsePresetQuery(r *http.Request) []string {
+	return parseRepeatCommaQuery(r, "preset")
+}
+
+func uniqueSetPresets(bindings []domain.SetBinding) []string {
+	out := make([]string, 0, len(bindings))
+	seen := map[string]struct{}{}
+	for _, b := range bindings {
+		pn := strings.TrimSpace(b.Preset)
+		if pn == "" {
+			continue
+		}
+		if _, ok := seen[pn]; ok {
+			continue
+		}
+		seen[pn] = struct{}{}
+		out = append(out, pn)
+	}
+	return out
+}
+
+func normalizeSetCompat(set *domain.InboundSet) {
+	if set == nil {
+		return
+	}
+	if len(set.Bindings) == 0 && len(set.Presets) > 0 {
+		set.Bindings = make([]domain.SetBinding, 0, len(set.Presets))
+		for _, pn := range set.Presets {
+			pn = strings.TrimSpace(pn)
+			if pn == "" {
+				continue
+			}
+			set.Bindings = append(set.Bindings, domain.SetBinding{Preset: pn})
+		}
+	}
+	if len(set.Presets) == 0 && len(set.Bindings) > 0 {
+		set.Presets = uniqueSetPresets(set.Bindings)
+	}
+}
+
+func vlessVariantsForBindingMeta(b domain.SetBinding) []domain.UserVariantSpec {
+	all := domain.VLESSUserVariantSpecs
+	if len(b.EnabledUserVariants) == 0 {
+		return all
+	}
+	out := make([]domain.UserVariantSpec, 0, len(b.EnabledUserVariants))
+	seen := map[string]struct{}{}
+	for _, n := range b.EnabledUserVariants {
+		for _, vv := range all {
+			if vv.Name != n {
+				continue
+			}
+			if _, ok := seen[n]; ok {
+				break
+			}
+			seen[n] = struct{}{}
+			out = append(out, vv)
+			break
+		}
+	}
+	if len(out) == 0 {
+		return all
+	}
+	return out
+}
+
+func dedupeStrings(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := map[string]struct{}{}
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func parseRepeatCommaQuery(r *http.Request, key string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, v := range r.URL.Query()[key] {
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func subtleConstantTimeEq(a, b string) bool {
