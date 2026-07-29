@@ -45,6 +45,10 @@ Default server set (slim vs panel): keep wireguard/AWG/quic/utls/server inbounds
 **Optional embedded controlplane:** omit `with_controlplane` from `tags.server` by default.
 Ship / CI-test a second allowlist file `build/tags.server.controlplane` (= server tags + `with_controlplane`) as described in [controlplane/09-build-and-ci](controlplane/09-build-and-ci.md).
 
+**Optional traffic module:** omit `with_traffic` from `tags.server` by default.
+CI also tests `build/tags.server.traffic` and `build/tags.server.traffic.controlplane`
+([traffic/adr/0001](traffic/adr/0001-optional-build-tag.md)).
+
 CI injects version ldflags (`AgentVersion`, `AgentCommit`, `SingBoxCommit`) on build artifacts. Local builds without `-X` report `0.0.0-dev` / `unknown`.
 
 ## Local build

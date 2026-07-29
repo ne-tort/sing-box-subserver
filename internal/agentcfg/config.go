@@ -22,8 +22,15 @@ type Config struct {
 	Pull               PullConfig      `yaml:"pull" json:"pull"`
 	Heartbeat          HeartbeatConfig `yaml:"heartbeat" json:"heartbeat"`
 	Controlplane       ControlplaneConfig `yaml:"controlplane" json:"controlplane"`
+	Traffic            TrafficConfig      `yaml:"traffic" json:"traffic"`
 	TLS                TLSConfig          `yaml:"tls" json:"tls"`
 	Log                LogConfig          `yaml:"log" json:"log"`
+}
+
+// TrafficConfig seeds optional traffic module (with_traffic).
+type TrafficConfig struct {
+	FlushIntervalSec int `yaml:"flush_interval_sec" json:"flush_interval_sec"`
+	RetentionDays    int `yaml:"retention_days" json:"retention_days"`
 }
 
 // ControlplaneConfig seeds optional embedded CP (with_controlplane).

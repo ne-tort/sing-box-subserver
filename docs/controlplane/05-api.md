@@ -77,9 +77,9 @@ If `config_mode` is not `controlplane` but `active_sets` is non-empty, stale ent
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/users` | List (secrets redacted: no raw `sub_token` / password fields; show `has_token`, preset names present) |
-| POST | `/v1/controlplane/users` | Create `{name, enabled?, expires_at?, traffic_limit_bytes?, traffic_reset_at?, traffic_reset_period_sec?, creds?, …}` → returns user **with** `sub_token` + `creds` once + `subscription_path` + `subscription_url` |
+| POST | `/v1/controlplane/users` | Create `{name, enabled?, expires_at?, traffic_limit_bytes?, traffic_reset_at?, traffic_reset_period_sec?, speed_up_bytes_per_sec?, speed_down_bytes_per_sec?, creds?, …}` → returns user **with** `sub_token` + `creds` once + `subscription_path` + `subscription_url` |
 | GET | `/v1/controlplane/users/{id}` | Get (redacted; `?secrets=1` returns `sub_token`, `creds`, `subscription_path`, `subscription_url`) |
-| PATCH | `/v1/controlplane/users/{id}` | Update mutable fields including traffic hooks (not bulk creds replace); rename unique → else `409` |
+| PATCH | `/v1/controlplane/users/{id}` | Update mutable fields including traffic hooks and `speed_*` shaping (not bulk creds replace); rename unique → else `409` |
 | DELETE | `/v1/controlplane/users/{id}` | Delete; triggers rematerialize if any set active |
 | PUT | `/v1/controlplane/users/{id}/creds` | Merge operator `creds` into user; auto-fill missing presets/fields; rematerialize; returns secrets once |
 | POST | `/v1/controlplane/users/{id}/rotate-token` | New `sub_token`; returns token once + URLs |

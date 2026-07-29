@@ -11,10 +11,12 @@ Normative types for implementation and API. Field names are JSON/`snake_case` un
 | `enabled` | bool | Default true |
 | `created_at` / `updated_at` | RFC3339 | |
 | `expires_at` | RFC3339 \| null | Optional lifetime end |
-| `traffic_limit_bytes` | uint64 \| null | Hook for future accounting |
-| `traffic_used_bytes` | uint64 | Default 0; written by future module or admin PATCH |
+| `traffic_limit_bytes` | uint64 \| null | Quota hook; enforced when used ≥ limit |
+| `traffic_used_bytes` | uint64 | Default 0; written by `with_traffic` cpbridge or admin PATCH |
 | `traffic_reset_at` | RFC3339 \| null | Next reset instant (optional) |
 | `traffic_reset_period_sec` | uint64 \| null | Optional period after reset |
+| `speed_up_bytes_per_sec` | int64 | Shaping upload cap (0 = unlimited); requires `with_traffic` |
+| `speed_down_bytes_per_sec` | int64 | Shaping download cap (0 = unlimited); requires `with_traffic` |
 | `sub_token` | string | Secret; high entropy; URL-safe |
 | `creds` | object | Map `preset_name` → protocol-specific secret object |
 

@@ -7,6 +7,8 @@ toolchain go1.26.0
 require (
 	github.com/sagernet/sing v0.8.12-0.20260715103206-ac5f044167e4
 	github.com/sagernet/sing-box v1.14.0-lx.17
+	github.com/sagernet/sing-tun v0.8.12-0.20260714150017-c54b06b8a670
+	golang.org/x/time v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -171,7 +173,6 @@ require (
 	github.com/sagernet/sing-shadowsocks2 v0.2.1 // indirect
 	github.com/sagernet/sing-shadowtls v0.2.1 // indirect
 	github.com/sagernet/sing-snell v0.0.0-20260710094516-a4e97ee24beb // indirect
-	github.com/sagernet/sing-tun v0.8.12-0.20260714150017-c54b06b8a670 // indirect
 	github.com/sagernet/sing-usbip v0.0.0-20260616101517-efb91521eddb // indirect
 	github.com/sagernet/sing-vmess v0.2.8-0.20250909125414-3aed155119a1 // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
@@ -215,7 +216,6 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect

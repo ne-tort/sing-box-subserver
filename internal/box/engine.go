@@ -16,6 +16,7 @@ var ErrUnsupported = errors.New("unsupported feature")
 // Engine creates and validates sing-box instances with server registries.
 type Engine struct {
 	base context.Context
+	hook TrafficHook
 }
 
 // NewEngine builds a reusable engine with registries installed on a base context.
@@ -34,6 +35,14 @@ func NewEngine(parent context.Context) *Engine {
 	)
 	ctx = registerDemuxInjectFeeds(ctx)
 	return &Engine{base: ctx}
+}
+
+// SetTrafficHook registers optional traffic trackers (nil clears).
+func (e *Engine) SetTrafficHook(h TrafficHook) {
+	if e == nil {
+		return
+	}
+	e.hook = h
 }
 
 // Validate unmarshals options without starting listeners and enforces agent policy.
@@ -84,13 +93,20 @@ type Instance interface {
 type instance struct {
 	box  *singbox.Box
 	done chan struct{}
+	hook TrafficHook
 }
 
 func (i *instance) Close() error {
-	if i == nil || i.box == nil {
+	if i == nil {
 		return nil
 	}
-	err := i.box.Close()
+	if i.hook != nil {
+		i.hook.OnBoxStopped()
+	}
+	var err error
+	if i.box != nil {
+		err = i.box.Close()
+	}
 	select {
 	case <-i.done:
 	default:
@@ -134,12 +150,24 @@ func (e *Engine) Start(ctx context.Context, raw []byte) (Instance, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create box: %w", err)
 	}
+	if e.hook != nil {
+		if router := b.Router(); router != nil {
+			for _, tr := range e.hook.Trackers() {
+				if tr != nil {
+					router.AppendTracker(tr)
+				}
+			}
+		}
+	}
 	if err := b.Start(); err != nil {
 		_ = b.Close()
 		return nil, fmt.Errorf("start box: %w", err)
 	}
 	done := make(chan struct{})
-	inst := &instance{box: b, done: done}
+	inst := &instance{box: b, done: done, hook: e.hook}
+	if e.hook != nil {
+		e.hook.OnBoxStarted(runCtx)
+	}
 	return inst, nil
 }
 

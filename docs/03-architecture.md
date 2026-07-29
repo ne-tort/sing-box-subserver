@@ -68,6 +68,7 @@ flowchart TB
 | `internal/obs` | slog setup, ring buffer, Prometheus + JSON metrics |
 | `internal/agentcfg` | Agent YAML/JSON settings (not sing-box JSON) |
 | `internal/controlplane` | Optional (`with_controlplane`): local users, presets, sets, materialize, `/v1/sub/{token}` — see [controlplane/](controlplane/00-index.md) |
+| `internal/traffic` | Optional (`with_traffic`): byte accounting, shaping, time-series — see [traffic/](traffic/00-index.md) |
 
 ## Config ownership
 

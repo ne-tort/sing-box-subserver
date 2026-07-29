@@ -114,6 +114,20 @@ func (s *Server) SetControlplane(h ControlplaneHandler) {
 	}
 }
 
+// TrafficHandler mounts optional /v1/traffic routes.
+type TrafficHandler interface {
+	Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc)
+}
+
+// SetTraffic wires optional traffic module routes.
+func (s *Server) SetTraffic(h TrafficHandler) {
+	if h != nil {
+		h.Register(s.mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+			return s.requireAuth(handlerFunc(next))
+		})
+	}
+}
+
 type handlerFunc func(http.ResponseWriter, *http.Request)
 
 func (s *Server) authorize(r *http.Request) bool {

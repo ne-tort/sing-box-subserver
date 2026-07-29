@@ -30,6 +30,7 @@ flowchart TD
   api --> adr
   build --> adr
   idx --> cpmod
+  idx --> trafficmod[traffic_docs]
 ```
 
 ## Map
@@ -55,6 +56,14 @@ When building with `with_controlplane`, see the separate ladder:
 **[controlplane/00-index.md](controlplane/00-index.md)** — local users, presets, demux sets, subscription URLs, materialize.
 
 Default `build/tags.server` omits the tag ([controlplane/09-build-and-ci](controlplane/09-build-and-ci.md)).
+
+## Optional module: traffic accounting / shaping
+
+When building with `with_traffic`, see:
+
+**[traffic/00-index.md](traffic/00-index.md)** — subjects, trackers, time-series, `/v1/traffic/*`, CP bridge.
+
+Default `build/tags.server` omits the tag ([traffic/adr/0001](traffic/adr/0001-optional-build-tag.md)).
 
 ## Quality bar vs panel monoliths
 

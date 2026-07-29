@@ -44,6 +44,18 @@ type Service struct {
 		everReady bool
 		lostSince time.Time
 	}
+
+	trafficHooks TrafficHooks
+}
+
+// SetTrafficHooks wires optional traffic module bridge.
+func (s *Service) SetTrafficHooks(h TrafficHooks) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.trafficHooks = h
 }
 
 // New constructs the CP service (with_controlplane builds only).
@@ -179,12 +191,14 @@ func (s *Service) applyTrafficResetsLocked(now time.Time) bool {
 		return false
 	}
 	changed := false
+	var resetIDs []string
 	for i := range users {
 		u := &users[i]
 		if u.TrafficResetAt == nil || u.TrafficResetAt.After(now) {
 			continue
 		}
 		u.TrafficUsedBytes = 0
+		resetIDs = append(resetIDs, u.ID)
 		if u.TrafficResetPeriodSec != nil && *u.TrafficResetPeriodSec > 0 {
 			next := now.Add(time.Duration(*u.TrafficResetPeriodSec) * time.Second)
 			u.TrafficResetAt = &next
@@ -194,10 +208,76 @@ func (s *Service) applyTrafficResetsLocked(now time.Time) bool {
 		u.UpdatedAt = now
 		changed = true
 	}
-	if changed {
-		_ = s.store.SaveUsers(users)
+	if !changed {
+		return false
 	}
-	return changed
+	if err := s.store.SaveUsers(users); err != nil {
+		return false
+	}
+	if s.trafficHooks != nil {
+		for _, id := range resetIDs {
+			s.trafficHooks.OnTrafficReset(id)
+		}
+	}
+	return true
+}
+
+// ListUserIDs returns all local user ids (for traffic bridge polling).
+func (s *Service) ListUserIDs() []string {
+	if s == nil {
+		return nil
+	}
+	users, err := s.store.LoadUsers()
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(users))
+	for _, u := range users {
+		out = append(out, u.ID)
+	}
+	return out
+}
+
+// ApplyTrafficUsage writes cumulative totals from the traffic module into users.json.
+// Returns whether eligibility changed (and rematerialize was triggered).
+func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint64) (bool, error) {
+	if s == nil || len(updates) == 0 {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users, err := s.store.LoadUsers()
+	if err != nil {
+		return false, err
+	}
+	now := time.Now().UTC()
+	before := s.eligibilityFingerprintLocked()
+	changed := false
+	for i := range users {
+		v, ok := updates[users[i].ID]
+		if !ok {
+			continue
+		}
+		if users[i].TrafficUsedBytes != v {
+			users[i].TrafficUsedBytes = v
+			users[i].UpdatedAt = now
+			changed = true
+		}
+	}
+	if !changed {
+		return false, nil
+	}
+	if err := s.store.SaveUsers(users); err != nil {
+		return false, err
+	}
+	after := s.eligibilityFingerprintLocked()
+	if before == after {
+		return false, nil
+	}
+	if err := s.rematerializeLocked(ctx, false); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc) {
@@ -478,6 +558,10 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		return err
 	}
 	s.recordMaterializeResult(true, nil, res.Noop, res.SHA256, "")
+	if s.trafficHooks != nil {
+		allUsers, _ := s.store.LoadUsers()
+		s.trafficHooks.OnMaterialize(allUsers, sets)
+	}
 	return nil
 }
 
@@ -613,6 +697,8 @@ func redactUser(u domain.User, secrets bool) map[string]any {
 		"traffic_used_bytes":       u.TrafficUsedBytes,
 		"traffic_reset_at":         u.TrafficResetAt,
 		"traffic_reset_period_sec": u.TrafficResetPeriodSec,
+		"speed_up_bytes_per_sec":   u.SpeedUpBytesPerSec,
+		"speed_down_bytes_per_sec": u.SpeedDownBytesPerSec,
 		"has_token":                u.SubToken != "",
 	}
 	names := make([]string, 0, len(u.Creds))
@@ -810,6 +896,8 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		TrafficLimitBytes     *uint64                   `json:"traffic_limit_bytes"`
 		TrafficResetAt        *string                   `json:"traffic_reset_at"`
 		TrafficResetPeriodSec *uint64                   `json:"traffic_reset_period_sec"`
+		SpeedUpBytesPerSec    int64                     `json:"speed_up_bytes_per_sec"`
+		SpeedDownBytesPerSec  int64                     `json:"speed_down_bytes_per_sec"`
 		Creds                 map[string]map[string]any `json:"creds"`
 	}
 	if err := decodeBody(r, &body); err != nil {
@@ -868,6 +956,8 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	u.TrafficLimitBytes = body.TrafficLimitBytes
 	u.TrafficResetPeriodSec = body.TrafficResetPeriodSec
+	u.SpeedUpBytesPerSec = body.SpeedUpBytesPerSec
+	u.SpeedDownBytesPerSec = body.SpeedDownBytesPerSec
 	if body.TrafficResetAt != nil {
 		t, err := parseTimePtr(*body.TrafficResetAt)
 		if err != nil {
@@ -982,6 +1072,12 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := body["traffic_used_bytes"].(float64); ok {
 		u.TrafficUsedBytes = uint64(v)
+	}
+	if v, ok := body["speed_up_bytes_per_sec"].(float64); ok {
+		u.SpeedUpBytesPerSec = int64(v)
+	}
+	if v, ok := body["speed_down_bytes_per_sec"].(float64); ok {
+		u.SpeedDownBytesPerSec = int64(v)
 	}
 	if _, ok := body["traffic_reset_at"]; ok {
 		if body["traffic_reset_at"] == nil {

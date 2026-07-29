@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+**Superseded** (partially) by the optional [`with_traffic`](../../traffic/00-index.md) module.
 
 ## Context
 
@@ -10,7 +10,7 @@ Local users need expiry and future traffic limits so a later accounting module c
 attach without redesigning user records or materialize. Real counters, probes, and
 billing are not available yet.
 
-## Decision
+## Decision (original)
 
 1. User fields: `expires_at`, `traffic_limit_bytes`, `traffic_used_bytes`,
    `traffic_reset_at`, `traffic_reset_period_sec` (all optional except used defaulting to 0).
@@ -21,8 +21,17 @@ billing are not available yet.
    future module or explicit admin PATCH.
 5. When used ≥ limit, behave as expired for dataplane membership until reset/clear.
 
+## Update (with_traffic)
+
+When the agent is built with `with_traffic` **and** controlplane is enabled,
+`internal/traffic/cpbridge` meters bytes and periodically writes
+`traffic_used_bytes` (and syncs `speed_*` shaping). Hooks and eligibility
+semantics remain; metering is no longer manual-only.
+
+Without `with_traffic`, decision (4) still holds: PATCH or external updater only.
+
 ## Consequences
 
 - Pros: stable extension point; hotreload behavior defined early.
-- Cons: without the future module, traffic limits only work if something updates
+- Cons: without the traffic module, traffic limits only work if something updates
   `traffic_used_bytes` (or operators PATCH it).

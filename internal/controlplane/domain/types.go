@@ -16,6 +16,8 @@ type User struct {
 	TrafficUsedBytes      uint64                    `json:"traffic_used_bytes"`
 	TrafficResetAt        *time.Time                `json:"traffic_reset_at,omitempty"`
 	TrafficResetPeriodSec *uint64                   `json:"traffic_reset_period_sec,omitempty"`
+	SpeedUpBytesPerSec    int64                     `json:"speed_up_bytes_per_sec,omitempty"`
+	SpeedDownBytesPerSec  int64                     `json:"speed_down_bytes_per_sec,omitempty"`
 	SubToken              string                    `json:"sub_token"`
 	Creds                 map[string]map[string]any `json:"creds"`
 }

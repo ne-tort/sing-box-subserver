@@ -62,6 +62,18 @@ jobs:
           CP_TAGS=$(tr -d '\r\n' < build/tags.server.controlplane)
           go test -ldflags="-checklinkname=0" -tags "$CP_TAGS" ./internal/controlplane/... ./internal/configowner/...
 
+      - name: Test traffic
+        if: matrix.goarch == 'amd64'
+        run: |
+          T_TAGS=$(tr -d '\r\n' < build/tags.server.traffic)
+          go test -ldflags="-checklinkname=0" -tags "$T_TAGS" ./internal/traffic/... ./internal/box/...
+
+      - name: Test traffic+controlplane
+        if: matrix.goarch == 'amd64'
+        run: |
+          TC_TAGS=$(tr -d '\r\n' < build/tags.server.traffic.controlplane)
+          go test -ldflags="-checklinkname=0" -tags "$TC_TAGS" ./internal/traffic/... ./internal/controlplane/... ./internal/app/...
+
       - name: Vet
         if: matrix.goarch == 'amd64'
         run: go vet -tags "${{ steps.tags.outputs.tags }}" ./...

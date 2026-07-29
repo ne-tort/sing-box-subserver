@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
 	"github.com/ne-tort/sing-box-subserver/internal/api"
@@ -21,6 +22,8 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/obs"
 	"github.com/ne-tort/sing-box-subserver/internal/subscribe"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
+	"github.com/ne-tort/sing-box-subserver/internal/traffic"
+	"github.com/ne-tort/sing-box-subserver/internal/traffic/cpbridge"
 )
 
 // Options for Run.
@@ -44,6 +47,16 @@ func Run(opts Options) error {
 		return err
 	}
 	engine := box.NewEngine(context.Background())
+	trafficMod := traffic.New(traffic.Deps{
+		DataDir:       cfg.DataDir,
+		FlushInterval: time.Duration(cfg.Traffic.FlushIntervalSec) * time.Second,
+		RetentionDays: cfg.Traffic.RetentionDays,
+		Logger:        o.Logger,
+	})
+	if trafficMod != nil {
+		engine.SetTrafficHook(trafficMod)
+		o.Logger.Info("traffic module enabled")
+	}
 	sup := supervisor.NewWithOptions(store, engine, o.Logger, o.Metrics, supervisor.Options{
 		Probe: cfg.ProbeDuration(),
 	})
@@ -102,6 +115,15 @@ func Run(opts Options) error {
 		o.Logger.Warn("insecure_public_bind enabled: management API without TLS on non-loopback", "listen", cfg.Listen)
 	}
 
+	if trafficMod != nil {
+		srv.SetTraffic(trafficMod)
+	}
+
+	var trafficBridge *cpbridge.Bridge
+	if trafficMod != nil && cpSvc != nil {
+		trafficBridge = cpbridge.Attach(cpSvc, trafficMod, o.Logger)
+	}
+
 	owner.SetHooks(configowner.Hooks{
 		OnLeaveSubscribe: func() {
 			subMgr.CancelOnDirectConfig()
@@ -126,6 +148,12 @@ func Run(opts Options) error {
 	// Runtime state lives in data_dir; agent.yaml / install env are seed-only.
 	go subMgr.Run(ctx)
 	go hb.Run(ctx)
+	if trafficMod != nil {
+		go trafficMod.Run(ctx)
+	}
+	if trafficBridge != nil {
+		go trafficBridge.Run(ctx)
+	}
 	if cpSvc != nil {
 		go cpSvc.Run(ctx)
 		cpSvc.Bootstrap(ctx)
