@@ -39,7 +39,7 @@ local product surface behind `with_controlplane`.
 
 | Term | Meaning |
 |------|---------|
-| **Protocol preset** | Named inbound+outbound JSON templates + traits + description |
+| **Protocol preset / invariant** | Named inbound+outbound JSON templates + traits + i18n + scores; files under `presets/data/<protocol>/` |
 | **Inbound set** | Named ordered list of presets + listen + demux template for **one** port |
 | **Active set** | One of possibly many sets currently materializing into the box (when mode=controlplane) |
 | **Local user** | Agent-local account; static per-preset creds; optional expiry / traffic hooks |

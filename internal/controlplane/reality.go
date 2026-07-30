@@ -28,10 +28,16 @@ var likelyCDNSuffixes = []string{
 }
 
 func defaultRealityProfiles() []domain.RealityEndpoint {
+	// Keep in sync with demuxgroups Reality SNI pool (CDN-looking hosts are filtered).
 	return []domain.RealityEndpoint{
 		{SNI: "www.microsoft.com"},
 		{SNI: "www.apple.com"},
-		{SNI: "www.cloudflare.com"},
+		{SNI: "www.amazon.com"},
+		{SNI: "gateway.icloud.com"},
+		{SNI: "dl.google.com"},
+		{SNI: "www.bing.com"},
+		{SNI: "www.yahoo.com"},
+		{SNI: "www.wikipedia.org"},
 	}
 }
 
@@ -157,8 +163,8 @@ func (s *Service) validateRealityPool(ctx context.Context, profiles []domain.Rea
 
 func hasRealityPreset(sets []domain.InboundSet) bool {
 	for _, set := range sets {
-		for _, pn := range set.Presets {
-			p, err := presets.Get(pn)
+		for _, b := range set.EffectiveBindings() {
+			p, err := presets.Get(b.Preset)
 			if err != nil {
 				continue
 			}
@@ -266,46 +272,107 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 	now := time.Now().UTC()
 	changed := false
 	needed := map[string]struct{}{}
+	type needItem struct {
+		key       string
+		setName   string
+		preset    string
+		preferSNI string
+	}
+	var items []needItem
 	for _, set := range sets {
-		for _, pn := range set.Presets {
-			p, err := presets.Get(pn)
+		for _, b := range set.EffectiveBindings() {
+			p, err := presets.Get(b.Preset)
 			if err != nil || !presetHasTrait(p, "reality") {
 				continue
 			}
-			key := realityInboundKey(set.Name, pn)
+			key := realityInboundKey(set.Name, p.Name)
 			needed[key] = struct{}{}
-			a, ok := assignments[key]
-			if ok && poolContainsEndpoint(profiles, domain.RealityEndpoint{
-				SNI:             a.SNI,
-				HandshakeServer: a.HandshakeServer,
-				HandshakePort:   a.HandshakePort,
-			}) && a.PrivateKeyBase64 != "" && a.PublicKeyBase64 != "" && a.ShortID != "" {
+			prefer := ""
+			if b.Params != nil {
+				prefer = strings.ToLower(strings.TrimSpace(b.Params["demux_sni"]))
+			}
+			items = append(items, needItem{key: key, setName: set.Name, preset: p.Name, preferSNI: prefer})
+		}
+	}
+	usedSNI := map[string]string{} // sni → inbound key (only among needed)
+	for _, it := range items {
+		a, ok := assignments[it.key]
+		if !ok || a.SNI == "" {
+			continue
+		}
+		valid := poolContainsEndpoint(profiles, domain.RealityEndpoint{
+			SNI:             a.SNI,
+			HandshakeServer: a.HandshakeServer,
+			HandshakePort:   a.HandshakePort,
+		}) && a.PrivateKeyBase64 != "" && a.PublicKeyBase64 != "" && a.ShortID != ""
+		if !valid {
+			continue
+		}
+		sni := strings.ToLower(a.SNI)
+		if owner, taken := usedSNI[sni]; taken && owner != it.key {
+			continue // duplicate — will reassign below
+		}
+		usedSNI[sni] = it.key
+	}
+	for _, it := range items {
+		key := it.key
+		preferSNI := it.preferSNI
+		a, ok := assignments[key]
+		valid := ok && poolContainsEndpoint(profiles, domain.RealityEndpoint{
+			SNI:             a.SNI,
+			HandshakeServer: a.HandshakeServer,
+			HandshakePort:   a.HandshakePort,
+		}) && a.PrivateKeyBase64 != "" && a.PublicKeyBase64 != "" && a.ShortID != ""
+		if valid {
+			cur := strings.ToLower(a.SNI)
+			if preferSNI != "" && cur != preferSNI {
+				if ep, found := findRealityEndpointBySNI(profiles, preferSNI); found {
+					if owner, taken := usedSNI[preferSNI]; !taken || owner == key {
+						a.SNI = ep.SNI
+						a.HandshakeServer = ep.HandshakeServer
+						a.HandshakePort = ep.HandshakePort
+						a.UpdatedAt = now
+						assignments[key] = a
+						delete(usedSNI, cur)
+						usedSNI[preferSNI] = key
+						changed = true
+						continue
+					}
+				}
+			}
+			if owner, taken := usedSNI[cur]; !taken || owner == key {
+				usedSNI[cur] = key
 				continue
 			}
-			ep, err := randomRealityEndpoint(profiles)
-			if err != nil {
-				return nil, false, err
-			}
-			priv, pub, err := generateRealityKeyPair()
-			if err != nil {
-				return nil, false, err
-			}
-			shortID, err := randomRealityShortID()
-			if err != nil {
-				return nil, false, err
-			}
-			assignments[key] = domain.RealityAssignment{
-				InboundKey:       key,
-				SNI:              ep.SNI,
-				HandshakeServer:  ep.HandshakeServer,
-				HandshakePort:    ep.HandshakePort,
-				PrivateKeyBase64: priv,
-				PublicKeyBase64:  pub,
-				ShortID:          shortID,
-				UpdatedAt:        now,
-			}
-			changed = true
+			// duplicate SNI — fall through
 		}
+		ep, err := pickRealityEndpoint(profiles, preferSNI, usedSNI, key)
+		if err != nil {
+			return nil, false, err
+		}
+		priv, pub, err := generateRealityKeyPair()
+		if err != nil {
+			return nil, false, err
+		}
+		shortID, err := randomRealityShortID()
+		if err != nil {
+			return nil, false, err
+		}
+		if old, ok := assignments[key]; ok && old.SNI != "" {
+			delete(usedSNI, strings.ToLower(old.SNI))
+		}
+		assignments[key] = domain.RealityAssignment{
+			InboundKey:       key,
+			SNI:              ep.SNI,
+			HandshakeServer:  ep.HandshakeServer,
+			HandshakePort:    ep.HandshakePort,
+			PrivateKeyBase64: priv,
+			PublicKeyBase64:  pub,
+			ShortID:          shortID,
+			UpdatedAt:        now,
+		}
+		usedSNI[strings.ToLower(ep.SNI)] = key
+		changed = true
 	}
 	for key := range assignments {
 		if _, ok := needed[key]; ok {
@@ -320,6 +387,44 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 		}
 	}
 	return assignments, changed, nil
+}
+
+func findRealityEndpointBySNI(pool []domain.RealityEndpoint, sni string) (domain.RealityEndpoint, bool) {
+	want := strings.ToLower(strings.TrimSpace(sni))
+	for _, ep := range pool {
+		if strings.ToLower(ep.SNI) == want {
+			return ep, true
+		}
+	}
+	return domain.RealityEndpoint{}, false
+}
+
+// pickRealityEndpoint prefers demux_sni, then any unused SNI from the validated pool.
+func pickRealityEndpoint(pool []domain.RealityEndpoint, preferSNI string, usedSNI map[string]string, selfKey string) (domain.RealityEndpoint, error) {
+	if len(pool) == 0 {
+		return domain.RealityEndpoint{}, fmt.Errorf("no validated reality profiles available")
+	}
+	prefer := strings.ToLower(strings.TrimSpace(preferSNI))
+	if prefer != "" {
+		if ep, ok := findRealityEndpointBySNI(pool, prefer); ok {
+			if owner, taken := usedSNI[prefer]; !taken || owner == selfKey {
+				return ep, nil
+			}
+		}
+	}
+	unused := make([]domain.RealityEndpoint, 0, len(pool))
+	for _, ep := range pool {
+		sni := strings.ToLower(ep.SNI)
+		if owner, taken := usedSNI[sni]; taken && owner != selfKey {
+			continue
+		}
+		unused = append(unused, ep)
+	}
+	if len(unused) == 0 {
+		// Last resort: allow reuse (demux sync will still force match per inbound).
+		return randomRealityEndpoint(pool)
+	}
+	return randomRealityEndpoint(unused)
 }
 
 func randomRealityEndpoint(pool []domain.RealityEndpoint) (domain.RealityEndpoint, error) {

@@ -1,0 +1,20 @@
+{
+  "ts": "2026-07-30T02:50:51.068880+00:00",
+  "min_mbps": 0.5,
+  "results": [
+    {
+      "group": "dg_443_reality_sq",
+      "tag": "vless_reality",
+      "status": "pass",
+      "mbps": 3845.6,
+      "detail": "mbps=3845.6"
+    },
+    {
+      "group": "dg_443_reality_sq",
+      "tag": "shadowquic_jls",
+      "status": "pass",
+      "mbps": 1027.47,
+      "detail": "mbps=1027.47"
+    }
+  ]
+}

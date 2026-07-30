@@ -1,0 +1,19 @@
+{
+  "group": "dg_443_reality_sq",
+  "public_port": 1443,
+  "member_ports": {
+    "shadowquic_jls": 58836,
+    "vless_reality": 59228
+  },
+  "slot_snis": {
+    "tcp": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com"
+  },
+  "tags": [
+    "vless_reality",
+    "shadowquic_jls"
+  ],
+  "reality": true
+}

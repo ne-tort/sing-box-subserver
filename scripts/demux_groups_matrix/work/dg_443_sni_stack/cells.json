@@ -1,0 +1,61 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 57790,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_ws_reality",
+    "port": 45690,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls",
+      "ws"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "anytls",
+    "port": 45080,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "vless_http_tls",
+    "port": 57912,
+    "protocol": "vless",
+    "traits": [
+      "http",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "vless_tls",
+    "port": 54768,
+    "protocol": "vless",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "dl.google.com"
+  }
+]

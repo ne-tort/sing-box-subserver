@@ -1,0 +1,9 @@
+protocol: shadowquic
+mode: render
+cells:
+- tag: shadowquic_jls
+  stage: 3
+- tag: shadowquic_0rtt
+  stage: 3
+- tag: shadowquic_uot
+  stage: 3

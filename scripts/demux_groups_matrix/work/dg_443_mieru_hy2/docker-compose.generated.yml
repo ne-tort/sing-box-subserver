@@ -1,0 +1,39 @@
+name: dgmatrix
+services:
+  iperf:
+    image: sui-lx-iperf:local
+    container_name: inv-iperf
+    networks: [invmatrix_net]
+    command: [iperf3, -s]
+  handshake:
+    image: sui-lx-iperf:local
+    container_name: inv-handshake
+    hostname: inv-handshake
+    networks:
+      invmatrix_net:
+        aliases: [inv-handshake, www.microsoft.com, www.apple.com, www.amazon.com]
+    volumes:
+      - C:/Users/qwerty/git/sui/third_party/sing-box-subserver/scripts/demux_groups_matrix/work/dg_443_mieru_hy2:/work:ro
+    command:
+      - bash
+      - -c
+      - openssl s_server -quiet -accept 443 -cert /work/certs/reality-hs.crt -key /work/certs/reality-hs.key -www >/tmp/hs.log 2>&1
+  server:
+    image: sui-lx-iperf:local
+    container_name: inv-server
+    hostname: inv-server
+    networks:
+      invmatrix_net:
+        aliases: [inv-server]
+    volumes:
+      - C:/Users/qwerty/git/sui/.tools/lx-client/sing-box:/bin-ro/sing-box:ro
+      - C:/Users/qwerty/git/sui/third_party/sing-box-subserver/scripts/demux_groups_matrix/work/dg_443_mieru_hy2:/work:ro
+    command:
+      - bash
+      - -c
+      - cp /bin-ro/sing-box /tmp/sing-box && chmod +x /tmp/sing-box && /tmp/sing-box run -c /work/server.json
+    depends_on: [iperf, handshake]
+networks:
+  invmatrix_net:
+    external: true
+    name: invmatrix_net

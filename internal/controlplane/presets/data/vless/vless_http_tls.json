@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "tag": "vless_http_tls",
+  "protocol": "vless",
+  "aliases": [
+    "vless-http-tls"
+  ],
+  "short_name": "VLESS HTTP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS HTTP/2 TLS",
+      "description": "VLESS + TLS + HTTP transport (host/path/method/headers — DPI видит H2)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "http"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then HTTP/2",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_user_variants": [
+    "flow-none"
+  ],
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "http",
+      "host": [
+        "{{param.http_host}}"
+      ],
+      "path": "{{param.http_path}}",
+      "method": "PUT",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ],
+        "Accept-Language": [
+          "en-US,en;q=0.9"
+        ]
+      },
+      "idle_timeout": "15s",
+      "ping_timeout": "15s"
+    }
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "http",
+      "host": [
+        "{{param.http_host}}"
+      ],
+      "path": "{{param.http_path}}",
+      "method": "PUT",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ],
+        "Accept-Language": [
+          "en-US,en;q=0.9"
+        ]
+      },
+      "idle_timeout": "15s",
+      "ping_timeout": "15s"
+    },
+    "packet_encoding": "xudp"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "flow": "Vision/XTLS несовместим с WS/gRPC/HTTP/HTTPUpgrade — только flow-none",
+    "packet_encoding": "по умолчанию xudp; профили pkt-none / pkt-packetaddr через enabled_client_profiles",
+    "params": "optional bindings[].params overrides: http_host, http_path",
+    "http_path_default": "/vless-h2"
+  }
+}

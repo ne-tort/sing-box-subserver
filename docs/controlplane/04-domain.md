@@ -20,6 +20,25 @@ Normative types for implementation and API. Field names are JSON/`snake_case` un
 | `sub_token` | string | Secret; high entropy; URL-safe |
 | `creds` | object | Map `preset_name` → protocol-specific secret object |
 
+WireGuard hub creds live under `creds.wg` (mirrored to `wg_awg2`/`wg_awg3` aliases):
+`private_key`, `public_key`, sticky `wg_host_index` (2–254).
+
+## WgHub (singleton)
+
+Persisted as `wg_hub.json`. At most one WireGuard endpoint per agent.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `enabled` | bool | When true, materialize emits `endpoints[]` |
+| `profile` | string | `wg` \| `wg_awg2` \| `wg_awg3` |
+| `subnet` | string | Default `10.8.0.0/24` (must be /24) |
+| `listen_port` | uint16 | Default 51820 |
+| `system` | bool | Opt-in; default false (omit) |
+| `forward_allow` | bool | P2P firewall; requires `system=true`; default false |
+| `internet_allow` | bool | Client full-tunnel; default true |
+| `hub_private_key` / `hub_public_key` | string | Auto curve25519 |
+| `awg` | object | Generated AWG2/3 + masquerade (`id`/`ip`/`ib`); no i1–i5 |
+
 ### Credential map
 
 On user create (and `PUT /users/{id}/creds`), the operator may supply partial
@@ -53,16 +72,29 @@ When `traffic_reset_at <= now`:
 
 Actual increment of `traffic_used_bytes` is **out of scope** (future module).
 
-## ProtocolPreset
+## ProtocolPreset / InvariantPreset
+
+Source of truth: embedded files under `internal/controlplane/presets/data/`
+(see operator guide [`docs/guides/controlplane-presets/`](../guides/controlplane-presets/00-index.md)).
+
+Compat view `ProtocolPreset` (materialize / older callers):
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `name` | string | Stable key (`vless-reality-tcp`, …) |
-| `protocol` | string | sing-box inbound type |
-| `description` | string | Human text (protocol + variant) |
+| `name` | string | Canonical tag (`vless_reality`); aliases also resolve via `presets.Get` |
+| `protocol` | string | Parent protocol tag / sing-box inbound type |
+| `description` | string | Resolved i18n (default `ru`) |
+| `short_name` | string | Mobile one-liner |
 | `traits` | string[] | See trait vocabulary below |
+| `aliases` | string[] | Legacy hyphen ids |
+| `scores` / `demux_hints` / `requirements` | object | Optional metadata |
 | `inbound_template` | object | sing-box inbound skeleton with placeholders |
 | `outbound_template` | object | Mirror outbound skeleton with placeholders |
+| `cred_fields` | string[] | Keys under `user.creds[tag]` |
+
+`ProtocolMeta` (`protocol.json`): tag, i18n, status, `invariant_tags`.
+
+`InvariantPreset`: full JSON file (= tag); i18n map; templates required for `stable`/`lab`.
 
 ### Placeholders (materialize / subscribe) — closed list
 
@@ -111,6 +143,7 @@ Used when authoring demux `match` blocks — stored/returned by API; not a runti
 | `enabled_user_variants` | string[] | Optional allowed user-symmetric variants for this binding |
 | `enabled_client_profiles` | string[] | Optional outbound-only profile keys for this binding |
 | `credential_instance_policy` | string | Optional future policy hint |
+| `params` | map[string]string | Operator knobs for the binding (e.g. carrier `room` URL). Materialize substitutes `{{param.<key>}}`. Required keys are listed on the preset as `param_fields`. |
 
 ### Variant metadata (v1)
 
@@ -124,7 +157,9 @@ Initial v1 user variants for `vless`:
 - `flow-xtls-rprx-vision` → `creds[preset].uuid_xtls`, `flow="xtls-rprx-vision"`
 - `flow-udp-vision` → `creds[preset].uuid_udp`, `flow="xtls-rprx-vision-udp443"`
 
-Resolver: `domain.UserVariantsForProtocol(protocol, binding)` — single entry point for materialize, subscription catalog, and discovery APIs. Empty or unknown `enabled_user_variants` falls back to the full protocol catalog.
+Resolver: `domain.UserVariantsForProtocol(protocol, binding, preset.DefaultUserVariants)` — single entry point for materialize, subscription catalog, and discovery APIs. Binding `enabled_user_variants` wins; else preset defaults; else the full protocol catalog. Unknown enabled names fall back to the full catalog.
+
+Client profiles (outbound-only): `domain.ClientProfilesForProtocol(protocol, binding, preset.DefaultClientProfiles)` + `ApplyOutboundOverrides`. Catalog lives in `domain/variants.go` (VLESS `packet_encoding`, VMess `security`, TUIC `udp_relay_mode`).
 
 ### Port exclusivity
 

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "tag": "cloudflared_token",
+  "protocol": "cloudflared",
+  "aliases": [
+    "cloudflared",
+    "cf-tunnel"
+  ],
+  "short_name": "CF Tunnel",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Cloudflared token",
+      "description": "Cloudflare Tunnel: params.token; HA + http2 + post_quantum; без listen/users."
+    }
+  },
+  "traits": [
+    "no_listen",
+    "no_users",
+    "cloudflare",
+    "inbound_only"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "cloudflared control plane",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 4
+  },
+  "cred_fields": [],
+  "param_fields": [
+    "token"
+  ],
+  "inbound_template": {
+    "type": "cloudflared",
+    "tag": "{{tag}}",
+    "token": "{{param.token}}",
+    "ha_connections": 4,
+    "protocol": "http2",
+    "post_quantum": true,
+    "edge_ip_version": 0,
+    "datagram_version": "quic",
+    "grace_period": "30s"
+  },
+  "outbound_template": {},
+  "requirements": {
+    "build_tag": "with_cloudflared"
+  },
+  "client_notes": {
+    "token": "Cloudflare tunnel token (ops) в bindings[].params.token",
+    "subscription": "inbound_only — RenderSubscription пропускает"
+  }
+}

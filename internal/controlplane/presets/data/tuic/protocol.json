@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "tuic",
+  "singbox_type": "tuic",
+  "short_name": "TUIC",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "TUIC",
+      "description": "TUIC v5 поверх QUIC/TLS."
+    },
+    "en": {
+      "title": "TUIC",
+      "description": "TUIC v5 поверх QUIC/TLS."
+    }
+  },
+  "default_cred_fields": [
+    "uuid",
+    "password"
+  ]
+}

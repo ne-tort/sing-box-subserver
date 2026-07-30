@@ -1,0 +1,15 @@
+{
+  "group": "dg_443_mieru_hy2",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 55356,
+    "mieru_tcp": 44858
+  },
+  "slot_snis": {},
+  "preset_sni": {},
+  "tags": [
+    "mieru_tcp",
+    "hy2"
+  ],
+  "reality": false
+}

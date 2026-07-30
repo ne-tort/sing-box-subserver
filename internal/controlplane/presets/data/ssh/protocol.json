@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "ssh",
+  "singbox_type": "ssh",
+  "short_name": "SSH",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH",
+      "description": "SSH inbound (сборка with_ssh); lab-скелет."
+    },
+    "en": {
+      "title": "SSH",
+      "description": "SSH inbound (сборка with_ssh); lab-скелет."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

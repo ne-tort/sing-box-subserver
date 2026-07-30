@@ -1,0 +1,372 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "demux",
+      "tag": "cp-demux-dg-matrix",
+      "listen": "0.0.0.0",
+      "listen_port": 1443,
+      "network": [
+        "tcp",
+        "udp"
+      ],
+      "inspect_timeout": "3s",
+      "rules": [
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 55363
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.microsoft.com"
+              ]
+            }
+          },
+          "name": "tcp_reality-r1"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 54509
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.apple.com"
+              ]
+            }
+          },
+          "name": "tcp_reality-r2"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 42441
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.amazon.com"
+              ]
+            }
+          },
+          "name": "tcp_tls-t1"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 56270
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "gateway.icloud.com"
+              ]
+            }
+          },
+          "name": "tcp_tls-t2"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 53166
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "dl.google.com"
+              ]
+            }
+          },
+          "name": "tcp_tls-t3"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 42968
+            }
+          },
+          "match": {
+            "protocol": "quic",
+            "sni": [
+              "www.bing.com"
+            ]
+          },
+          "name": "quic-hy2"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 55802
+            }
+          },
+          "match": {
+            "protocol": "quic",
+            "sni": [
+              "www.yahoo.com"
+            ]
+          },
+          "name": "quic-tuic"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 54214
+            }
+          },
+          "match": {
+            "always": true
+          },
+          "name": "plain-plain"
+        }
+      ]
+    },
+    {
+      "type": "vless",
+      "tag": "vless_reality",
+      "listen": "127.0.0.1",
+      "listen_port": 55363,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "reality": {
+          "enabled": true,
+          "private_key": "YFsDcZvd_w0moJL6T5vgnSOE43t0yiISBC3I_J7TeGA",
+          "short_id": [
+            "0123456789abcdef"
+          ],
+          "handshake": {
+            "server": "inv-handshake",
+            "server_port": 443
+          }
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "vless_grpc_reality",
+      "listen": "127.0.0.1",
+      "listen_port": 54509,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "alpn": [
+          "h2"
+        ],
+        "reality": {
+          "enabled": true,
+          "private_key": "YFsDcZvd_w0moJL6T5vgnSOE43t0yiISBC3I_J7TeGA",
+          "short_id": [
+            "0123456789abcdef"
+          ],
+          "handshake": {
+            "server": "inv-handshake",
+            "server_port": 443
+          }
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "GunService",
+        "idle_timeout": "15s",
+        "ping_timeout": "15s",
+        "permit_without_stream": false
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "anytls",
+      "listen": "127.0.0.1",
+      "listen_port": 42441,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.amazon.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "padding_scheme": [
+        "stop=8",
+        "0=30-30",
+        "1=100-400",
+        "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000",
+        "3=9-9,500-1000",
+        "4=500-1000",
+        "5=500-1000",
+        "6=500-1000",
+        "7=500-1000"
+      ]
+    },
+    {
+      "type": "vless",
+      "tag": "vless_tls",
+      "listen": "127.0.0.1",
+      "listen_port": 56270,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "gateway.icloud.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "vless_ws_tls",
+      "listen": "127.0.0.1",
+      "listen_port": 53166,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "dl.google.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/vless-ws",
+        "headers": {
+          "Host": [
+            "matrix.local"
+          ],
+          "User-Agent": [
+            "Mozilla/5.0"
+          ]
+        },
+        "max_early_data": 2048,
+        "early_data_header_name": "Sec-WebSocket-Protocol"
+      }
+    },
+    {
+      "type": "sudoku",
+      "tag": "sudoku_pad",
+      "listen": "127.0.0.1",
+      "listen_port": 54214,
+      "key": "08670a0adbebf397b072a6b411d37a6b",
+      "aead_method": "chacha20-poly1305",
+      "padding_min": 5,
+      "padding_max": 15,
+      "table_type": "prefer_ascii",
+      "enable_pure_downlink": true,
+      "handshake_timeout": 5,
+      "fallback": "http://127.0.0.1:80",
+      "suspicious_action": "fallback",
+      "multiplex": "auto"
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "listen": "127.0.0.1",
+      "listen_port": 42968,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.bing.com",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "ignore_client_bandwidth": true,
+      "up_mbps": 100,
+      "down_mbps": 100
+    },
+    {
+      "type": "tuic",
+      "tag": "tuic",
+      "listen": "127.0.0.1",
+      "listen_port": 55802,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.yahoo.com",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "congestion_control": "bbr",
+      "auth_timeout": "3s",
+      "heartbeat": "10s"
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

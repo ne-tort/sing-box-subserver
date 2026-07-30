@@ -4,9 +4,12 @@ package controlplane
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,12 +24,15 @@ import (
 
 	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxgroups"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxrecipes"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/materialize"
-	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxrecipes"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/store"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/ssh"
 )
 
 // Service is the embedded controlplane.
@@ -328,8 +334,17 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("PUT /v1/controlplane/users/{id}/creds", requireAuth(s.handleUsersPutCreds))
 	mux.HandleFunc("GET /v1/controlplane/presets", requireAuth(s.handlePresetsList))
 	mux.HandleFunc("GET /v1/controlplane/presets/{name}", requireAuth(s.handlePresetsGet))
+	mux.HandleFunc("GET /v1/controlplane/protocols", requireAuth(s.handleProtocolsList))
+	mux.HandleFunc("GET /v1/controlplane/protocols/{tag}", requireAuth(s.handleProtocolsGet))
 	mux.HandleFunc("GET /v1/controlplane/demux-recipes", requireAuth(s.handleDemuxRecipesList))
 	mux.HandleFunc("GET /v1/controlplane/demux-recipes/{name}", requireAuth(s.handleDemuxRecipesGet))
+	mux.HandleFunc("GET /v1/controlplane/demux-groups", requireAuth(s.handleDemuxGroupsList))
+	mux.HandleFunc("GET /v1/controlplane/demux-groups/{tag}", requireAuth(s.handleDemuxGroupsGet))
+	mux.HandleFunc("GET /v1/controlplane/demux-groups/{tag}/substitutions", requireAuth(s.handleDemuxGroupsSubstitutions))
+	mux.HandleFunc("POST /v1/controlplane/sets/from-demux-group", requireAuth(s.handleSetsFromDemuxGroup))
+	mux.HandleFunc("POST /v1/controlplane/sets/from-presets", requireAuth(s.handleSetsFromPresets))
+	mux.HandleFunc("GET /v1/controlplane/client/bootstrap", requireAuth(s.handleClientBootstrap))
+	mux.HandleFunc("GET /v1/controlplane/ports/availability", requireAuth(s.handlePortsAvailability))
 	mux.HandleFunc("GET /v1/controlplane/sets", requireAuth(s.handleSetsList))
 	mux.HandleFunc("POST /v1/controlplane/sets", requireAuth(s.handleSetsCreate))
 	mux.HandleFunc("GET /v1/controlplane/sets/{name}", requireAuth(s.handleSetsGet))
@@ -344,6 +359,9 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
 	mux.HandleFunc("GET /v1/controlplane/reality", requireAuth(s.handleRealityGet))
 	mux.HandleFunc("PUT /v1/controlplane/reality", requireAuth(s.handleRealityPut))
+	mux.HandleFunc("GET /v1/controlplane/wg", requireAuth(s.handleWgGet))
+	mux.HandleFunc("PUT /v1/controlplane/wg", requireAuth(s.handleWgPut))
+	mux.HandleFunc("POST /v1/controlplane/wg/regenerate-awg", requireAuth(s.handleWgRegenerateAWG))
 	mux.HandleFunc("GET /v1/sub/{token}", s.handleSub)
 }
 
@@ -363,13 +381,78 @@ func randomPassword() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
+func randomBase64Key(n int) (string, error) {
+	if n <= 0 {
+		return "", fmt.Errorf("invalid key length %d", n)
+	}
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// randomCurve25519Private returns a clamped X25519 private key (base64.RawURLEncoding),
+// compatible with lx DERP wire.ParseKey.
+func randomCurve25519Private() (string, error) {
+	var k [32]byte
+	if _, err := rand.Read(k[:]); err != nil {
+		return "", err
+	}
+	k[0] &= 248
+	k[31] &= 127
+	k[31] |= 64
+	return base64.RawURLEncoding.EncodeToString(k[:]), nil
+}
+
+func curve25519PublicFromPrivate(privB64 string) (string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(privB64)
+	if err != nil {
+		raw, err = base64.StdEncoding.DecodeString(privB64)
+	}
+	if err != nil {
+		return "", fmt.Errorf("curve25519 private key: %w", err)
+	}
+	if len(raw) != 32 {
+		return "", fmt.Errorf("curve25519 private key length %d, want 32", len(raw))
+	}
+	pub, err := curve25519.X25519(raw, curve25519.Basepoint)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(pub), nil
+}
+
+func randomSSHEd25519PrivatePEM() (string, error) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", err
+	}
+	block, err := ssh.MarshalPrivateKey(priv, "")
+	if err != nil {
+		return "", err
+	}
+	return string(pem.EncodeToMemory(block)), nil
+}
+
+func sshPublicFromPrivatePEM(privPEM string) (string, error) {
+	signer, err := ssh.ParsePrivateKey([]byte(privPEM))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), nil
+}
+
 func (s *Service) ensureCreds(u *domain.User) (bool, error) {
 	if u.Creds == nil {
 		u.Creds = map[string]map[string]any{}
 	}
 	changed := false
 	for _, p := range presets.All() {
-		creds := u.Creds[p.Name]
+		if presetIsEndpoint(p) {
+			continue // WG creds via ensureWgUserCreds when hub enabled
+		}
+		creds := presets.CredsFor(u.Creds, p.Name)
 		if creds == nil {
 			creds = map[string]any{}
 		}
@@ -378,19 +461,131 @@ func (s *Service) ensureCreds(u *domain.User) (bool, error) {
 			if !credFieldEmpty(creds[f]) {
 				continue
 			}
-			val, err := generateCredField(f)
+			gen := ""
+			if p.CredGenerators != nil {
+				gen = p.CredGenerators[f]
+			}
+			if f == "public_key" {
+				// Filled after private_key via ensureSSHPublicFromPrivate / ensureCurve25519Public.
+				continue
+			}
+			val, err := generateCredField(f, gen)
 			if err != nil {
 				return false, err
 			}
 			creds[f] = val
 			presetChanged = true
 		}
-		if presetChanged || u.Creds[p.Name] == nil {
-			u.Creds[p.Name] = creds
-			changed = true
+		wantPub := false
+		wantSSHPub := false
+		for _, f := range p.CredFields {
+			if f == "public_key" {
+				wantPub = true
+				if p.CredGenerators != nil && p.CredGenerators["private_key"] == "ssh_ed25519" {
+					wantSSHPub = true
+				}
+			}
+		}
+		if wantSSHPub {
+			sshChanged, err := ensureSSHPublicFromPrivate(creds)
+			if err != nil {
+				return false, err
+			}
+			if sshChanged {
+				presetChanged = true
+			}
+		} else {
+			pubChanged, err := ensureCurve25519Public(creds, wantPub)
+			if err != nil {
+				return false, err
+			}
+			if pubChanged {
+				presetChanged = true
+			}
+		}
+		for _, key := range presets.CredKeysForEnsure(p) {
+			if presetChanged || u.Creds[key] == nil {
+				u.Creds[key] = creds
+				changed = true
+			}
 		}
 	}
 	return changed, nil
+}
+
+// ensurePeerSecrets fills set-level secrets declared by preset PeerSecretFields.
+func (s *Service) ensurePeerSecrets(set *domain.InboundSet) (bool, error) {
+	if set == nil {
+		return false, nil
+	}
+	if set.PeerSecrets == nil {
+		set.PeerSecrets = map[string]string{}
+	}
+	changed := false
+	for _, b := range set.EffectiveBindings() {
+		p, err := presets.Get(b.Preset)
+		if err != nil || len(p.PeerSecretFields) == 0 {
+			continue
+		}
+		canonical := p.Name
+		for field, gen := range p.PeerSecretFields {
+			key := canonical + "/" + field
+			if strings.TrimSpace(set.PeerSecrets[key]) != "" {
+				continue
+			}
+			if field == "public_key" {
+				// Derived from private_key below.
+				continue
+			}
+			val, err := generateCredField(field, gen)
+			if err != nil {
+				return false, err
+			}
+			s, ok := val.(string)
+			if !ok || strings.TrimSpace(s) == "" {
+				return false, fmt.Errorf("peer secret %q for %s: empty", field, canonical)
+			}
+			set.PeerSecrets[key] = s
+			changed = true
+		}
+		if _, wantPub := p.PeerSecretFields["public_key"]; wantPub {
+			privKey := canonical + "/private_key"
+			pubKey := canonical + "/public_key"
+			if strings.TrimSpace(set.PeerSecrets[pubKey]) == "" {
+				priv := strings.TrimSpace(set.PeerSecrets[privKey])
+				if priv == "" {
+					return false, fmt.Errorf("peer secret public_key for %s requires private_key", canonical)
+				}
+				pub, err := curve25519PublicFromPrivate(priv)
+				if err != nil {
+					return false, fmt.Errorf("peer secret public_key for %s: %w", canonical, err)
+				}
+				set.PeerSecrets[pubKey] = pub
+				changed = true
+			}
+		}
+	}
+	if changed && len(set.PeerSecrets) == 0 {
+		set.PeerSecrets = nil
+	}
+	return changed, nil
+}
+
+func (s *Service) ensurePeerSecretsAll(sets []domain.InboundSet) ([]domain.InboundSet, bool, error) {
+	changedAny := false
+	out := make([]domain.InboundSet, len(sets))
+	for i := range sets {
+		set := sets[i]
+		changed, err := s.ensurePeerSecrets(&set)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed {
+			changedAny = true
+		}
+		out[i] = set
+	}
+	return out, changedAny, nil
 }
 
 func (s *Service) publicHost(r *http.Request) string {
@@ -550,13 +745,72 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	if err != nil {
 		return err
 	}
-	if len(sets) == 0 {
+	hub, err := s.store.LoadWgHub()
+	if err != nil {
+		return err
+	}
+	if len(sets) == 0 && !hub.Enabled {
 		s.publishTrafficPolicyLocked()
 		return nil
 	}
 	users, err := s.eligibleUsers(time.Now().UTC())
 	if err != nil {
 		return err
+	}
+	if hub.Enabled {
+		hubChanged, err := s.ensureWgHubSecrets(&hub, false)
+		if err != nil {
+			return err
+		}
+		users, credsChanged, err := s.ensureWgUserCreds(users)
+		if err != nil {
+			return err
+		}
+		if hubChanged {
+			if err := s.store.SaveWgHub(hub); err != nil {
+				return err
+			}
+		}
+		if credsChanged {
+			all, err := s.store.LoadUsers()
+			if err != nil {
+				return err
+			}
+			byID := map[string]domain.User{}
+			for _, u := range users {
+				byID[u.ID] = u
+			}
+			for i := range all {
+				if u, ok := byID[all[i].ID]; ok {
+					all[i].Creds = u.Creds
+				}
+			}
+			if err := s.store.SaveUsers(all); err != nil {
+				return err
+			}
+		}
+	}
+	sets, peerChanged, err := s.ensurePeerSecretsAll(sets)
+	if err != nil {
+		return err
+	}
+	if peerChanged {
+		all, err := s.store.LoadSets()
+		if err != nil {
+			return err
+		}
+		byName := map[string]domain.InboundSet{}
+		for _, st := range sets {
+			byName[st.Name] = st
+		}
+		for i := range all {
+			if st, ok := byName[all[i].Name]; ok {
+				all[i].PeerSecrets = st.PeerSecrets
+			}
+		}
+		if err := s.store.SaveSets(all); err != nil {
+			return err
+		}
 	}
 	host := "127.0.0.1"
 	if s.cfg.Cfg != nil && s.cfg.Cfg.Controlplane.PublicHost != "" {
@@ -585,6 +839,10 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		TLS:                profile,
 		RealityAssignments: realityAssignments,
 	}
+	if hub.Enabled {
+		h := hub
+		in.WgHub = &h
+	}
 	pemChanged := false
 	if profile.Mode == domain.TLSModeSelfSigned {
 		if profile.SelfSigned == nil {
@@ -596,7 +854,20 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		}
 		pemChanged = changed
 		in.TLSCertPath, in.TLSKeyPath = cert, key
+	} else if profile.Mode == domain.TLSModeACMEDomain || profile.Mode == domain.TLSModeACMEIP {
+		// TrustTunnel (and similar PEM-only inbounds) need concrete files; resolve ACME PEMs.
+		if cert, key, _, err := s.mgmtMaterialPaths(); err == nil {
+			in.TLSCertPath, in.TLSKeyPath = cert, key
+		}
 	}
+	slotTLS, slotChanged, err := s.ensureDemuxSlotTLS(sets)
+	if err != nil {
+		return err
+	}
+	if slotChanged {
+		pemChanged = true
+	}
+	in.SlotTLS = slotTLS
 	raw, err := materialize.Build(in)
 	if err != nil {
 		s.recordMaterializeResult(false, err, false, "", materializeErrorCode(err))
@@ -611,9 +882,54 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		s.recordMaterializeResult(false, err, false, "", "cp_apply_failed")
 		return err
 	}
+	if hub.Enabled {
+		_ = applyWgForwardRules(hub)
+	} else {
+		_ = applyWgForwardRules(domain.WgHub{Enabled: false})
+	}
 	s.recordMaterializeResult(true, nil, res.Noop, res.SHA256, "")
 	s.publishTrafficPolicyLocked()
 	return nil
+}
+
+func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet) (map[string]materialize.SlotTLSMaterial, bool, error) {
+	out := map[string]materialize.SlotTLSMaterial{}
+	changed := false
+	for _, set := range sets {
+		if !set.HasDemux() {
+			continue
+		}
+		for _, b := range set.EffectiveBindings() {
+			sni := ""
+			if b.Params != nil {
+				sni = strings.TrimSpace(b.Params["demux_sni"])
+			}
+			if sni == "" {
+				continue
+			}
+			p, err := presets.Get(b.Preset)
+			if err != nil {
+				continue
+			}
+			// Reality uses handshake assignment, not PEM slots.
+			if presetHasTrait(p, "reality") {
+				continue
+			}
+			needsPEM := presetHasTrait(p, "tls") || presetHasTrait(p, "tls_custom")
+			if !needsPEM {
+				continue
+			}
+			cert, key, wrote, err := ensureSlotSelfSigned(s.cfg.DataDir, sni)
+			if err != nil {
+				return nil, false, fmt.Errorf("slot tls %q: %w", sni, err)
+			}
+			if wrote {
+				changed = true
+			}
+			out[sni] = materialize.SlotTLSMaterial{CertPath: cert, KeyPath: key}
+		}
+	}
+	return out, changed, nil
 }
 
 func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error) {
@@ -831,6 +1147,7 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		"users_eligible":          elig,
 		"presets_count":           len(presets.All()),
 		"demux_recipes_count":     len(demuxrecipes.All()),
+		"demux_groups_count":      demuxgroups.Count(),
 		"sets_count":              len(sets),
 		"demux_in_binary":         demuxInBinary,
 		"last_materialize_sha256": st.LastMaterializeSHA256,
@@ -857,20 +1174,75 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		out["reality"] = s.realityStatusPayload(rc)
 	}
 	out["ownership_health"] = s.ownershipHealth(st)
+	out["ready"] = s.computeClientReady(st, out)
 	if details {
 		out["owner_transitions"] = st.OwnerTransitions
 		out["active_set_details"] = s.buildActiveSetDetails(st.ActiveSets, sets)
 		if s.cfg.Supervisor != nil {
 			snap := s.cfg.Supervisor.Status()
 			out["supervisor"] = map[string]any{
-				"state":           snap.State,
-				"revision":        snap.Revision,
-				"content_sha256":  snap.ContentSHA256,
-				"last_apply":      snap.LastApply,
+				"state":          snap.State,
+				"revision":       snap.Revision,
+				"content_sha256": snap.ContentSHA256,
+				"last_apply":     snap.LastApply,
+				"box_up":         snap.BoxUp,
 			}
 		}
 	}
 	return out
+}
+
+// computeClientReady is the single wizard poll signal after activate/install.
+func (s *Service) computeClientReady(st domain.State, payload map[string]any) map[string]any {
+	reasons := make([]string, 0)
+	ok := true
+	oh, _ := payload["ownership_health"].(map[string]any)
+	if oh != nil {
+		if status, _ := oh["status"].(string); status != "" && status != "ok" {
+			ok = false
+			if issues, _ := oh["issues"].([]string); len(issues) > 0 {
+				reasons = append(reasons, issues...)
+			} else {
+				reasons = append(reasons, "ownership_degraded")
+			}
+		}
+	}
+	if len(st.ActiveSets) == 0 {
+		ok = false
+		reasons = append(reasons, "no_active_sets")
+	}
+	if st.Materialize != nil && st.Materialize.LastError != "" {
+		ok = false
+		reasons = append(reasons, "materialize_error")
+	}
+	if ms, okTLS := payload["tls_material_status"].(map[string]any); okTLS {
+		if ready, _ := ms["ready"].(bool); !ready {
+			// ACME may still be issuing; not fatal for self_signed but block "ready" if explicitly false.
+			if mode, _ := payload["tls_mode"].(string); mode == string(domain.TLSModeACMEDomain) || mode == string(domain.TLSModeACMEIP) {
+				ok = false
+				reasons = append(reasons, "tls_not_ready")
+			}
+		}
+	}
+	boxUp := false
+	supState := ""
+	if s.cfg.Supervisor != nil {
+		snap := s.cfg.Supervisor.Status()
+		boxUp = snap.BoxUp
+		supState = string(snap.State)
+		if !snap.BoxUp || snap.State != supervisor.StateRunning {
+			ok = false
+			reasons = append(reasons, "dataplane_not_running")
+		}
+	}
+	return map[string]any{
+		"ok":               ok,
+		"box_up":           boxUp,
+		"supervisor_state": supState,
+		"active_sets":      len(st.ActiveSets) > 0,
+		"reasons":          reasons,
+		"poll":             "GET /v1/controlplane/status → ready.ok == true",
+	}
 }
 
 func (s *Service) buildActiveSetDetails(active []string, sets []domain.InboundSet) []any {
@@ -896,7 +1268,7 @@ func (s *Service) buildActiveSetDetails(active []string, sets []domain.InboundSe
 				continue
 			}
 			variantNames := []string{}
-			for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b) {
+			for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b, p.DefaultUserVariants) {
 				variantNames = append(variantNames, vv.Name)
 			}
 			bindingDetails = append(bindingDetails, map[string]any{
@@ -1295,24 +1667,161 @@ func (s *Service) handleUsersPutCreds(w http.ResponseWriter, r *http.Request) {
 	okJSON(w, 200, redactUser(users[i], true))
 }
 
-func (s *Service) handlePresetsList(w http.ResponseWriter, _ *http.Request) {
+func requestLang(r *http.Request) string {
+	return domain.NormalizeLang(r.URL.Query().Get("lang"))
+}
+
+func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
+	lang := requestLang(r)
+	protocolFilter := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	all := presets.All()
 	out := make([]any, 0, len(all))
 	for _, p := range all {
-		out = append(out, map[string]any{
-			"name": p.Name, "protocol": p.Protocol, "description": p.Description, "traits": p.Traits,
-		})
+		if protocolFilter != "" && p.Protocol != protocolFilter {
+			continue
+		}
+		inv, err := presets.GetInvariant(p.Name)
+		if err != nil {
+			continue
+		}
+		pp := inv.ToProtocolPreset(lang)
+		item := map[string]any{
+			"name":         pp.Name,
+			"tag":          pp.Name,
+			"protocol":     pp.Protocol,
+			"description":  pp.Description,
+			"short_name":   pp.ShortName,
+			"traits":       pp.Traits,
+			"status":       pp.Status,
+			"aliases":      pp.Aliases,
+			"scores":       pp.Scores,
+			"demux_hints":  pp.DemuxHints,
+			"cred_fields":  pp.CredFields,
+			"param_fields": pp.ParamFields,
+			"optional_params": map[string]any{
+				"listen_port": map[string]any{
+					"type":        "uint16",
+					"required":    false,
+					"description": "Public listen port for single-inbound install. Omit to auto-pick a free port (prefers 443).",
+					"constraint":  "At most one TCP and one UDP occupant per port.",
+				},
+			},
+		}
+		if nets := networksFromTraits(pp.Traits); len(nets) > 0 {
+			item["networks"] = nets
+		}
+		out = append(out, item)
 	}
 	okJSON(w, 200, out)
 }
 
 func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
-	p, err := presets.Get(r.PathValue("name"))
+	lang := requestLang(r)
+	inv, err := presets.GetInvariant(r.PathValue("name"))
 	if err != nil {
 		failJSON(w, 404, "not_found", err.Error())
 		return
 	}
-	okJSON(w, 200, p)
+	if len(inv.InboundTemplate) == 0 {
+		failJSON(w, 404, "not_found", "preset has no templates")
+		return
+	}
+	pp := inv.ToProtocolPreset(lang)
+	proto, _ := presets.GetProtocol(inv.Protocol)
+	_, pDesc := domain.ResolveI18n(proto.I18n, lang)
+	okJSON(w, 200, map[string]any{
+		"name":              pp.Name,
+		"tag":               pp.Name,
+		"protocol":          pp.Protocol,
+		"description":       pp.Description,
+		"short_name":        pp.ShortName,
+		"traits":            pp.Traits,
+		"status":            pp.Status,
+		"aliases":           pp.Aliases,
+		"scores":            pp.Scores,
+		"demux_hints":       pp.DemuxHints,
+		"requirements":      pp.Requirements,
+		"cred_fields":       pp.CredFields,
+		"param_fields":      pp.ParamFields,
+		"client_notes":      inv.ClientNotes,
+		"optional_params": map[string]any{
+			"listen_port": map[string]any{
+				"type":        "uint16",
+				"required":    false,
+				"description": "Public listen port when installing as a single-inbound set (not demux member). Omit to auto-pick.",
+				"constraint":  "At most one TCP and one UDP inbound may share a port across sets.",
+			},
+			"demux_sni": map[string]any{
+				"type":        "string",
+				"description": "SNI used for demux match / TLS server_name when installed inside a demux group.",
+			},
+		},
+		"inbound_template":  pp.InboundTemplate,
+		"outbound_template": pp.OutboundTemplate,
+		"protocol_meta": map[string]any{
+			"tag":         proto.Tag,
+			"short_name":  proto.ShortName,
+			"status":      proto.Status,
+			"description": pDesc,
+		},
+	})
+}
+
+func (s *Service) handleProtocolsList(w http.ResponseWriter, r *http.Request) {
+	lang := requestLang(r)
+	out := make([]any, 0)
+	for _, p := range presets.Protocols() {
+		title, desc := domain.ResolveI18n(p.I18n, lang)
+		out = append(out, map[string]any{
+			"tag":             p.Tag,
+			"short_name":      p.ShortName,
+			"status":          p.Status,
+			"title":           title,
+			"description":     desc,
+			"invariant_tags":  p.InvariantTags,
+			"singbox_type":    p.SingBoxType,
+		})
+	}
+	okJSON(w, 200, out)
+}
+
+func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
+	lang := requestLang(r)
+	p, err := presets.GetProtocol(r.PathValue("tag"))
+	if err != nil {
+		failJSON(w, 404, "not_found", err.Error())
+		return
+	}
+	title, desc := domain.ResolveI18n(p.I18n, lang)
+	invOut := make([]any, 0, len(p.InvariantTags))
+	for _, tag := range p.InvariantTags {
+		inv, err := presets.GetInvariant(tag)
+		if err != nil {
+			continue
+		}
+		pp := inv.ToProtocolPreset(lang)
+		item := map[string]any{
+			"tag":         pp.Name,
+			"short_name":  pp.ShortName,
+			"status":      pp.Status,
+			"description": pp.Description,
+			"traits":      pp.Traits,
+			"scores":      pp.Scores,
+			"demux_hints": pp.DemuxHints,
+			"aliases":     pp.Aliases,
+		}
+		invOut = append(invOut, item)
+	}
+	okJSON(w, 200, map[string]any{
+		"tag":            p.Tag,
+		"short_name":     p.ShortName,
+		"status":         p.Status,
+		"title":          title,
+		"description":    desc,
+		"singbox_type":   p.SingBoxType,
+		"invariant_tags": p.InvariantTags,
+		"invariants":     invOut,
+	})
 }
 
 func (s *Service) handleDemuxRecipesList(w http.ResponseWriter, _ *http.Request) {
@@ -1351,25 +1860,61 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 		return fmt.Errorf("without demux exactly one preset required")
 	}
 	for _, pn := range presetsList {
-		if _, err := presets.Get(pn); err != nil {
+		p, err := presets.Get(pn)
+		if err != nil {
 			return fmt.Errorf("cp_unknown_preset: %w", err)
+		}
+		if presetIsEndpoint(p) {
+			return fmt.Errorf("cp_invalid_preset: wireguard endpoint presets are managed via PUT /v1/controlplane/wg (singleton hub)")
 		}
 	}
 	seenBindingPreset := map[string]struct{}{}
 	for _, b := range bindings {
-		if _, ok := seenBindingPreset[b.Preset]; ok {
-			return fmt.Errorf("cp_invalid_bindings: duplicate preset binding %q", b.Preset)
+		canonical, ok := presets.CanonicalTag(b.Preset)
+		if !ok {
+			canonical = b.Preset
 		}
-		seenBindingPreset[b.Preset] = struct{}{}
+		if _, exists := seenBindingPreset[canonical]; exists {
+			return fmt.Errorf("cp_invalid_bindings: duplicate preset binding %q (canonical %q)", b.Preset, canonical)
+		}
+		seenBindingPreset[canonical] = struct{}{}
+		p, err := presets.Get(b.Preset)
+		if err != nil {
+			return fmt.Errorf("cp_unknown_preset: %w", err)
+		}
+		if err := validateBindingParams(p, b); err != nil {
+			return err
+		}
 	}
 	if set.HasDemux() {
 		if err := demuxrecipes.ValidateTemplate(set.DemuxTemplate); err != nil {
 			return fmt.Errorf("cp_invalid_demux: %w", err)
 		}
 	}
+	myNets := portNetworks(set)
 	for _, o := range others {
-		if o.Name != set.Name && o.ListenPort == set.ListenPort {
-			return fmt.Errorf("cp_port_conflict: port %d in use by %s", set.ListenPort, o.Name)
+		if o.Name == set.Name || o.ListenPort != set.ListenPort {
+			continue
+		}
+		otherNets := portNetworks(o)
+		for _, n := range myNets {
+			for _, on := range otherNets {
+				if n == on {
+					return fmt.Errorf("cp_port_conflict: port %d %s already used by set %q", set.ListenPort, n, o.Name)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding) error {
+	if len(p.ParamFields) == 0 {
+		return nil
+	}
+	for _, field := range p.ParamFields {
+		if strings.TrimSpace(b.Params[field]) == "" {
+			return fmt.Errorf("cp_invalid_bindings: preset %q requires bindings[].params[%q] (e.g. carrier room URL)", p.Name, field)
 		}
 	}
 	return nil
@@ -1518,6 +2063,13 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	set.CreatedAt = sets[idx].CreatedAt
 	set.UpdatedAt = time.Now().UTC()
+	if len(set.PeerSecrets) == 0 {
+		set.PeerSecrets = sets[idx].PeerSecrets
+	}
+	if _, err := s.ensurePeerSecrets(&set); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
 	sets[idx] = set
 	if err := s.store.SaveSets(sets); err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -1650,7 +2202,10 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(st.ActiveSets) == 0 {
-		if s.cfg.Owner != nil {
+		hub, _ := s.store.LoadWgHub()
+		if hub.Enabled {
+			_ = s.rematerialize(r.Context())
+		} else if s.cfg.Owner != nil {
 			if err := s.claimOwnership(configowner.ModeIdle, "deactivate_last_set", name); err != nil && s.log != nil {
 				s.log.Warn("controlplane deactivate claim idle failed", "err", err, "set", name)
 			}
@@ -1932,7 +2487,12 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	if len(sets) == 0 {
+	hub, err := s.store.LoadWgHub()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if len(sets) == 0 && !hub.Enabled {
 		failJSON(w, 409, "cp_no_active_set", "no active sets")
 		return
 	}
@@ -1948,6 +2508,23 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		_ = s.store.SaveUsers(users)
+	}
+	if hub.Enabled {
+		ensured, c2, err := s.ensureWgUserCreds([]domain.User{*user})
+		if err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
+		if c2 && len(ensured) == 1 {
+			*user = ensured[0]
+			for i := range users {
+				if users[i].ID == user.ID {
+					users[i] = *user
+					break
+				}
+			}
+			_ = s.store.SaveUsers(users)
+		}
 	}
 	filterSet := r.URL.Query().Get("set")
 	filterPresets := parsePresetQuery(r)
@@ -1968,6 +2545,10 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	var hubPtr *domain.WgHub
+	if hub.Enabled {
+		hubPtr = &hub
+	}
 	body, err := materialize.RenderSubscription(*user, sets, host, profile, materialize.SubscriptionFilters{
 		Set:           filterSet,
 		Presets:       filterPresets,
@@ -1977,7 +2558,7 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		Flow:          filterFlow,
 		Network:       filterNetwork,
 		StrictFilters: strictFilters,
-	}, assignments)
+	}, assignments, hubPtr)
 	if err != nil {
 		if strictFilters && strings.Contains(err.Error(), "cp_invalid_sub_filter") {
 			failJSON(w, 400, "cp_invalid_sub_filter", err.Error())

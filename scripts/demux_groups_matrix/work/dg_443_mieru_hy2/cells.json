@@ -1,0 +1,24 @@
+[
+  {
+    "tag": "mieru_tcp",
+    "port": 44858,
+    "protocol": "mieru",
+    "traits": [
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "hy2",
+    "port": 55356,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

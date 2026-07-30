@@ -206,6 +206,28 @@ func (s *Store) LoadRealityAssignments() (map[string]domain.RealityAssignment, e
 	return f.Assignments, nil
 }
 
+func (s *Store) LoadWgHub() (domain.WgHub, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var h domain.WgHub
+	err := readJSON(s.path("wg_hub.json"), &h)
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.DefaultWgHub(), nil
+	}
+	if err != nil {
+		return domain.WgHub{}, err
+	}
+	h.Normalize()
+	return h, nil
+}
+
+func (s *Store) SaveWgHub(h domain.WgHub) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h.Normalize()
+	return writeJSON(s.path("wg_hub.json"), h)
+}
+
 func (s *Store) SaveRealityAssignments(assignments map[string]domain.RealityAssignment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

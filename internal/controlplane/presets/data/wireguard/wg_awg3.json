@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "tag": "wg_awg3",
+  "protocol": "wireguard",
+  "aliases": ["awg3", "amnezia-wg3"],
+  "short_name": "AWG3",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "AmneziaWG 3 + masquerade",
+      "description": "AWG3 (HP/CPA/timings) + AWG2 + всегда masquerade."
+    }
+  },
+  "traits": ["udp", "endpoint", "wireguard", "awg", "awg3", "masquerade"],
+  "demux_hints": {
+    "network": ["udp"],
+    "looks_like": "raw_udp",
+    "compatible_with_demux": false
+  },
+  "scores": { "dpi": 9, "speed": 8, "mobile": 6, "setup": 4 },
+  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "cred_generators": {
+    "private_key": "curve25519",
+    "wg_host_index": "wg_host_index"
+  },
+  "requirements": { "build_tag": "with_awg" },
+  "endpoint_template": {
+    "type": "wireguard",
+    "tag": "cp-wg",
+    "mtu": 1280,
+    "address": [],
+    "private_key": "",
+    "listen_port": 51820,
+    "peers": []
+  },
+  "outbound_template": {
+    "type": "wireguard",
+    "tag": "{{tag}}",
+    "mtu": 1280,
+    "address": [],
+    "private_key": "{{user.private_key}}",
+    "peers": [
+      {
+        "address": "{{server}}",
+        "port": 0,
+        "public_key": "",
+        "allowed_ips": [],
+        "persistent_keepalive_interval": 25
+      }
+    ]
+  },
+  "client_notes": {
+    "masquerade": "всегда; AWG3 HP требует s≥12"
+  }
+}

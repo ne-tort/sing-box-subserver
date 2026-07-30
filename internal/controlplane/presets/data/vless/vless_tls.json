@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "tag": "vless_tls",
+  "protocol": "vless",
+  "aliases": [
+    "vless-tls"
+  ],
+  "short_name": "VLESS TLS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS TLS",
+      "description": "VLESS TCP с TLS-профилем controlplane."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 7,
+    "setup": 7
+  },
+  "cred_fields": [
+    "uuid",
+    "uuid_xtls",
+    "uuid_udp"
+  ],
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "packet_encoding": "xudp"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "client_notes": {
+    "variants": "flow-none / xtls-rprx-vision / udp-vision — отдельные inbound users"
+  }
+}

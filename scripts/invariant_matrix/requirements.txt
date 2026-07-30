@@ -1,0 +1,2 @@
+# Optional: PyYAML (usually already installed). Stdlib otherwise insufficient for manifests.
+PyYAML>=6.0

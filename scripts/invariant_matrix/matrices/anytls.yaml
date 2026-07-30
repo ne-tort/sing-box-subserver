@@ -1,0 +1,7 @@
+protocol: anytls
+mode: render
+cells:
+- tag: anytls
+  stage: 1
+- tag: anytls_idle
+  stage: 2

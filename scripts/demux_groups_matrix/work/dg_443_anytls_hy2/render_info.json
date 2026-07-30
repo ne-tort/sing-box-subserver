@@ -1,0 +1,19 @@
+{
+  "group": "dg_443_anytls_hy2",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 51257,
+    "hy2": 42848
+  },
+  "slot_snis": {
+    "tls": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "anytls": "www.microsoft.com"
+  },
+  "tags": [
+    "anytls",
+    "hy2"
+  ],
+  "reality": false
+}

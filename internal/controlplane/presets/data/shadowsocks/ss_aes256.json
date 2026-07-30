@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "tag": "ss_aes256",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-aes-256-gcm"
+  ],
+  "short_name": "SS AES256",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS AES-256-GCM",
+      "description": "Shadowsocks AES-256-GCM multi-user, TCP."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 8
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "method": "aes-256-gcm",
+    "users": [],
+    "network": "tcp"
+  },
+  "outbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "method": "aes-256-gcm",
+    "password": "{{user.password}}",
+    "network": "tcp"
+  }
+}

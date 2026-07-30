@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel",
+  "singbox_type": "trusttunnel",
+  "short_name": "TrustTunnel",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TrustTunnel",
+      "description": "TrustTunnel H2/H3 anti-DPI (with_trusttunnel)."
+    },
+    "en": {
+      "title": "TrustTunnel",
+      "description": "TrustTunnel (with_trusttunnel)."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ]
+}

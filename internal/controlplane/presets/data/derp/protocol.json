@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "derp",
+  "singbox_type": "derp",
+  "short_name": "DERP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "DERP",
+      "description": "Tailscale-compatible DERP proxy (curve25519), with_derp."
+    },
+    "en": {
+      "title": "DERP",
+      "description": "DERP proxy (with_derp)."
+    }
+  },
+  "default_cred_fields": [
+    "private_key",
+    "public_key"
+  ]
+}

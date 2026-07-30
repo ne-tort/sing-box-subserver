@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_vk_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-vk",
+    "carrier-vk-shared"
+  ],
+  "short_name": "Carrier VK shared",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier VK shared",
+      "description": "Self-host VK WRAP/DTLS (не vk.ru/call). server/port ← set; опц. params.vk_hash."
+    }
+  },
+  "traits": [
+    "udp",
+    "shared_auth",
+    "wg_star",
+    "needs_listen",
+    "self_host",
+    "vk"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "inbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "provider": "vk",
+    "auth": "shared",
+    "link": {
+      "server": "0.0.0.0",
+      "server_port": "{{listen_port}}",
+      "password": "{{peer.password}}",
+      "vk_hash": "{{param.vk_hash}}",
+      "wrap_password": "{{param.wrap_password}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "outbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "provider": "vk",
+    "link": {
+      "server": "{{server}}",
+      "server_port": "{{listen_port}}",
+      "password": "{{peer.password}}",
+      "device_id": "{{user.device_id}}",
+      "vk_hash": "{{param.vk_hash}}",
+      "wrap_password": "{{param.wrap_password}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "vk": "userspace WRAP inbound; params.vk_hash = user:pass@turn-host:port (опц.)"
+  },
+  "peer_secret_fields": {
+    "password": "password"
+  }
+}

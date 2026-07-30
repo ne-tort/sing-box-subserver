@@ -1,0 +1,36 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "direct",
+      "tag": "iperf-in",
+      "listen": "127.0.0.1",
+      "listen_port": 15201,
+      "override_address": "192.168.16.2",
+      "override_port": 5201,
+      "network": [
+        "tcp"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "ssh",
+      "tag": "ssh_password",
+      "server": "192.168.16.4",
+      "server_port": 1443,
+      "user": "u1",
+      "password": "matrix-pass-1",
+      "client_version": "SSH-2.0-OpenSSH_8.9"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "ssh_password"
+  }
+}

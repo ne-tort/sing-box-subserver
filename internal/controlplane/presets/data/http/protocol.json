@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "http",
+  "singbox_type": "http",
+  "short_name": "HTTP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "HTTP",
+      "description": "HTTP CONNECT прокси."
+    },
+    "en": {
+      "title": "HTTP",
+      "description": "HTTP CONNECT прокси."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ]
+}

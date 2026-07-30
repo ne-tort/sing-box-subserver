@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "tag": "vless_tls_mux",
+  "protocol": "vless",
+  "aliases": [
+    "vless-tls-mux"
+  ],
+  "short_name": "VLESS mux",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS TLS + multiplex",
+      "description": "VLESS+TLS с multiplex (smux+padding) — меньше TCP handshake, другой pattern для DPI."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "multiplex"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid",
+    "uuid_xtls",
+    "uuid_udp"
+  ],
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "multiplex": {
+      "enabled": true,
+      "padding": true
+    }
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "packet_encoding": "xudp",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "multiplex": {
+      "enabled": true,
+      "protocol": "smux",
+      "padding": true,
+      "max_connections": 4,
+      "min_streams": 4,
+      "max_streams": 16
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "flow": "Vision + mux обычно несовместимы — оставляем полный catalog, оператор может сузить enabled_user_variants"
+  }
+}

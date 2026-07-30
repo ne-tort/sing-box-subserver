@@ -1,0 +1,43 @@
+{
+  "group": "dg_443_dense8",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 42441,
+    "hy2": 42968,
+    "sudoku_pad": 54214,
+    "tuic": 55802,
+    "vless_grpc_reality": 54509,
+    "vless_reality": 55363,
+    "vless_tls": 56270,
+    "vless_ws_tls": 53166
+  },
+  "slot_snis": {
+    "hy2": "www.bing.com",
+    "r1": "www.microsoft.com",
+    "r2": "www.apple.com",
+    "t1": "www.amazon.com",
+    "t2": "gateway.icloud.com",
+    "t3": "dl.google.com",
+    "tuic": "www.yahoo.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_grpc_reality": "www.apple.com",
+    "anytls": "www.amazon.com",
+    "vless_tls": "gateway.icloud.com",
+    "vless_ws_tls": "dl.google.com",
+    "hy2": "www.bing.com",
+    "tuic": "www.yahoo.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_grpc_reality",
+    "anytls",
+    "vless_tls",
+    "vless_ws_tls",
+    "sudoku_pad",
+    "hy2",
+    "tuic"
+  ],
+  "reality": true
+}

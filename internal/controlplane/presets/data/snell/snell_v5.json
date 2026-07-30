@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "tag": "snell_v5",
+  "protocol": "snell",
+  "aliases": [
+    "snell",
+    "snell-v5"
+  ],
+  "short_name": "Snell v5",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Snell v5",
+      "description": "Snell v5: peer PSK + users.userkey; HTTP obfs_mode."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "snell AEAD",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "userkey"
+  ],
+  "peer_secret_fields": {
+    "psk": "password"
+  },
+  "inbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 5,
+    "psk": "{{peer.psk}}",
+    "users": [],
+    "obfs_mode": "http"
+  },
+  "outbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 4,
+    "psk": "{{peer.psk}}",
+    "userkey": "{{user.userkey}}",
+    "obfs_mode": "http",
+    "obfs_host": "{{param.obfs_host}}"
+  },
+  "client_notes": {
+    "version": "inbound v5 ~ outbound v4 wire",
+    "psk": "peer_symmetric",
+    "userkey": "user_symmetric",
+    "params": "optional bindings[].params overrides: obfs_host"
+  }
+}

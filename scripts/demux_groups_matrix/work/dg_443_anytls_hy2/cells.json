@@ -1,0 +1,25 @@
+[
+  {
+    "tag": "anytls",
+    "port": 51257,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 42848,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

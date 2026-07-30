@@ -1,0 +1,21 @@
+protocol: shadowsocks
+mode: render
+cells:
+- tag: ss_aes128
+  stage: 1
+- tag: ss_2022_aes128
+  stage: 1
+- tag: ss_aes128_mux
+  stage: 2
+- tag: ss_aes128_uot
+  stage: 2
+- tag: ss_aes256
+  stage: 2
+- tag: ss_chacha20
+  stage: 2
+- tag: ss_2022_aes256
+  stage: 2
+- tag: ss_2022_chacha
+  stage: 2
+- tag: ss_2022_aes128_mux
+  stage: 2

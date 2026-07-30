@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "tag": "ss_2022_aes256",
+  "protocol": "shadowsocks",
+  "aliases": [],
+  "short_name": "SS2022-256",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS 2022 AES-256",
+      "description": "Shadowsocks 2022-blake3-aes-256-gcm multi-user; inbound server password (peer) + per-user password (оба base64 32B)."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SS2022 AEAD",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 3,
+    "speed": 8,
+    "mobile": 6,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "cred_generators": {
+    "password": "ss2022_32"
+  },
+  "peer_secret_fields": {
+    "password": "ss2022_32"
+  },
+  "inbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "method": "2022-blake3-aes-256-gcm",
+    "password": "{{peer.password}}",
+    "users": [],
+    "network": "tcp"
+  },
+  "outbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "method": "2022-blake3-aes-256-gcm",
+    "password": "{{user.password}}",
+    "network": "tcp"
+  },
+  "client_notes": {
+    "password": "subscription password = peer.password + \":\" + user.password (SIP022 multi-user)",
+    "peer.password": "server PSK in set.peer_secrets[preset/password]"
+  }
+}

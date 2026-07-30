@@ -1,0 +1,29 @@
+protocol: vmess
+mode: render
+cells:
+- tag: vmess_tls
+  stage: 1
+- tag: vmess_reality
+  stage: 1
+- tag: vmess_ws_tls
+  stage: 2
+- tag: vmess_ws_reality
+  stage: 2
+- tag: vmess_grpc_tls
+  stage: 2
+- tag: vmess_grpc_reality
+  stage: 2
+- tag: vmess_http_tls
+  stage: 2
+- tag: vmess_http_reality
+  stage: 2
+- tag: vmess_httpupgrade_tls
+  stage: 2
+- tag: vmess_httpupgrade_reality
+  stage: 2
+- tag: vmess_tls_mux
+  stage: 2
+- tag: vmess_quic_tls
+  stage: 2
+- tag: vmess_tcp
+  stage: 2

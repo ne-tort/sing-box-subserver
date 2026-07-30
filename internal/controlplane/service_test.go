@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
@@ -397,6 +398,86 @@ func TestEnsureCredsFieldLevelFill(t *testing.T) {
 	}
 	if u.Creds["vless-tcp"]["uuid_xtls"] == nil || u.Creds["vless-tcp"]["uuid_xtls"] == "" {
 		t.Fatal("missing vless uuid_xtls should be generated")
+	}
+}
+
+func TestEnsureSSHEd25519Creds(t *testing.T) {
+	t.Parallel()
+	svc := &Service{}
+	u := domain.User{Creds: map[string]map[string]any{}}
+	if _, err := svc.ensureCreds(&u); err != nil {
+		t.Fatal(err)
+	}
+	creds := u.Creds["ssh_pubkey"]
+	if creds == nil {
+		t.Fatal("ssh_pubkey missing")
+	}
+	priv, _ := creds["private_key"].(string)
+	pub, _ := creds["public_key"].(string)
+	if !strings.Contains(priv, "PRIVATE KEY") || !strings.HasPrefix(pub, "ssh-ed25519 ") {
+		t.Fatalf("ssh keys bad: priv=%q pub=%q", priv[:min(40, len(priv))], pub)
+	}
+}
+
+func TestValidateBindingParamsRequiresRoom(t *testing.T) {
+	t.Parallel()
+	svc := &Service{}
+	set := domain.InboundSet{
+		Name: "cj", Listen: "::", ListenPort: 1,
+		Bindings: []domain.SetBinding{{Preset: "carrier_jitsi_shared"}},
+	}
+	err := svc.validateSet(set, nil)
+	if err == nil || !strings.Contains(err.Error(), "params") {
+		t.Fatalf("want params error, got %v", err)
+	}
+	set.Bindings[0].Params = map[string]string{"room": "https://meet.jit.si/r"}
+	if err := svc.validateSet(set, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnsureDERPCurve25519CredsAndPeer(t *testing.T) {
+	t.Parallel()
+	svc := &Service{}
+	u := domain.User{Creds: map[string]map[string]any{}}
+	if _, err := svc.ensureCreds(&u); err != nil {
+		t.Fatal(err)
+	}
+	creds := u.Creds["derp_tls"]
+	if creds == nil {
+		t.Fatal("derp_tls creds missing")
+	}
+	priv, _ := creds["private_key"].(string)
+	pub, _ := creds["public_key"].(string)
+	if priv == "" || pub == "" {
+		t.Fatalf("derp keys empty: %v", creds)
+	}
+	wantPub, err := curve25519PublicFromPrivate(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub != wantPub {
+		t.Fatalf("public mismatch got %s want %s", pub, wantPub)
+	}
+	set := domain.InboundSet{Name: "d1", Presets: []string{"derp_tls"}}
+	changed, err := svc.ensurePeerSecrets(&set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected peer secrets")
+	}
+	sp := set.PeerSecrets["derp_tls/private_key"]
+	spub := set.PeerSecrets["derp_tls/public_key"]
+	if sp == "" || spub == "" {
+		t.Fatalf("peer secrets=%v", set.PeerSecrets)
+	}
+	wantPeerPub, err := curve25519PublicFromPrivate(sp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spub != wantPeerPub {
+		t.Fatalf("peer public mismatch")
 	}
 }
 

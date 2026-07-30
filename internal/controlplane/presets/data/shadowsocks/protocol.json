@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "shadowsocks",
+  "singbox_type": "shadowsocks",
+  "short_name": "Shadowsocks",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Shadowsocks",
+      "description": "Классический AEAD multi-user без TLS."
+    },
+    "en": {
+      "title": "Shadowsocks",
+      "description": "Классический AEAD multi-user без TLS."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

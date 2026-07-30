@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_http_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-http-reality"
+  ],
+  "short_name": "VMess HTTP+R",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess HTTP+R",
+      "description": "vmess + Reality + HTTP/2 transport."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "http",
+    "reality"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "Reality TLS then HTTP/2",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "http",
+      "host": [
+        "{{param.http_host}}"
+      ],
+      "path": "{{param.http_path}}",
+      "method": "PUT",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ],
+        "Accept-Language": [
+          "en-US,en;q=0.9"
+        ]
+      },
+      "idle_timeout": "15s",
+      "ping_timeout": "15s"
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "http",
+      "host": [
+        "{{param.http_host}}"
+      ],
+      "path": "{{param.http_path}}",
+      "method": "PUT",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ],
+        "Accept-Language": [
+          "en-US,en;q=0.9"
+        ]
+      },
+      "idle_timeout": "15s",
+      "ping_timeout": "15s"
+    },
+    "uuid": "{{user.uuid}}",
+    "security": "auto"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "client_notes": {
+    "params": "optional bindings[].params overrides: http_host, http_path",
+    "http_path_default": "/vmess-h2"
+  }
+}

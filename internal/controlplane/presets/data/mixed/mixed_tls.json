@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "tag": "mixed_tls",
+  "protocol": "mixed",
+  "aliases": [
+    "mixed-tls"
+  ],
+  "short_name": "Mixed TLS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Mixed + TLS",
+      "description": "HTTP+SOCKS за TLS (DPI видит ClientHello)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 8
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mixed",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "http",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  }
+}

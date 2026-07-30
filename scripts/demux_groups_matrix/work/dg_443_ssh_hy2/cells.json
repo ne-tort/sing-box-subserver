@@ -1,0 +1,24 @@
+[
+  {
+    "tag": "ssh_password",
+    "port": 58211,
+    "protocol": "ssh",
+    "traits": [
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "hy2",
+    "port": 59251,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

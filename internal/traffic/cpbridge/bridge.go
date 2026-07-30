@@ -90,7 +90,7 @@ func DataplaneKeysForUser(u cpdomain.User, sets []cpdomain.InboundSet) []string 
 			if err != nil {
 				continue
 			}
-			variants := cpdomain.UserVariantsForProtocol(p.Protocol, b)
+			variants := cpdomain.UserVariantsForProtocol(p.Protocol, b, p.DefaultUserVariants)
 			if len(variants) == 0 {
 				continue
 			}

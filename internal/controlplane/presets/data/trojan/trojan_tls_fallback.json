@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_tls_fallback",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-fallback"
+  ],
+  "short_name": "Trojan fb",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Trojan TLS + fallback",
+      "description": "Trojan+TLS с fallback на 127.0.0.1:18080 (нужен локальный HTTP); DPI/пробы без пароля видят обычный сайт."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "fallback"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1",
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "fallback": {
+      "server": "127.0.0.1",
+      "server_port": 18080
+    },
+    "fallback_for_alpn": {
+      "h2": {
+        "server": "127.0.0.1",
+        "server_port": 18080
+      },
+      "http/1.1": {
+        "server": "127.0.0.1",
+        "server_port": 18080
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "fallback": "inbound-only; поднять локальный HTTP на :18080 или сменить адрес"
+  }
+}

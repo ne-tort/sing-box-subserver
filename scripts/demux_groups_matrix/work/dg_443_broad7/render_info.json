@@ -1,0 +1,39 @@
+{
+  "group": "dg_443_broad7",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 46430,
+    "hy2": 45673,
+    "mieru_tcp": 54544,
+    "tuic": 47599,
+    "vless_grpc_tls": 59439,
+    "vless_httpupgrade_reality": 41087,
+    "vless_reality": 51825
+  },
+  "slot_snis": {
+    "hy2": "dl.google.com",
+    "r1": "www.microsoft.com",
+    "r2": "www.apple.com",
+    "t1": "www.amazon.com",
+    "t2": "gateway.icloud.com",
+    "tuic": "www.bing.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_httpupgrade_reality": "www.apple.com",
+    "anytls": "www.amazon.com",
+    "vless_grpc_tls": "gateway.icloud.com",
+    "hy2": "dl.google.com",
+    "tuic": "www.bing.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_httpupgrade_reality",
+    "anytls",
+    "vless_grpc_tls",
+    "mieru_tcp",
+    "hy2",
+    "tuic"
+  ],
+  "reality": true
+}

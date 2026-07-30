@@ -45,9 +45,15 @@ func BuildSubscriptionCatalog(sets []domain.InboundSet) SubscriptionCatalog {
 			if err != nil {
 				continue
 			}
-			for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b) {
+			for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b, p.DefaultUserVariants) {
 				cat.Variants[vv.Name] = struct{}{}
 				for _, t := range vv.QueryTags {
+					cat.Tags[t] = struct{}{}
+				}
+			}
+			for _, cp := range domain.ClientProfilesForProtocol(p.Protocol, b, p.DefaultClientProfiles) {
+				cat.Profiles[cp.Name] = struct{}{}
+				for _, t := range cp.QueryTags {
 					cat.Tags[t] = struct{}{}
 				}
 			}

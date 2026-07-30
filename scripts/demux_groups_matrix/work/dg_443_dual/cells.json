@@ -1,0 +1,26 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 50909,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 59018,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

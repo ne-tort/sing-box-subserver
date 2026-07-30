@@ -1,0 +1,19 @@
+{
+  "group": "dg_443_dual",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 59018,
+    "vless_reality": 50909
+  },
+  "slot_snis": {
+    "tcp": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com"
+  },
+  "tags": [
+    "vless_reality",
+    "hy2"
+  ],
+  "reality": true
+}

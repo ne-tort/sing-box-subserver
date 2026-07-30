@@ -33,6 +33,12 @@ func validateCreds(creds map[string]map[string]any) error {
 			}
 			s, ok := v.(string)
 			if !ok {
+				if k == "wg_host_index" {
+					switch v.(type) {
+					case float64, int, int64:
+						continue
+					}
+				}
 				return fmt.Errorf("cp_invalid_creds: preset %q field %q must be a string", presetName, k)
 			}
 			if strings.TrimSpace(s) == "" {
@@ -78,13 +84,74 @@ func credFieldEmpty(v any) bool {
 	return strings.TrimSpace(s) == ""
 }
 
-func generateCredField(field string) (any, error) {
-	if field == "uuid" || strings.HasPrefix(field, "uuid") {
+func generateCredField(field, gen string) (any, error) {
+	if gen == "" {
+		if field == "uuid" || strings.HasPrefix(field, "uuid") {
+			gen = "uuid"
+		} else if field == "private_key" {
+			gen = "curve25519"
+		} else {
+			gen = "password"
+		}
+	}
+	switch gen {
+	case "uuid":
 		tok, err := randomToken()
 		if err != nil {
 			return nil, err
 		}
 		return fmt.Sprintf("%s-%s-%s-%s-%s", tok[0:8], tok[8:12], tok[12:16], tok[16:20], tok[20:32]), nil
+	case "password":
+		return randomPassword()
+	case "ss2022_16":
+		return randomBase64Key(16)
+	case "ss2022_32":
+		return randomBase64Key(32)
+	case "curve25519":
+		return randomCurve25519Private()
+	case "ssh_ed25519":
+		return randomSSHEd25519PrivatePEM()
+	default:
+		return nil, fmt.Errorf("unknown cred generator %q for field %q", gen, field)
 	}
-	return randomPassword()
+}
+
+// ensureSSHPublicFromPrivate fills public_key (authorized_keys line) from private_key PEM.
+func ensureSSHPublicFromPrivate(creds map[string]any) (bool, error) {
+	if creds == nil {
+		return false, nil
+	}
+	if !credFieldEmpty(creds["public_key"]) {
+		return false, nil
+	}
+	priv, ok := creds["private_key"].(string)
+	if !ok || strings.TrimSpace(priv) == "" {
+		return false, nil
+	}
+	pub, err := sshPublicFromPrivatePEM(priv)
+	if err != nil {
+		return false, err
+	}
+	creds["public_key"] = pub
+	return true, nil
+}
+
+// ensureCurve25519Public fills public_key from private_key when both are expected.
+func ensureCurve25519Public(creds map[string]any, wantPublic bool) (bool, error) {
+	if !wantPublic || creds == nil {
+		return false, nil
+	}
+	if !credFieldEmpty(creds["public_key"]) {
+		return false, nil
+	}
+	priv, ok := creds["private_key"].(string)
+	if !ok || strings.TrimSpace(priv) == "" {
+		return false, nil
+	}
+	pub, err := curve25519PublicFromPrivate(priv)
+	if err != nil {
+		return false, err
+	}
+	creds["public_key"] = pub
+	return true, nil
 }

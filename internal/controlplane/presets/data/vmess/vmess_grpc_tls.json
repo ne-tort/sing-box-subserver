@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_grpc_tls",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-grpc-tls"
+  ],
+  "short_name": "VMess gRPC",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess gRPC TLS",
+      "description": "VMess + TLS + gRPC."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "grpc"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then grpc",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ]
+    },
+    "transport": {
+      "type": "grpc",
+      "service_name": "VMessService",
+      "idle_timeout": "15s",
+      "ping_timeout": "15s",
+      "permit_without_stream": false
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "grpc",
+      "service_name": "VMessService",
+      "idle_timeout": "15s",
+      "ping_timeout": "15s",
+      "permit_without_stream": false
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "security": "outbound-only: sec-auto / sec-aes128 / sec-chacha / pkt-xudp через enabled_client_profiles"
+  }
+}

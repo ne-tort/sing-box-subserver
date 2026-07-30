@@ -1,0 +1,14 @@
+protocol: wireguard
+mode: reuse
+stage: 4
+reuse_dir: ../../../sing-box-lx/lx-test/awg-matrix-docker
+reuse_cmd: ["powershell", "-NoProfile", "-File", "./run-matrix.ps1"]
+reuse_timeout: 900
+tags: [wg, wg_awg2, wg_awg3]
+cells:
+- tag: wg
+  stage: 4
+- tag: wg_awg2
+  stage: 4
+- tag: wg_awg3
+  stage: 4

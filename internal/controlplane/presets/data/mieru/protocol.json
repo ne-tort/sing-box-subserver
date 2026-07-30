@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "mieru",
+  "singbox_type": "mieru",
+  "short_name": "Mieru",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru",
+      "description": "Mieru/mita (with_mieru): TCP или UDP transport."
+    },
+    "en": {
+      "title": "Mieru",
+      "description": "Mieru/mita (with_mieru)."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "group": "dg_443_vless_family",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 57202,
+    "vless_grpc_tls": 57475,
+    "vless_reality": 54899,
+    "vless_tls": 56657,
+    "vless_ws_reality": 56267
+  },
+  "slot_snis": {
+    "vgrpc": "gateway.icloud.com",
+    "vr": "www.microsoft.com",
+    "vtls": "www.amazon.com",
+    "vws": "www.apple.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_ws_reality": "www.apple.com",
+    "vless_tls": "www.amazon.com",
+    "vless_grpc_tls": "gateway.icloud.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_ws_reality",
+    "vless_tls",
+    "vless_grpc_tls",
+    "hy2"
+  ],
+  "reality": true
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "tag": "shadowtls_v3_wildcard",
+  "protocol": "shadowtls",
+  "aliases": [
+    "shadowtls-wildcard",
+    "shadowtls-v3-wildcard"
+  ],
+  "short_name": "ShadowTLS wild",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowTLS v3 wildcard",
+      "description": "ShadowTLS v3 wildcard_sni=authed — SNI из ClientHello для handshake."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_mimic",
+    "wildcard_sni"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello → wildcard handshake",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "shadowtls",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 3,
+    "strict_mode": true,
+    "users": [],
+    "handshake": {
+      "server": "{{param.handshake_server}}",
+      "server_port": 443
+    },
+    "wildcard_sni": "authed"
+  },
+  "outbound_template": {
+    "type": "shadowtls",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 3,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{param.handshake_server}}",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      },
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "client_notes": {
+    "wildcard_sni": "authed — только после успешной auth; outbound SNI = handshake target",
+    "params": "optional bindings[].params overrides: handshake_server"
+  }
+}

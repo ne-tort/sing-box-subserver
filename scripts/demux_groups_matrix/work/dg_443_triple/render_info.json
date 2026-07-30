@@ -1,0 +1,23 @@
+{
+  "group": "dg_443_triple",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 59041,
+    "hy2": 51622,
+    "vless_reality": 47307
+  },
+  "slot_snis": {
+    "reality": "www.microsoft.com",
+    "tls": "www.apple.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "anytls": "www.apple.com"
+  },
+  "tags": [
+    "vless_reality",
+    "anytls",
+    "hy2"
+  ],
+  "reality": true
+}

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_tls",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-tcp"
+  ],
+  "short_name": "Trojan TLS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan TLS",
+      "description": "Trojan поверх TCP+TLS (профиль CP)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 7
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  }
+}

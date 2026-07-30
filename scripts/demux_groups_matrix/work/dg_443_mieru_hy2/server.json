@@ -1,0 +1,89 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "demux",
+      "tag": "cp-demux-dg-matrix",
+      "listen": "0.0.0.0",
+      "listen_port": 1443,
+      "network": [
+        "tcp",
+        "udp"
+      ],
+      "inspect_timeout": "3s",
+      "rules": [
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 55356
+            }
+          },
+          "match": {
+            "protocol": "quic"
+          },
+          "name": "quic-quic"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 44858
+            }
+          },
+          "match": {
+            "always": true
+          },
+          "name": "plain-mieru"
+        }
+      ]
+    },
+    {
+      "type": "mieru",
+      "tag": "mieru_tcp",
+      "listen": "127.0.0.1",
+      "listen_port": 44858,
+      "transport": "TCP",
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "mtu": 1400,
+      "user_hint_is_mandatory": false
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "listen": "127.0.0.1",
+      "listen_port": 55356,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "matrix.local",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "ignore_client_bandwidth": true,
+      "up_mbps": 100,
+      "down_mbps": 100
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

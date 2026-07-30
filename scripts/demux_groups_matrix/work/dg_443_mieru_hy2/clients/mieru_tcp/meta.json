@@ -1,0 +1,7 @@
+{
+  "tag": "mieru_tcp",
+  "iperf_mode": "tcp",
+  "demux_sni": "matrix.local",
+  "public_port": 1443,
+  "member_port": 44858
+}

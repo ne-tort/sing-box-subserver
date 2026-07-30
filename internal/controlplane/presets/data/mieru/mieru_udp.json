@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "tag": "mieru_udp",
+  "protocol": "mieru",
+  "aliases": [
+    "mieru-udp"
+  ],
+  "short_name": "Mieru UDP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru UDP",
+      "description": "Mieru UDP transport."
+    }
+  },
+  "traits": [
+    "udp"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "mieru UDP",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 4,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "transport": "UDP",
+    "users": [],
+    "user_hint_is_mandatory": false,
+    "mtu": 1400,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "outbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "transport": "UDP",
+    "username": "{{user.name}}",
+    "password": "{{user.password}}",
+    "multiplexing": "MULTIPLEXING_HIGH",
+    "handshake_mode": "HANDSHAKE_STANDARD",
+    "mtu": 1400,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "requirements": {
+    "build_tag": "with_mieru",
+    "udp": true
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: traffic_pattern"
+  }
+}

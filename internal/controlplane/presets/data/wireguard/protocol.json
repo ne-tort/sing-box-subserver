@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "tag": "wireguard",
+  "sing_box_type": "wireguard",
+  "i18n": {
+    "ru": {
+      "title": "WireGuard",
+      "description": "Singleton WireGuard / AmneziaWG endpoint (не inbound)."
+    }
+  }
+}

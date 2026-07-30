@@ -1,0 +1,9 @@
+protocol: ssh
+mode: render
+cells:
+- tag: ssh_password
+  stage: 5
+- tag: ssh_uot
+  stage: 5
+- tag: ssh_pubkey
+  stage: 5

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "tag": "hy1_obfs",
+  "protocol": "hysteria",
+  "aliases": [
+    "hysteria-obfs"
+  ],
+  "short_name": "Hy1 obfs",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria v1 + obfs",
+      "description": "Hysteria1 + peer obfs string (симметрично на in/out)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "obfs"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "hysteria"
+    ],
+    "sni_required": true,
+    "first_bytes": "obfuscated QUIC",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 7,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "auth_str"
+  ],
+  "peer_secret_fields": {
+    "obfs": "password"
+  },
+  "inbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "obfs": "{{peer.obfs}}",
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "obfs": "{{peer.obfs}}",
+    "auth_str": "{{user.auth_str}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  }
+}

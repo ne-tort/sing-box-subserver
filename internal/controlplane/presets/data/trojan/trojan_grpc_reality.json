@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_grpc_reality",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-grpc-reality"
+  ],
+  "short_name": "Trojan gRPC+R",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan gRPC+R",
+      "description": "trojan + Reality + gRPC (ALPN h2)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "grpc",
+    "reality"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "Reality TLS then h2 gRPC",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ]
+    },
+    "transport": {
+      "type": "grpc",
+      "service_name": "GunService",
+      "idle_timeout": "15s",
+      "ping_timeout": "15s",
+      "permit_without_stream": false
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "grpc",
+      "service_name": "GunService",
+      "idle_timeout": "15s",
+      "ping_timeout": "15s",
+      "permit_without_stream": false
+    },
+    "password": "{{user.password}}"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  }
+}

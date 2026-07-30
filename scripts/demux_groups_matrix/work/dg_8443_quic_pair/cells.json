@@ -1,0 +1,26 @@
+[
+  {
+    "tag": "hy2",
+    "port": 50612,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 52903,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  }
+]

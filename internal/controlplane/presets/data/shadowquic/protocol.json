@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic",
+  "singbox_type": "shadowquic",
+  "short_name": "ShadowQUIC",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC",
+      "description": "ShadowQUIC + JLS SNI camouflage (with_shadowquic)."
+    },
+    "en": {
+      "title": "ShadowQUIC",
+      "description": "ShadowQUIC + JLS (with_shadowquic)."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "tag": "hy1",
+  "protocol": "hysteria",
+  "aliases": [
+    "hysteria",
+    "hysteria1"
+  ],
+  "short_name": "Hy1",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria v1",
+      "description": "Hysteria1 UDP/QUIC + TLS; users.auth_str (не password)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "hysteria"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 5
+  },
+  "cred_fields": [
+    "auth_str"
+  ],
+  "inbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "auth_str": "{{user.auth_str}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "client_notes": {
+    "auth_str": "user_symmetric: inbound users[].auth_str <-> outbound auth_str"
+  }
+}

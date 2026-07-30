@@ -17,3 +17,4 @@ flowchart LR
 | Guide set | Audience | Design docs (separate) |
 |-----------|----------|------------------------|
 | [traffic/](traffic/00-index.md) | Ops enabling accounting, shaping, quotas | [`docs/traffic/`](../traffic/00-index.md) |
+| [controlplane-presets/](controlplane-presets/00-index.md) | Protocol/invariant catalog, API `lang` | [`docs/controlplane/`](../controlplane/00-index.md) |

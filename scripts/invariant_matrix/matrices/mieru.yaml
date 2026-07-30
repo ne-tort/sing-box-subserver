@@ -1,0 +1,9 @@
+protocol: mieru
+mode: render
+cells:
+- tag: mieru_tcp
+  stage: 3
+- tag: mieru_udp
+  stage: 3
+  # UDP transport; TCP payload still expected through tunnel.
+  note: udp-transport

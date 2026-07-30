@@ -1,0 +1,15 @@
+protocol: shadowtls
+mode: skip
+stage: 5
+skip_reason: "standalone ShadowTLS does not carry TCP destination (needs SS/VLESS detour)"
+tags:
+- shadowtls_v3
+- shadowtls_v3_wildcard
+- shadowtls_v3_wildcard_all
+cells:
+- tag: shadowtls_v3
+  stage: 5
+- tag: shadowtls_v3_wildcard
+  stage: 5
+- tag: shadowtls_v3_wildcard_all
+  stage: 5

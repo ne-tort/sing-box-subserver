@@ -1,0 +1,9 @@
+protocol: sudoku
+mode: render
+cells:
+- tag: sudoku_pad
+  stage: 3
+- tag: sudoku_httpmask
+  stage: 3
+- tag: sudoku_aes
+  stage: 3

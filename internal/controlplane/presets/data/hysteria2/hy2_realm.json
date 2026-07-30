@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "tag": "hy2_realm",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2-realm"
+  ],
+  "short_name": "Hy2 realm",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2 Realm",
+      "description": "Hy2 inbound realm{} (server_url/realm_id/stun) + peer token. Требует params.realm_server_url + realm_id."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "realm"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 9,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "ignore_client_bandwidth": true,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "realm": {
+      "server_url": "{{param.realm_server_url}}",
+      "token": "{{peer.realm_token}}",
+      "realm_id": "{{param.realm_id}}",
+      "stun_servers": [
+        "stun.l.google.com:19302"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "realm": {
+      "server_url": "{{param.realm_server_url}}",
+      "token": "{{peer.realm_token}}",
+      "realm_id": "{{param.realm_id}}",
+      "stun_servers": [
+        "stun.l.google.com:19302"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "peer_secret_fields": {
+    "realm_token": "password"
+  },
+  "param_fields": [
+    "realm_server_url",
+    "realm_id"
+  ],
+  "client_notes": {
+    "realm": "params.realm_server_url + realm_id; peer_secrets realm_token"
+  }
+}

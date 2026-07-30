@@ -1,0 +1,21 @@
+{
+  "group": "dg_443_quic_pair_sni",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 59597,
+    "tuic": 42853
+  },
+  "slot_snis": {
+    "hy2": "www.microsoft.com",
+    "tuic": "www.apple.com"
+  },
+  "preset_sni": {
+    "hy2": "www.microsoft.com",
+    "tuic": "www.apple.com"
+  },
+  "tags": [
+    "hy2",
+    "tuic"
+  ],
+  "reality": false
+}

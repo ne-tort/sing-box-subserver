@@ -5,8 +5,9 @@
 Produce a **complete** server-side sing-box JSON document from:
 
 - **all** `active_sets`
+- optional singleton **WgHub** → `endpoints[]` (profile `wg`/`wg_awg2`/`wg_awg3`)
 - embedded `ProtocolPreset`s referenced by those sets
-- **eligible** local users
+- **eligible** local users (`speed_*` → WG peer `up_mbps`/`down_mbps`)
 - agent `controlplane.public_host`
 - validated Reality profile pool + sticky Reality assignments
 

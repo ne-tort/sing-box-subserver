@@ -1,0 +1,15 @@
+{
+  "group": "dg_443_snell_hy2",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 55330,
+    "snell_v5": 51074
+  },
+  "slot_snis": {},
+  "preset_sni": {},
+  "tags": [
+    "snell_v5",
+    "hy2"
+  ],
+  "reality": false
+}

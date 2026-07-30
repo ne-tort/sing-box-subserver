@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_httpmask",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-httpmask"
+  ],
+  "short_name": "Sudoku HTTP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku HTTPMask",
+      "description": "Sudoku + httpmask legacy (DPI: HTTP-like framing поверх TCP)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key",
+    "httpmask"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP-like sudoku mask",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "peer_secret_fields": {
+    "key": "password"
+  },
+  "inbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "chacha20-poly1305",
+    "padding_min": 8,
+    "padding_max": 24,
+    "table_type": "prefer_ascii",
+    "enable_pure_downlink": true,
+    "handshake_timeout": 5,
+    "fallback": "{{param.fallback}}",
+    "suspicious_action": "fallback",
+    "multiplex": "off",
+    "httpmask": {
+      "disable": false,
+      "mode": "legacy",
+      "path_root": "/sudoku"
+    }
+  },
+  "outbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "chacha20-poly1305",
+    "padding_min": 8,
+    "padding_max": 24,
+    "table_type": "prefer_ascii",
+    "enable_pure_downlink": true,
+    "multiplex": "off",
+    "httpmask": {
+      "disable": false,
+      "mode": "legacy",
+      "path_root": "/sudoku"
+    }
+  },
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  }
+}

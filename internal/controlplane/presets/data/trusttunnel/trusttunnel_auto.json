@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel_auto",
+  "protocol": "trusttunnel",
+  "aliases": [
+    "trusttunnel-auto"
+  ],
+  "short_name": "TT auto",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TrustTunnel auto",
+      "description": "TrustTunnel upstream_protocol=auto (H3→H2 fallback) + ICMP off."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp",
+    "quic",
+    "tls_custom",
+    "http3",
+    "auto"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "hostname": "{{server}}",
+    "users": [],
+    "tls": {
+      "server_name": "{{server}}"
+    },
+    "transport": {
+      "upstream_protocol": "auto",
+      "anti_dpi": true,
+      "enable_protocol_fallback": true,
+      "protocol_fallback_delay": "1s",
+      "connection_timeout": "10s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "enable_icmp": false
+  },
+  "outbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "hostname": "{{server}}",
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "server_name": "{{server}}",
+      "skip_verification": true
+    },
+    "transport": {
+      "upstream_protocol": "auto",
+      "anti_dpi": true,
+      "enable_protocol_fallback": true,
+      "protocol_fallback_delay": "1s",
+      "connection_timeout": "10s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "headers": {
+      "user_agent": "Mozilla/5.0",
+      "app_name": "Chrome",
+      "platform": "windows"
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "health_check": {
+      "enabled": true,
+      "interval": "30s",
+      "timeout": "5s"
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_trusttunnel"
+  }
+}

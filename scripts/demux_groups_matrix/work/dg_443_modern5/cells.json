@@ -1,0 +1,62 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 54992,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_ws_reality",
+    "port": 56405,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls",
+      "ws"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "anytls",
+    "port": 51218,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 59091,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 57345,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "dl.google.com"
+  }
+]

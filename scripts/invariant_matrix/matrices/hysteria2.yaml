@@ -1,0 +1,20 @@
+protocol: hysteria2
+mode: render
+cells:
+- tag: hy2
+  stage: 1
+- tag: hy2_salamander
+  stage: 1
+- tag: hy2_gecko
+  stage: 2
+- tag: hy2_gecko_compact
+  stage: 2
+- tag: hy2_gecko_masquerade
+  stage: 2
+- tag: hy2_masquerade
+  stage: 2
+- tag: hy2_masquerade_proxy
+  stage: 2
+- tag: hy2_masquerade_file
+  stage: 2
+# hy2_realm needs external realm control server_url — not self-contained in matrix

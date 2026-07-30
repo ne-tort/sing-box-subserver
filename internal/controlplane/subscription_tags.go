@@ -19,19 +19,30 @@ func (s *Service) bindingSubscriptionTagsEntry(set domain.InboundSet, b domain.S
 	}
 	variantNames := []string{}
 	queryTags := []string{}
-	for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b) {
+	for _, vv := range domain.UserVariantsForProtocol(p.Protocol, b, p.DefaultUserVariants) {
 		variantNames = append(variantNames, vv.Name)
 		queryTags = append(queryTags, vv.QueryTags...)
 	}
+	profileNames := []string{}
+	for _, cp := range domain.ClientProfilesForProtocol(p.Protocol, b, p.DefaultClientProfiles) {
+		profileNames = append(profileNames, cp.Name)
+		queryTags = append(queryTags, cp.QueryTags...)
+	}
 	queryTags = append(queryTags, b.SubscriptionTags...)
+	enabledProfiles := dedupeStrings(b.EnabledClientProfiles)
+	if len(enabledProfiles) == 0 {
+		enabledProfiles = dedupeStrings(profileNames)
+	}
 	return map[string]any{
 		"inbound_tag":                fmt.Sprintf("cp-in-%s-%s", set.Name, b.Preset),
 		"preset":                     b.Preset,
 		"protocol":                   p.Protocol,
 		"subscription_tags":          dedupeStrings(queryTags),
 		"enabled_user_variants":      dedupeStrings(variantNames),
-		"enabled_client_profiles":    dedupeStrings(b.EnabledClientProfiles),
+		"enabled_client_profiles":    enabledProfiles,
 		"credential_instance_policy": b.CredentialInstancePolicy,
+		"params":                     b.Params,
+		"param_fields":               append([]string{}, p.ParamFields...),
 	}
 }
 

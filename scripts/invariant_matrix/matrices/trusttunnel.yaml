@@ -1,0 +1,9 @@
+protocol: trusttunnel
+mode: render
+cells:
+- tag: trusttunnel_h2
+  stage: 3
+- tag: trusttunnel_h3
+  stage: 3
+- tag: trusttunnel_auto
+  stage: 3

@@ -1,0 +1,21 @@
+{
+  "group": "dg_443_plain_tls",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 59049,
+    "sudoku_pad": 52986,
+    "vless_reality": 43510
+  },
+  "slot_snis": {
+    "reality": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com"
+  },
+  "tags": [
+    "sudoku_pad",
+    "vless_reality",
+    "hy2"
+  ],
+  "reality": true
+}

@@ -1,0 +1,25 @@
+{
+  "group": "dg_443_quic_trio",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 50773,
+    "shadowquic_0rtt": 57184,
+    "tuic": 42388
+  },
+  "slot_snis": {
+    "hy2": "www.microsoft.com",
+    "sq": "www.amazon.com",
+    "tuic": "www.apple.com"
+  },
+  "preset_sni": {
+    "hy2": "www.microsoft.com",
+    "tuic": "www.apple.com",
+    "shadowquic_0rtt": "www.amazon.com"
+  },
+  "tags": [
+    "hy2",
+    "tuic",
+    "shadowquic_0rtt"
+  ],
+  "reality": false
+}

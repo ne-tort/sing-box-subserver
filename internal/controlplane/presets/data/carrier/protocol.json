@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "tag": "carrier",
+  "singbox_type": "carrier",
+  "short_name": "Carrier",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier",
+      "description": "WG-star поверх underlay: peer/VK self-host + SFU (jitsi/telemost/wbstream) без регистрации на join."
+    },
+    "en": {
+      "title": "Carrier",
+      "description": "WG-star underlay: peer/VK + SFU join-without-account."
+    }
+  },
+  "default_cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "notes": {
+    "params": "SFU presets require bindings[].params.room (meeting URL). Optional: token, transport, key.",
+    "auth": "shared_auth → inbound без users; users_auth → users[]{device_id,secret}, outbound password=secret."
+  }
+}

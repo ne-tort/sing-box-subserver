@@ -1,0 +1,63 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "direct",
+      "tag": "iperf-in",
+      "listen": "127.0.0.1",
+      "listen_port": 15201,
+      "override_address": "192.168.16.2",
+      "override_port": 5201,
+      "network": [
+        "tcp"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "trusttunnel",
+      "tag": "trusttunnel_h2",
+      "server": "192.168.16.4",
+      "server_port": 1443,
+      "hostname": "matrix.local",
+      "username": "u1",
+      "password": "matrix-pass-1",
+      "tls": {
+        "server_name": "matrix.local",
+        "skip_verification": true,
+        "insecure": true
+      },
+      "transport": {
+        "upstream_protocol": "http2",
+        "anti_dpi": false,
+        "connection_timeout": "10s",
+        "max_idle_timeout": "60s",
+        "initial_stream_window": 8388608,
+        "initial_connection_window": 16777216,
+        "disable_header_compression": false
+      },
+      "headers": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "app_name": "Chrome",
+        "platform": "windows"
+      },
+      "enable_tcp": true,
+      "enable_udp": true,
+      "enable_icmp": false,
+      "health_check": {
+        "enabled": true,
+        "interval": "30s",
+        "timeout": "5s"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "trusttunnel_h2"
+  }
+}

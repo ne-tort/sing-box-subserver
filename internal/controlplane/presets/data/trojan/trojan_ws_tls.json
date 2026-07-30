@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_ws_tls",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-ws-tls"
+  ],
+  "short_name": "Trojan WS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan WebSocket TLS",
+      "description": "Trojan + TLS + WebSocket (path/Host headers — типичный CDN-like fingerprint)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "ws"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then ws",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "ws",
+      "path": "{{param.ws_path}}",
+      "headers": {
+        "Host": [
+          "{{param.ws_host}}"
+        ],
+        "User-Agent": [
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ]
+      },
+      "max_early_data": 2048,
+      "early_data_header_name": "Sec-WebSocket-Protocol"
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "ws",
+      "path": "{{param.ws_path}}",
+      "headers": {
+        "Host": [
+          "{{param.ws_host}}"
+        ],
+        "User-Agent": [
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ]
+      },
+      "max_early_data": 2048,
+      "early_data_header_name": "Sec-WebSocket-Protocol"
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: ws_host, ws_path",
+    "ws_path_default": "/trojanws"
+  }
+}

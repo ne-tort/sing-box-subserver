@@ -1,0 +1,164 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "demux",
+      "tag": "cp-demux-dg-matrix",
+      "listen": "0.0.0.0",
+      "listen_port": 1443,
+      "network": [
+        "tcp",
+        "udp"
+      ],
+      "inspect_timeout": "3s",
+      "rules": [
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 47887
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.microsoft.com"
+              ]
+            }
+          },
+          "name": "tcp_tls-h2"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 50211
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.apple.com"
+              ]
+            }
+          },
+          "name": "tcp_tls-h1"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 55370
+            }
+          },
+          "match": {
+            "protocol": "quic"
+          },
+          "name": "quic-quic"
+        },
+        {
+          "action": {
+            "reject": true
+          },
+          "match": {
+            "always": true
+          },
+          "name": "reject-rest"
+        }
+      ]
+    },
+    {
+      "type": "vless",
+      "tag": "vless_grpc_tls",
+      "listen": "127.0.0.1",
+      "listen_port": 47887,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "alpn": [
+          "h2"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "GunService",
+        "idle_timeout": "15s",
+        "ping_timeout": "15s",
+        "permit_without_stream": false
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "anytls",
+      "listen": "127.0.0.1",
+      "listen_port": 50211,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "padding_scheme": [
+        "stop=8",
+        "0=30-30",
+        "1=100-400",
+        "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000",
+        "3=9-9,500-1000",
+        "4=500-1000",
+        "5=500-1000",
+        "6=500-1000",
+        "7=500-1000"
+      ]
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "listen": "127.0.0.1",
+      "listen_port": 55370,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "matrix.local",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "ignore_client_bandwidth": true,
+      "up_mbps": 100,
+      "down_mbps": 100
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

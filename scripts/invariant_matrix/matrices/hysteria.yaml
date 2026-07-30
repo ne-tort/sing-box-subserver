@@ -1,0 +1,7 @@
+protocol: hysteria
+mode: render
+cells:
+- tag: hy1
+  stage: 5
+- tag: hy1_obfs
+  stage: 5

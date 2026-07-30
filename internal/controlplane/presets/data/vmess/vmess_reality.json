@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-reality"
+  ],
+  "short_name": "VMess Reality",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess Reality",
+      "description": "VMess + Reality (хуже VLESS Reality по DPI, но тот же handshake)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "reality"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "Reality TLS fingerprint",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  }
+}

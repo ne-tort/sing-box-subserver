@@ -1,0 +1,46 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "direct",
+      "tag": "iperf-in",
+      "listen": "127.0.0.1",
+      "listen_port": 15201,
+      "override_address": "192.168.16.2",
+      "override_port": 5201,
+      "network": [
+        "tcp"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "tuic",
+      "tag": "tuic",
+      "server": "192.168.16.4",
+      "server_port": 1443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "password": "matrix-pass-1",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.bing.com",
+        "alpn": [
+          "h3"
+        ],
+        "insecure": true
+      },
+      "congestion_control": "bbr",
+      "udp_relay_mode": "native",
+      "heartbeat": "10s"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "tuic"
+  }
+}

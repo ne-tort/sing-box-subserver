@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_httpupgrade_tls",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-httpupgrade-tls"
+  ],
+  "short_name": "VMess HUp",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess HTTPUpgrade TLS",
+      "description": "VMess + TLS + HTTPUpgrade."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "httpupgrade"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then httpupgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "security": "outbound-only: sec-auto / sec-aes128 / sec-chacha / pkt-xudp через enabled_client_profiles",
+    "params": "optional bindings[].params overrides: hu_host, hu_path",
+    "hu_path_default": "/vmess-hu"
+  }
+}

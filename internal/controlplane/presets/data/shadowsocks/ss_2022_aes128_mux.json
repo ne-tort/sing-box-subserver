@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "tag": "ss_2022_aes128_mux",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "ss2022-aes128-mux"
+  ],
+  "short_name": "SS2022+mux",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS2022 AES-128 + mux",
+      "description": "2022-blake3-aes-128-gcm multi-user + multiplex smux."
+    }
+  },
+  "traits": [
+    "tcp",
+    "multiplex"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SS2022 AEAD+mux",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 3,
+    "speed": 8,
+    "mobile": 6,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "cred_generators": {
+    "password": "ss2022_16"
+  },
+  "peer_secret_fields": {
+    "password": "ss2022_16"
+  },
+  "inbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "{{peer.password}}",
+    "network": "tcp",
+    "users": [],
+    "multiplex": {
+      "enabled": true,
+      "padding": true
+    }
+  },
+  "outbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "{{user.password}}",
+    "network": "tcp",
+    "multiplex": {
+      "enabled": true,
+      "protocol": "smux",
+      "padding": true,
+      "max_connections": 4,
+      "min_streams": 4,
+      "max_streams": 16
+    }
+  },
+  "client_notes": {
+    "password": "subscription password = peer.password + ':' + user.password"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "group": "dg_443_stack6",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 51610,
+    "hy2": 44365,
+    "tuic": 57724,
+    "vless_httpupgrade_tls": 53577,
+    "vless_reality": 54105,
+    "vless_ws_reality": 47739
+  },
+  "slot_snis": {
+    "hy2": "dl.google.com",
+    "r1": "www.microsoft.com",
+    "r2": "www.apple.com",
+    "t1": "www.amazon.com",
+    "t2": "gateway.icloud.com",
+    "tuic": "www.bing.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_ws_reality": "www.apple.com",
+    "anytls": "www.amazon.com",
+    "vless_httpupgrade_tls": "gateway.icloud.com",
+    "hy2": "dl.google.com",
+    "tuic": "www.bing.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_ws_reality",
+    "anytls",
+    "vless_httpupgrade_tls",
+    "hy2",
+    "tuic"
+  ],
+  "reality": true
+}

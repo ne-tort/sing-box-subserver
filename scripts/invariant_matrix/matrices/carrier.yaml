@@ -1,0 +1,17 @@
+protocol: carrier
+mode: reuse
+stage: 4
+reuse_dir: ../../../sing-box-lx/lx-test/carrier-docker
+reuse_cmd: ["powershell", "-NoProfile", "-File", "./smoke-failfast.ps1"]
+reuse_timeout: 900
+tags:
+- carrier_peer_shared
+- carrier_peer_users
+- carrier_jitsi_shared
+cells:
+- tag: carrier_peer_shared
+  stage: 4
+- tag: carrier_peer_users
+  stage: 4
+- tag: carrier_jitsi_shared
+  stage: 4

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tag": "naive",
+  "singbox_type": "naive",
+  "short_name": "Naive",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "NaiveProxy",
+      "description": "NaiveProxy inbound (HTTP/2 или QUIC поверх TLS)."
+    },
+    "en": {
+      "title": "NaiveProxy",
+      "description": "NaiveProxy inbound."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ]
+}

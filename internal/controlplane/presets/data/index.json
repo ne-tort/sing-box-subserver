@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "protocols": [
+    "vless",
+    "shadowsocks",
+    "trojan",
+    "vmess",
+    "hysteria2",
+    "tuic",
+    "anytls",
+    "socks",
+    "http",
+    "ssh",
+    "hysteria",
+    "naive",
+    "shadowtls",
+    "snell",
+    "mixed",
+    "mieru",
+    "shadowquic",
+    "sudoku",
+    "trusttunnel",
+    "derp",
+    "carrier",
+    "cloudflared",
+    "wireguard"
+  ]
+}

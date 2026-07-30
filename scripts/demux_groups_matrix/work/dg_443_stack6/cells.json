@@ -1,0 +1,74 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 54105,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_ws_reality",
+    "port": 47739,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls",
+      "ws"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "anytls",
+    "port": 51610,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "vless_httpupgrade_tls",
+    "port": 53577,
+    "protocol": "vless",
+    "traits": [
+      "httpupgrade",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 44365,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "dl.google.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 57724,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.bing.com"
+  }
+]

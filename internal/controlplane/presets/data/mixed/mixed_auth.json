@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "tag": "mixed_auth",
+  "protocol": "mixed",
+  "aliases": [
+    "mixed",
+    "mixed-auth"
+  ],
+  "short_name": "Mixed auth",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Mixed HTTP+SOCKS",
+      "description": "Один порт: HTTP CONNECT и SOCKS5 с auth (plaintext, DPI=1)."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP methods or SOCKS5",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 9
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mixed",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}"
+  },
+  "client_notes": {
+    "outbound": "клиент подключается как SOCKS5 к mixed inbound"
+  }
+}

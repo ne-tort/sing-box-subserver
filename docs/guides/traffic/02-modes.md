@@ -36,4 +36,4 @@ Stub panel for labs: `testdata/docker/mock_panel.py` + `configs/vless-multi.json
 
 - It does not choose the config owner.
 - It does not invent usernames: keys come from inbound `metadata.User`.
-- WireGuard peer shaping is deferred (Phase 3+).
+- WireGuard peer shaping: CP `speed_*` → materialize `peers[].up_mbps/down_mbps` (integer Mbps).

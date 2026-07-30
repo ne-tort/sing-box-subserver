@@ -1,0 +1,113 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "demux",
+      "tag": "cp-demux-dg-matrix",
+      "listen": "0.0.0.0",
+      "listen_port": 1443,
+      "network": [
+        "udp"
+      ],
+      "inspect_timeout": "3s",
+      "rules": [
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 59597
+            }
+          },
+          "match": {
+            "protocol": "quic",
+            "sni": [
+              "www.microsoft.com"
+            ]
+          },
+          "name": "quic-hy2"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 42853
+            }
+          },
+          "match": {
+            "protocol": "quic",
+            "sni": [
+              "www.apple.com"
+            ]
+          },
+          "name": "quic-tuic"
+        },
+        {
+          "action": {
+            "reject": true
+          },
+          "match": {
+            "always": true
+          },
+          "name": "reject-rest"
+        }
+      ]
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "listen": "127.0.0.1",
+      "listen_port": 59597,
+      "users": [
+        {
+          "name": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "ignore_client_bandwidth": true,
+      "up_mbps": 100,
+      "down_mbps": 100
+    },
+    {
+      "type": "tuic",
+      "tag": "tuic",
+      "listen": "127.0.0.1",
+      "listen_port": 42853,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_path": "/work/certs/server.crt",
+        "key_path": "/work/certs/server.key"
+      },
+      "congestion_control": "bbr",
+      "auth_timeout": "3s",
+      "heartbeat": "10s"
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

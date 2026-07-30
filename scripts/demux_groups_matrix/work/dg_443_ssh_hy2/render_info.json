@@ -1,0 +1,15 @@
+{
+  "group": "dg_443_ssh_hy2",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 59251,
+    "ssh_password": 58211
+  },
+  "slot_snis": {},
+  "preset_sni": {},
+  "tags": [
+    "ssh_password",
+    "hy2"
+  ],
+  "reality": false
+}

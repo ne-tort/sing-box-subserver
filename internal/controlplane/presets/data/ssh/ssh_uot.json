@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "tag": "ssh_uot",
+  "protocol": "ssh",
+  "aliases": [
+    "ssh-uot"
+  ],
+  "short_name": "SSH UoT",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH + UDP-over-TCP",
+      "description": "SSH password auth; outbound udp_over_tcp (with_ssh)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp_over_tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "ssh_banner",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SSH-2.0 banner",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "server_version": "{{param.server_version}}"
+  },
+  "outbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "user": "{{user.username}}",
+    "password": "{{user.password}}",
+    "client_version": "{{param.server_version}}",
+    "udp_over_tcp": {
+      "enabled": true,
+      "version": 2
+    }
+  },
+  "requirements": {
+    "build_tag": "with_ssh"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: server_version"
+  }
+}

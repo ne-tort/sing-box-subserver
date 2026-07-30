@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_httpupgrade_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-httpupgrade-reality"
+  ],
+  "short_name": "VMess HUp+R",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess HTTPUpgrade Reality",
+      "description": "VMess + Reality + HTTPUpgrade."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "httpupgrade",
+    "reality"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "Reality TLS then HTTP Upgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: hu_host, hu_path",
+    "hu_path_default": "/vmess-hu"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "tag": "tuic",
+  "protocol": "tuic",
+  "aliases": [
+    "tuic"
+  ],
+  "short_name": "TUIC",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "TUIC v5",
+      "description": "TUIC v5 UDP/QUIC + TLS, congestion BBR, udp_relay_mode native."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "tuic",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "congestion_control": "bbr",
+    "auth_timeout": "3s",
+    "heartbeat": "10s"
+  },
+  "outbound_template": {
+    "type": "tuic",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "congestion_control": "bbr",
+    "udp_relay_mode": "native",
+    "heartbeat": "10s"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "client_notes": {
+    "udp_relay_mode": "outbound-only: native|quic — профили udp-native / udp-quic",
+    "zero_rtt": "см. инвариант tuic_0rtt"
+  },
+  "default_client_profiles": [
+    "udp-native"
+  ]
+}

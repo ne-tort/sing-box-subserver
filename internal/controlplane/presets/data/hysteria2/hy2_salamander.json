@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "tag": "hy2_salamander",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2-salamander"
+  ],
+  "short_name": "Hy2 obfs",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2 Salamander",
+      "description": "Hy2 + TLS + salamander obfs (peer-symmetric password в шаблоне)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "obfs"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "obfuscated QUIC",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "obfs": {
+      "type": "salamander",
+      "password": "{{peer.obfs_password}}"
+    },
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "ignore_client_bandwidth": true,
+    "up_mbps": 100,
+    "down_mbps": 100
+  },
+  "outbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "obfs": {
+      "type": "salamander",
+      "password": "{{peer.obfs_password}}"
+    },
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "up_mbps": 100,
+    "down_mbps": 100
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "client_notes": {
+    "obfs": "peer_symmetric: set.peer_secrets[preset/obfs_password]"
+  },
+  "peer_secret_fields": {
+    "obfs_password": "password"
+  }
+}

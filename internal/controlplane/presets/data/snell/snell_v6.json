@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "tag": "snell_v6",
+  "protocol": "snell",
+  "aliases": [
+    "snell-v6"
+  ],
+  "short_name": "Snell v6",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Snell v6",
+      "description": "Snell v6: PSK + userkey + mode shaping."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "snell v6",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "userkey"
+  ],
+  "peer_secret_fields": {
+    "psk": "password"
+  },
+  "inbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 6,
+    "psk": "{{peer.psk}}",
+    "users": []
+  },
+  "outbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 6,
+    "psk": "{{peer.psk}}",
+    "userkey": "{{user.userkey}}"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "anytls",
+  "singbox_type": "anytls",
+  "short_name": "AnyTLS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "AnyTLS",
+      "description": "TLS-обёртка с парольной аутентификацией."
+    },
+    "en": {
+      "title": "AnyTLS",
+      "description": "TLS-обёртка с парольной аутентификацией."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "tag": "socks",
+  "protocol": "socks",
+  "aliases": [
+    "socks"
+  ],
+  "short_name": "SOCKS5",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SOCKS5",
+      "description": "SOCKS5 с логином/паролем (plaintext)."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SOCKS greeting",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 9
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}"
+  }
+}

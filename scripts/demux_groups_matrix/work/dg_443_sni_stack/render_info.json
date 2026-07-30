@@ -1,0 +1,33 @@
+{
+  "group": "dg_443_sni_stack",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 45080,
+    "vless_http_tls": 57912,
+    "vless_reality": 57790,
+    "vless_tls": 54768,
+    "vless_ws_reality": 45690
+  },
+  "slot_snis": {
+    "r1": "www.microsoft.com",
+    "r2": "www.apple.com",
+    "t1": "www.amazon.com",
+    "t2": "gateway.icloud.com",
+    "t3": "dl.google.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_ws_reality": "www.apple.com",
+    "anytls": "www.amazon.com",
+    "vless_http_tls": "gateway.icloud.com",
+    "vless_tls": "dl.google.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_ws_reality",
+    "anytls",
+    "vless_http_tls",
+    "vless_tls"
+  ],
+  "reality": true
+}

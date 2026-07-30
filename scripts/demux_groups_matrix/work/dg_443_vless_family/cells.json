@@ -1,0 +1,62 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 54899,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_ws_reality",
+    "port": 56267,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls",
+      "ws"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "vless_tls",
+    "port": 56657,
+    "protocol": "vless",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "vless_grpc_tls",
+    "port": 57475,
+    "protocol": "vless",
+    "traits": [
+      "grpc",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 57202,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

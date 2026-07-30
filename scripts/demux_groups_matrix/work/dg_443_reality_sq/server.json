@@ -1,0 +1,123 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "demux",
+      "tag": "cp-demux-dg-matrix",
+      "listen": "0.0.0.0",
+      "listen_port": 1443,
+      "network": [
+        "tcp",
+        "udp"
+      ],
+      "inspect_timeout": "3s",
+      "rules": [
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 59228
+            }
+          },
+          "match": {
+            "tls": {
+              "sni": [
+                "www.microsoft.com"
+              ]
+            }
+          },
+          "name": "tcp_reality-tcp"
+        },
+        {
+          "action": {
+            "dial": {
+              "address": "127.0.0.1",
+              "port": 58836
+            }
+          },
+          "match": {
+            "protocol": "quic"
+          },
+          "name": "quic-quic"
+        },
+        {
+          "action": {
+            "reject": true
+          },
+          "match": {
+            "always": true
+          },
+          "name": "reject-rest"
+        }
+      ]
+    },
+    {
+      "type": "vless",
+      "tag": "vless_reality",
+      "listen": "127.0.0.1",
+      "listen_port": 59228,
+      "users": [
+        {
+          "name": "u1",
+          "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "reality": {
+          "enabled": true,
+          "private_key": "yDtlsfn8wGMji56QzKrWi9V6T4Rsey73Us3L7F-BkmM",
+          "short_id": [
+            "0123456789abcdef"
+          ],
+          "handshake": {
+            "server": "inv-handshake",
+            "server_port": 443
+          }
+        }
+      }
+    },
+    {
+      "type": "shadowquic",
+      "tag": "shadowquic_jls",
+      "listen": "127.0.0.1",
+      "listen_port": 58836,
+      "users": [
+        {
+          "username": "u1",
+          "password": "matrix-pass-1"
+        }
+      ],
+      "jls_upstream": {
+        "addr": "www.cloudflare.com:443",
+        "server_name": "www.cloudflare.com",
+        "quic_version_probe": true
+      },
+      "alpn": [
+        "h3"
+      ],
+      "quic_versions": [
+        "v1"
+      ],
+      "congestion_control": "bbr",
+      "idle_timeout": "30s",
+      "zero_rtt": false,
+      "recv_window_conn": 15728640,
+      "recv_window": 67108864,
+      "max_datagram_frame_size": 1200
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

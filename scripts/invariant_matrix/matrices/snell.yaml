@@ -1,0 +1,7 @@
+protocol: snell
+mode: render
+cells:
+- tag: snell_v5
+  stage: 5
+- tag: snell_v6
+  stage: 5

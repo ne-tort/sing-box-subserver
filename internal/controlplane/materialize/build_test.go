@@ -366,7 +366,7 @@ func TestRenderSubscriptionInsecureOnlySelfSigned(t *testing.T) {
 	user := trojanUser(now)
 	user.SubToken = "tok"
 
-	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), SubscriptionFilters{}, nil)
+	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestRenderSubscriptionInsecureOnlySelfSigned(t *testing.T) {
 		Mode: domain.TLSModeACMEDomain,
 		ACME: &domain.ACMESpec{Email: "a@b.c", Domains: []string{"vpn.example.com"}},
 	}
-	body, err = RenderSubscription(user, sets, "vpn.example.com", acme, SubscriptionFilters{}, nil)
+	body, err = RenderSubscription(user, sets, "vpn.example.com", acme, SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestRenderSubscriptionPresetFilterMulti(t *testing.T) {
 			"shadowsocks-tcp": {"password": "s"},
 		},
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp", "trojan-tcp"}}, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp", "trojan-tcp"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,8 +440,8 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 		},
 	}
 	assignments := map[string]domain.RealityAssignment{
-		"r1/vless-reality-tcp": {
-			InboundKey:       "r1/vless-reality-tcp",
+		"r1/vless_reality": {
+			InboundKey:       "r1/vless_reality",
 			SNI:              "www.microsoft.com",
 			HandshakeServer:  "www.microsoft.com",
 			HandshakePort:    443,
@@ -474,10 +474,10 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 		t.Fatalf("inbound reality server_name=%v", tlsObj["server_name"])
 	}
 	realityObj, _ := tlsObj["reality"].(map[string]any)
-	if realityObj["private_key"] != assignments["r1/vless-reality-tcp"].PrivateKeyBase64 {
+	if realityObj["private_key"] != assignments["r1/vless_reality"].PrivateKeyBase64 {
 		t.Fatalf("private_key=%v", realityObj["private_key"])
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "198.51.100.10", domain.DefaultSelfSigned("198.51.100.10"), SubscriptionFilters{}, assignments)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "198.51.100.10", domain.DefaultSelfSigned("198.51.100.10"), SubscriptionFilters{}, assignments, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +505,7 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 			foundFlowNone = true
 		}
 		realityOut, _ := otls["reality"].(map[string]any)
-		if realityOut["public_key"] != assignments["r1/vless-reality-tcp"].PublicKeyBase64 {
+		if realityOut["public_key"] != assignments["r1/vless_reality"].PublicKeyBase64 {
 			t.Fatalf("public_key=%v", realityOut["public_key"])
 		}
 	}
@@ -533,7 +533,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 
 	t.Run("flow xtls only", func(t *testing.T) {
 		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
-			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}}, nil)
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -559,7 +559,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 
 	t.Run("flow none only", func(t *testing.T) {
 		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
-			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"none"}}, nil)
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"none"}}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -585,7 +585,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 
 	t.Run("network udp", func(t *testing.T) {
 		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
-			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}, Network: "udp"}, nil)
+			SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}, Network: "udp"}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -632,7 +632,7 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 	}
 
 	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"),
-		SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"profile-mobile"}}, nil)
+		SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"profile-mobile"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -650,6 +650,765 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 	}
 	if ob["uuid"] != "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" {
 		t.Fatalf("uuid=%v", ob["uuid"])
+	}
+}
+
+func TestMaterializeVlessHysteriaTransport(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "hy1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"vless_hysteria_tls"},
+		PeerSecrets: map[string]string{
+			"vless_hysteria_tls/hy_auth": "shared-hy-auth",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"vless_hysteria_tls": {"uuid": "11111111-2222-3333-4444-555555555555"},
+		},
+	}
+	tls := domain.DefaultSelfSigned("h.example")
+	raw, err := Build(Input{
+		PublicHost:  "h.example",
+		DataDir:     "/data",
+		TLS:         tls,
+		TLSCertPath: "/data/controlplane/tls/server.crt",
+		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		ActiveSets:  []domain.InboundSet{set},
+		Users:       []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	tr, _ := ib["transport"].(map[string]any)
+	if tr["type"] != "hysteria" {
+		t.Fatalf("transport=%v", tr)
+	}
+	if tr["password"] != "shared-hy-auth" {
+		t.Fatalf("password=%v", tr["password"])
+	}
+	if tr["version"] != float64(2) {
+		t.Fatalf("version=%v", tr["version"])
+	}
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("users=%d want 1 (flow-none only)", len(users))
+	}
+
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := sub["outbounds"].([]any)
+	if len(outs) != 1 {
+		t.Fatalf("outbounds=%d", len(outs))
+	}
+	ob, _ := outs[0].(map[string]any)
+	otr, _ := ob["transport"].(map[string]any)
+	if otr["type"] != "hysteria" || otr["password"] != "shared-hy-auth" {
+		t.Fatalf("out transport=%v", otr)
+	}
+	if ob["packet_encoding"] != "xudp" {
+		t.Fatalf("packet_encoding=%v", ob["packet_encoding"])
+	}
+}
+
+func TestMaterializeVlessWSTransportDefaults(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "w1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"vless_ws_tls"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"vless_ws_tls": {"uuid": "11111111-2222-3333-4444-555555555555"},
+		},
+	}
+	tls := domain.DefaultSelfSigned("h.example")
+	raw, err := Build(Input{
+		PublicHost:  "h.example",
+		DataDir:     "/data",
+		TLS:         tls,
+		TLSCertPath: "/data/controlplane/tls/server.crt",
+		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		ActiveSets:  []domain.InboundSet{set},
+		Users:       []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	tr, _ := ib["transport"].(map[string]any)
+	if tr["type"] != "ws" {
+		t.Fatalf("transport=%v", tr)
+	}
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("users=%d want 1 (flow-none only)", len(users))
+	}
+	u, _ := users[0].(map[string]any)
+	if u["name"] != "u1-flow-none" {
+		t.Fatalf("user name=%v", u["name"])
+	}
+	if _, ok := u["flow"]; ok {
+		t.Fatalf("flow should be absent: %v", u)
+	}
+
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := sub["outbounds"].([]any)
+	if len(outs) != 1 {
+		t.Fatalf("outbounds=%d", len(outs))
+	}
+	ob, _ := outs[0].(map[string]any)
+	if ob["packet_encoding"] != "xudp" {
+		t.Fatalf("packet_encoding=%v", ob["packet_encoding"])
+	}
+	otr, _ := ob["transport"].(map[string]any)
+	if otr["type"] != "ws" {
+		t.Fatalf("out transport=%v", otr)
+	}
+}
+
+func TestMaterializeSS2022SubscriptionCombinedPassword(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "s1", Listen: "0.0.0.0", ListenPort: 8388,
+		Presets: []string{"ss_2022_aes128"},
+		PeerSecrets: map[string]string{
+			"ss_2022_aes128/password": "AAAAAAAAAAAAAAAAAAAAAA==",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"ss_2022_aes128": {"password": "BBBBBBBBBBBBBBBBBBBBBB=="},
+		},
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example",
+		domain.DefaultSelfSigned("h.example"), SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := doc["outbounds"].([]any)
+	if len(outs) != 1 {
+		t.Fatalf("outbounds=%d", len(outs))
+	}
+	ob, _ := outs[0].(map[string]any)
+	want := "AAAAAAAAAAAAAAAAAAAAAA==:BBBBBBBBBBBBBBBBBBBBBB=="
+	if ob["password"] != want {
+		t.Fatalf("password=%v want %s", ob["password"], want)
+	}
+}
+
+func TestPeerSecretsLookupUsesCanonicalPreset(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "h1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"hysteria2-salamander"}, // alias
+		PeerSecrets: map[string]string{
+			"hy2_salamander/obfs_password": "obfs-secret",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"hy2_salamander": {"password": "user-secret"},
+		},
+	}
+	tls := domain.DefaultSelfSigned("h.example")
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data", TLS: tls,
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{set}, Users: []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	obfs, _ := ib["obfs"].(map[string]any)
+	if obfs["password"] != "obfs-secret" {
+		t.Fatalf("obfs password=%v (alias peer lookup failed)", obfs["password"])
+	}
+}
+
+func TestMaterializeSS2022KeepsServerPassword(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "s1", Listen: "0.0.0.0", ListenPort: 8388,
+		Presets: []string{"ss_2022_aes128"},
+		PeerSecrets: map[string]string{
+			"ss_2022_aes128/password": "AAAAAAAAAAAAAAAAAAAAAA==",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"ss_2022_aes128": {"password": "BBBBBBBBBBBBBBBBBBBBBB=="},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("h.example"),
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	if ib["password"] != "AAAAAAAAAAAAAAAAAAAAAA==" {
+		t.Fatalf("server password=%v", ib["password"])
+	}
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("users=%d", len(users))
+	}
+	u, _ := users[0].(map[string]any)
+	if u["password"] != "BBBBBBBBBBBBBBBBBBBBBB==" {
+		t.Fatalf("user password=%v", u["password"])
+	}
+}
+
+func TestMaterializeSSHUserField(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "ssh1", Listen: "0.0.0.0", ListenPort: 2222,
+		Presets: []string{"ssh_password"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"ssh_password": {"username": "proxy", "password": "secret"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("h.example"),
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	users, _ := ib["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("users=%d", len(users))
+	}
+	u, _ := users[0].(map[string]any)
+	if u["user"] != "proxy" {
+		t.Fatalf("user field=%v want proxy", u)
+	}
+	if _, ok := u["username"]; ok {
+		t.Fatalf("username should be remapped: %v", u)
+	}
+}
+
+func TestMaterializeDERPKeys(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "d1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"derp_tls"},
+		PeerSecrets: map[string]string{
+			"derp_tls/private_key": "kKk88zAh-UZ7N8zImwQHwyaDORp8x2kLZal7jn9cZWE",
+			"derp_tls/public_key":  "gxQHX0NUGnGc4-DlOSw47u4Q1DlGpCfQRAcGACNerVk",
+		},
+	}
+	user := domain.User{
+		Name: "alice", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"derp_tls": {
+				"private_key": "GFDczwT26dgQecCGugg8VhBy4NE57Z5zg4iqzCuicF8",
+				"public_key":  "H2ozVoKXvYy7WKG1lec0LfEepCt2FphorktglinGyws",
+			},
+		},
+	}
+	tls := domain.DefaultSelfSigned("h.example")
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data", TLS: tls,
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	if ib["private_key"] != "kKk88zAh-UZ7N8zImwQHwyaDORp8x2kLZal7jn9cZWE" {
+		t.Fatalf("inbound private_key=%v", ib["private_key"])
+	}
+	users, _ := ib["users"].([]any)
+	u, _ := users[0].(map[string]any)
+	if u["public_key"] != "H2ozVoKXvYy7WKG1lec0LfEepCt2FphorktglinGyws" {
+		t.Fatalf("user public_key=%v", u)
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	ob, _ := sub["outbounds"].([]any)[0].(map[string]any)
+	if ob["private_key"] != "GFDczwT26dgQecCGugg8VhBy4NE57Z5zg4iqzCuicF8" {
+		t.Fatalf("out private_key=%v", ob["private_key"])
+	}
+	if ob["peer_public_key"] != "gxQHX0NUGnGc4-DlOSw47u4Q1DlGpCfQRAcGACNerVk" {
+		t.Fatalf("peer_public_key=%v", ob["peer_public_key"])
+	}
+}
+
+func TestMaterializeSudokuSharedKeyNoUsers(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "su1", Listen: "0.0.0.0", ListenPort: 8443,
+		Presets: []string{"sudoku_pad"},
+		PeerSecrets: map[string]string{
+			"sudoku_pad/key": "shared-sudoku-key",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"sudoku_pad": {"key": "ignored-user-key"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("h.example"),
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	if ib["key"] != "shared-sudoku-key" {
+		t.Fatalf("key=%v", ib["key"])
+	}
+	if _, ok := ib["users"]; ok {
+		t.Fatalf("shared_key should omit users: %v", ib["users"])
+	}
+}
+
+func TestMaterializeCarrierJitsiParamsAndSubscription(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	room := "https://meet.jit.si/lx-carrier-cp-room"
+	set := domain.InboundSet{
+		Name: "cj1", Listen: "0.0.0.0", ListenPort: 9443,
+		Bindings: []domain.SetBinding{{
+			Preset: "carrier_jitsi_shared",
+			Params: map[string]string{"room": room},
+		}},
+		PeerSecrets: map[string]string{
+			"carrier_jitsi_shared/password": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"carrier_jitsi_shared": {"device_id": "dev-1"},
+		},
+	}
+	tls := domain.DefaultSelfSigned("h.example")
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data", TLS: tls,
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	if ib["provider"] != "jitsi" {
+		t.Fatalf("provider=%v", ib["provider"])
+	}
+	if _, ok := ib["listen_port"]; ok {
+		t.Fatalf("SFU inbound should not bind listen_port: %v", ib["listen_port"])
+	}
+	link, _ := ib["link"].(map[string]any)
+	if link["room"] != room {
+		t.Fatalf("inbound room=%v", link["room"])
+	}
+	if _, ok := link["token"]; ok {
+		t.Fatalf("empty token should be pruned: %v", link)
+	}
+	if _, ok := ib["users"]; ok {
+		t.Fatalf("shared_auth should omit users: %v", ib["users"])
+	}
+
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	ob, _ := sub["outbounds"].([]any)[0].(map[string]any)
+	if _, ok := ob["server"]; ok {
+		t.Fatalf("carrier outbound must not set top-level server: %v", ob["server"])
+	}
+	olink, _ := ob["link"].(map[string]any)
+	if olink["room"] != room {
+		t.Fatalf("sub room=%v", olink["room"])
+	}
+	if olink["device_id"] != "dev-1" {
+		t.Fatalf("device_id=%v", olink["device_id"])
+	}
+	if olink["password"] != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("password=%v", olink["password"])
+	}
+}
+
+func TestMaterializeCarrierPeerSyncListen(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "cp1", Listen: "0.0.0.0", ListenPort: 9443,
+		Presets: []string{"carrier_peer_shared"},
+		PeerSecrets: map[string]string{
+			"carrier_peer_shared/password": "shared-pass",
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"carrier_peer_shared": {"device_id": "dev-peer"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "edge.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("edge.example"),
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	link, _ := ib["link"].(map[string]any)
+	if link["peer"] != "0.0.0.0:9443" {
+		t.Fatalf("peer=%v", link["peer"])
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "edge.example",
+		domain.DefaultSelfSigned("edge.example"), SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	ob, _ := sub["outbounds"].([]any)[0].(map[string]any)
+	olink, _ := ob["link"].(map[string]any)
+	if olink["peer"] != "edge.example:9443" {
+		t.Fatalf("out peer=%v", olink["peer"])
+	}
+}
+
+func TestMaterializeCloudflaredNoSubAndSSHPubkey(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	cfSet := domain.InboundSet{
+		Name: "cf1", Listen: "0.0.0.0", ListenPort: 8080,
+		Bindings: []domain.SetBinding{{
+			Preset: "cloudflared_token",
+			Params: map[string]string{"token": "eyJ.test.token"},
+		}},
+	}
+	sshSet := domain.InboundSet{
+		Name: "ssh1", Listen: "0.0.0.0", ListenPort: 2222,
+		Presets: []string{"ssh_pubkey"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"ssh_pubkey": {
+				"username":    "alice",
+				"private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nTEST\n-----END OPENSSH PRIVATE KEY-----",
+				"public_key":  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest alice",
+			},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "h.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("h.example"),
+		ActiveSets: []domain.InboundSet{cfSet, sshSet},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	inbounds, _ := doc["inbounds"].([]any)
+	if len(inbounds) != 2 {
+		t.Fatalf("inbounds=%d", len(inbounds))
+	}
+	foundCF, foundSSH := false, false
+	for _, rawIB := range inbounds {
+		ib, _ := rawIB.(map[string]any)
+		switch ib["type"] {
+		case "cloudflared":
+			foundCF = true
+			if ib["token"] != "eyJ.test.token" {
+				t.Fatalf("token=%v", ib["token"])
+			}
+			if _, ok := ib["listen_port"]; ok {
+				t.Fatal("cloudflared should not listen")
+			}
+		case "ssh":
+			foundSSH = true
+			users, _ := ib["users"].([]any)
+			u, _ := users[0].(map[string]any)
+			if u["public_key"] == nil || u["user"] != "alice" {
+				t.Fatalf("ssh user=%v", u)
+			}
+		}
+	}
+	if !foundCF || !foundSSH {
+		t.Fatalf("cf=%v ssh=%v", foundCF, foundSSH)
+	}
+	body, err := RenderSubscription(user, []domain.InboundSet{cfSet, sshSet}, "h.example",
+		domain.DefaultSelfSigned("h.example"), SubscriptionFilters{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sub map[string]any
+	if err := json.Unmarshal(body, &sub); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := sub["outbounds"].([]any)
+	if len(outs) != 1 {
+		t.Fatalf("expected only ssh outbound, got %d", len(outs))
+	}
+	ob, _ := outs[0].(map[string]any)
+	if ob["type"] != "ssh" {
+		t.Fatalf("type=%v", ob["type"])
+	}
+}
+
+func TestMaterializeBindingParamDefaults(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "sq1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"shadowquic_jls"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"shadowquic_jls": {"username": "alice", "password": "secret"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "edge.example", DataDir: "/data",
+		TLS: domain.DefaultSelfSigned("edge.example"),
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	ib := firstInbound(t, doc)
+	jls, _ := ib["jls_upstream"].(map[string]any)
+	if jls["addr"] != "www.cloudflare.com:443" {
+		t.Fatalf("jls addr default=%v", jls["addr"])
+	}
+	if jls["server_name"] != "www.cloudflare.com" {
+		t.Fatalf("jls sni default=%v", jls["server_name"])
+	}
+}
+
+func TestMaterializeBindingParamOverrideAndWSPath(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	sq := domain.InboundSet{
+		Name: "sq2", Listen: "0.0.0.0", ListenPort: 8443,
+		Bindings: []domain.SetBinding{{
+			Preset: "shadowquic_jls",
+			Params: map[string]string{
+				"jls_addr":        "cdn.example:443",
+				"jls_server_name": "cdn.example",
+			},
+		}},
+	}
+	ws := domain.InboundSet{
+		Name: "ws1", Listen: "0.0.0.0", ListenPort: 443,
+		Presets: []string{"vless_ws_tls"},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"shadowquic_jls": {"username": "alice", "password": "secret"},
+			"vless_ws_tls":   {"uuid": "11111111-1111-1111-1111-111111111111"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "edge.example", DataDir: "/data",
+		TLS:         domain.DefaultSelfSigned("edge.example"),
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{sq, ws},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	inbounds, _ := doc["inbounds"].([]any)
+	var foundSQ, foundWS bool
+	for _, rawIB := range inbounds {
+		ib, _ := rawIB.(map[string]any)
+		switch ib["type"] {
+		case "shadowquic":
+			foundSQ = true
+			jls, _ := ib["jls_upstream"].(map[string]any)
+			if jls["addr"] != "cdn.example:443" || jls["server_name"] != "cdn.example" {
+				t.Fatalf("jls override=%v", jls)
+			}
+		case "vless":
+			foundWS = true
+			tr, _ := ib["transport"].(map[string]any)
+			if tr["path"] != "/vless-ws" {
+				t.Fatalf("ws path default from notes=%v", tr["path"])
+			}
+			headers, _ := tr["headers"].(map[string]any)
+			host, _ := headers["Host"].([]any)
+			if len(host) != 1 || host[0] != "edge.example" {
+				t.Fatalf("ws Host=%v", headers["Host"])
+			}
+		}
+	}
+	if !foundSQ || !foundWS {
+		t.Fatalf("foundSQ=%v foundWS=%v", foundSQ, foundWS)
+	}
+}
+
+func TestShadowQUICDemuxSNISyncsJLS(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	set := domain.InboundSet{
+		Name: "dg-sq", Listen: "::", ListenPort: 443,
+		DemuxTemplate: map[string]any{
+			"type": "demux", "tag": "d", "listen": "::", "listen_port": 443,
+			"network": []any{"udp"}, "rules": []any{},
+		},
+		MemberPorts: map[string]uint16{"shadowquic_jls": 41002},
+		Bindings: []domain.SetBinding{
+			{Preset: "shadowquic_jls", Params: map[string]string{"demux_sni": "www.amazon.com"}},
+		},
+	}
+	user := domain.User{
+		Name: "u1", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"shadowquic_jls": {"username": "alice", "password": "secret"},
+		},
+	}
+	raw, err := Build(Input{
+		PublicHost: "edge.example", DataDir: "/data",
+		TLS:         domain.DefaultSelfSigned("edge.example"),
+		TLSCertPath: "/data/c.crt", TLSKeyPath: "/data/c.key",
+		ActiveSets: []domain.InboundSet{set},
+		Users:      []domain.User{user},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	inbounds, _ := doc["inbounds"].([]any)
+	var found bool
+	for _, rawIB := range inbounds {
+		ib, _ := rawIB.(map[string]any)
+		if ib["type"] != "shadowquic" {
+			continue
+		}
+		found = true
+		jls, _ := ib["jls_upstream"].(map[string]any)
+		if jls["server_name"] != "www.amazon.com" {
+			t.Fatalf("expected demux_sni synced to jls, got %v", jls["server_name"])
+		}
+	}
+	if !found {
+		t.Fatal("shadowquic inbound missing")
 	}
 }
 

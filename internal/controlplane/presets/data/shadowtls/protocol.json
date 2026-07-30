@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "shadowtls",
+  "singbox_type": "shadowtls",
+  "short_name": "ShadowTLS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowTLS",
+      "description": "ShadowTLS v3: TLS mimic handshake + password users."
+    },
+    "en": {
+      "title": "ShadowTLS",
+      "description": "ShadowTLS v3 inbound."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

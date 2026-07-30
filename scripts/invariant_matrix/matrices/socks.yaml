@@ -1,0 +1,7 @@
+protocol: socks
+mode: render
+cells:
+- tag: socks
+  stage: 5
+- tag: socks_uot
+  stage: 5

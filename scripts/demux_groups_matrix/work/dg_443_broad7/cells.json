@@ -1,0 +1,84 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 51825,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_httpupgrade_reality",
+    "port": 41087,
+    "protocol": "vless",
+    "traits": [
+      "httpupgrade",
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "anytls",
+    "port": 46430,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "vless_grpc_tls",
+    "port": 59439,
+    "protocol": "vless",
+    "traits": [
+      "grpc",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "mieru_tcp",
+    "port": 54544,
+    "protocol": "mieru",
+    "traits": [
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "hy2",
+    "port": 45673,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "dl.google.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 47599,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.bing.com"
+  }
+]

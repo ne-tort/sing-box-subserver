@@ -70,6 +70,8 @@ Default `build/tags.server` omits the tag ([traffic/adr/0001](traffic/adr/0001-o
 
 **[`guides/00-index.md`](guides/00-index.md)** — how-tos separated from design docs.
 
+Controlplane presets catalog: **[`guides/controlplane-presets/00-index.md`](guides/controlplane-presets/00-index.md)**.
+
 ## Quality bar vs panel monoliths
 
 Reference panels (including s-ui) show that in-process `singbox.New` is viable. They are **not** the quality target for this agent. This project requires:

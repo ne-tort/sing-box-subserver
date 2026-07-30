@@ -1,0 +1,39 @@
+[
+  {
+    "tag": "hy2",
+    "port": 50773,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 42388,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "shadowquic_0rtt",
+    "port": 57184,
+    "protocol": "shadowquic",
+    "traits": [
+      "0rtt",
+      "jls",
+      "quic",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  }
+]

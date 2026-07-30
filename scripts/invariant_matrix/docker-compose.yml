@@ -1,0 +1,37 @@
+# Reference compose (run.py generates docker-compose.generated.yml per protocol workdir).
+# Network must exist: docker network create invmatrix_net
+#
+# Usage (manual):
+#   set LX_BIN=c:/Users/qwerty/git/sui/.tools/lx-client/sing-box
+#   set WORKDIR=./work/vless
+#   docker compose -f docker-compose.yml up
+
+name: invmatrix
+
+services:
+  iperf:
+    image: sui-lx-iperf:local
+    container_name: inv-iperf
+    networks: [invmatrix_net]
+    command: ["iperf3", "-s"]
+
+  server:
+    image: sui-lx-iperf:local
+    container_name: inv-server
+    hostname: inv-server
+    networks:
+      invmatrix_net:
+        aliases: [inv-server]
+    volumes:
+      - ${LX_BIN}:/bin-ro/sing-box:ro
+      - ${WORKDIR}:/work:ro
+    command:
+      - bash
+      - -c
+      - cp /bin-ro/sing-box /tmp/sing-box && chmod +x /tmp/sing-box && /tmp/sing-box run -c /work/server.json
+    depends_on: [iperf]
+
+networks:
+  invmatrix_net:
+    external: true
+    name: invmatrix_net

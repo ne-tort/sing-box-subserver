@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_tcp",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-tcp"
+  ],
+  "short_name": "VMess TCP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess TCP",
+      "description": "VMess без TLS."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 3,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 7
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "alter_id": 0
+  }
+}

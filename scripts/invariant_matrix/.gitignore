@@ -1,0 +1,6 @@
+work/
+results/*.json
+results/SUMMARY.md
+**/docker-compose.generated.yml
+__pycache__/
+*.pyc

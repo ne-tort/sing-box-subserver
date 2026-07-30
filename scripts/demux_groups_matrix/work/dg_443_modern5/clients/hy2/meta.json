@@ -1,0 +1,7 @@
+{
+  "tag": "hy2",
+  "iperf_mode": "tcp",
+  "demux_sni": "gateway.icloud.com",
+  "public_port": 1443,
+  "member_port": 59091
+}

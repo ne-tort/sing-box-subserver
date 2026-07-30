@@ -1,0 +1,24 @@
+[
+  {
+    "tag": "snell_v5",
+    "port": 51074,
+    "protocol": "snell",
+    "traits": [
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "hy2",
+    "port": 55330,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

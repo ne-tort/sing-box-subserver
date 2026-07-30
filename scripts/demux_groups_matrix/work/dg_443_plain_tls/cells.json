@@ -1,0 +1,37 @@
+[
+  {
+    "tag": "sudoku_pad",
+    "port": 52986,
+    "protocol": "sudoku",
+    "traits": [
+      "shared_key",
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "vless_reality",
+    "port": 43510,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "hy2",
+    "port": 59049,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  }
+]

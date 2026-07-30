@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic_jls",
+  "protocol": "shadowquic",
+  "aliases": [
+    "shadowquic",
+    "shadowquic-jls"
+  ],
+  "short_name": "SQ JLS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC JLS",
+      "description": "UDP/QUIC ShadowQUIC: JLS upstream camouflage, ALPN h3, congestion bbr."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "jls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello → JLS upstream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "shadowquic",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "jls_upstream": {
+      "addr": "{{param.jls_addr}}",
+      "server_name": "{{param.jls_server_name}}",
+      "quic_version_probe": true
+    },
+    "alpn": [
+      "h3"
+    ],
+    "quic_versions": [
+      "v1"
+    ],
+    "congestion_control": "bbr",
+    "idle_timeout": "30s",
+    "zero_rtt": false,
+    "recv_window_conn": 15728640,
+    "recv_window": 67108864,
+    "max_datagram_frame_size": 1200
+  },
+  "outbound_template": {
+    "type": "shadowquic",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "server_name": "{{param.jls_server_name}}",
+    "sni": "{{param.jls_server_name}}",
+    "alpn": [
+      "h3"
+    ],
+    "quic_versions": [
+      "v1"
+    ],
+    "congestion_control": "bbr",
+    "keep_alive_interval": "15s",
+    "idle_timeout": "30s",
+    "udp_over_stream": false,
+    "zero_rtt": false,
+    "recv_window_conn": 15728640,
+    "recv_window": 67108864,
+    "max_datagram_frame_size": 1200
+  },
+  "requirements": {
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_shadowquic"
+  },
+  "client_notes": {
+    "jls_upstream": "должен быть доступен с edge; SNI outbound обычно совпадает",
+    "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
+  }
+}

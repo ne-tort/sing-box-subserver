@@ -17,8 +17,8 @@ data_dir/
     acme/                  # certmagic data_directory for ACME modes
 ```
 
-Presets live in the **binary** (`internal/controlplane/presets` embed). No preset files
-in data_dir for v1.
+Presets live in the **binary** (`go:embed` of `internal/controlplane/presets/data/**`). No runtime-editable
+preset files on disk under `data_dir` for v1.
 
 ## File rules
 

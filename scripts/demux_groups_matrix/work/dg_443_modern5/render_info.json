@@ -1,0 +1,33 @@
+{
+  "group": "dg_443_modern5",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 51218,
+    "hy2": 59091,
+    "tuic": 57345,
+    "vless_reality": 54992,
+    "vless_ws_reality": 56405
+  },
+  "slot_snis": {
+    "hy2": "gateway.icloud.com",
+    "reality": "www.microsoft.com",
+    "reality2": "www.apple.com",
+    "tls": "www.amazon.com",
+    "tuic": "dl.google.com"
+  },
+  "preset_sni": {
+    "vless_reality": "www.microsoft.com",
+    "vless_ws_reality": "www.apple.com",
+    "anytls": "www.amazon.com",
+    "hy2": "gateway.icloud.com",
+    "tuic": "dl.google.com"
+  },
+  "tags": [
+    "vless_reality",
+    "vless_ws_reality",
+    "anytls",
+    "hy2",
+    "tuic"
+  ],
+  "reality": true
+}

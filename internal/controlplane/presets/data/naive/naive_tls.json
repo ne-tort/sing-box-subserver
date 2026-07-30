@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "tag": "naive_tls",
+  "protocol": "naive",
+  "aliases": [
+    "naive",
+    "naive-tls"
+  ],
+  "short_name": "Naive TLS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Naive TLS",
+      "description": "NaiveProxy TCP+TLS (HTTP/2): DPI видит обычный H2 к SNI."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "http2"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "naive",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "network": "tcp",
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "naive",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "extra_headers": {
+      "User-Agent": [
+        "Mozilla/5.0"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  }
+}

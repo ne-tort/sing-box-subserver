@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "hysteria",
+  "singbox_type": "hysteria",
+  "short_name": "Hysteria",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria v1",
+      "description": "Hysteria 1 (legacy QUIC); предпочтительнее hysteria2."
+    },
+    "en": {
+      "title": "Hysteria v1",
+      "description": "Legacy Hysteria 1."
+    }
+  },
+  "default_cred_fields": [
+    "auth_str"
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_telemost_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-telemost-users"
+  ],
+  "short_name": "Carrier Telemost users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Telemost users",
+      "description": "Telemost + auth=users; params.room обязателен."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "telemost"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "inbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "provider": "telemost",
+    "auth": "users",
+    "users": [],
+    "link": {
+      "room": "{{param.room}}",
+      "transport": "vp8channel",
+      "password": "{{peer.password}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "outbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "provider": "telemost",
+    "link": {
+      "room": "{{param.room}}",
+      "transport": "vp8channel",
+      "password": "{{user.secret}}",
+      "device_id": "{{user.device_id}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "peer_secret_fields": {
+    "password": "password"
+  },
+  "param_fields": [
+    "room"
+  ]
+}

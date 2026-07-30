@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "tag": "anytls_idle",
+  "protocol": "anytls",
+  "aliases": [],
+  "short_name": "AnyTLS idle",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "AnyTLS + idle session",
+      "description": "AnyTLS с рекомендованными idle_session_* на outbound (клиент держит warm TLS)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "padding_scheme": [
+      "stop=8",
+      "0=30-30",
+      "1=100-400",
+      "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000",
+      "3=9-9,500-1000",
+      "4=500-1000",
+      "5=500-1000",
+      "6=500-1000",
+      "7=500-1000"
+    ],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "idle_session_check_interval": "30s",
+    "idle_session_timeout": "30s",
+    "min_idle_session": 0,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
+    "idle": "outbound idle_* — отдельный инвариант anytls_idle"
+  }
+}

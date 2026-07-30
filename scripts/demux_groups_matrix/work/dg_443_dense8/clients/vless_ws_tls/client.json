@@ -1,0 +1,62 @@
+{
+  "log": {
+    "level": "warn"
+  },
+  "inbounds": [
+    {
+      "type": "direct",
+      "tag": "iperf-in",
+      "listen": "127.0.0.1",
+      "listen_port": 15201,
+      "override_address": "192.168.16.2",
+      "override_port": 5201,
+      "network": [
+        "tcp"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "vless_ws_tls",
+      "server": "192.168.16.4",
+      "server_port": 1443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "tls": {
+        "enabled": true,
+        "server_name": "dl.google.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "insecure": true
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/vless-ws",
+        "headers": {
+          "Host": [
+            "matrix.local"
+          ],
+          "User-Agent": [
+            "Mozilla/5.0"
+          ]
+        },
+        "max_early_data": 2048,
+        "early_data_header_name": "Sec-WebSocket-Protocol"
+      },
+      "packet_encoding": "xudp"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "vless_ws_tls"
+  }
+}

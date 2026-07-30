@@ -1,0 +1,96 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 55363,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "vless_grpc_reality",
+    "port": 54509,
+    "protocol": "vless",
+    "traits": [
+      "grpc",
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.apple.com"
+  },
+  {
+    "tag": "anytls",
+    "port": 42441,
+    "protocol": "anytls",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.amazon.com"
+  },
+  {
+    "tag": "vless_tls",
+    "port": 56270,
+    "protocol": "vless",
+    "traits": [
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "gateway.icloud.com"
+  },
+  {
+    "tag": "vless_ws_tls",
+    "port": 53166,
+    "protocol": "vless",
+    "traits": [
+      "tcp",
+      "tls",
+      "ws"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "dl.google.com"
+  },
+  {
+    "tag": "sudoku_pad",
+    "port": 54214,
+    "protocol": "sudoku",
+    "traits": [
+      "shared_key",
+      "tcp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "matrix.local"
+  },
+  {
+    "tag": "hy2",
+    "port": 42968,
+    "protocol": "hysteria2",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.bing.com"
+  },
+  {
+    "tag": "tuic",
+    "port": 55802,
+    "protocol": "tuic",
+    "traits": [
+      "quic",
+      "tls",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.yahoo.com"
+  }
+]

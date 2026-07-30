@@ -1,0 +1,7 @@
+{
+  "tag": "anytls",
+  "iperf_mode": "tcp",
+  "demux_sni": "www.amazon.com",
+  "public_port": 1443,
+  "member_port": 46430
+}

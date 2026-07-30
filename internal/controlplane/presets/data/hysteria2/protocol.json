@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "hysteria2",
+  "singbox_type": "hysteria2",
+  "short_name": "Hysteria2",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2",
+      "description": "UDP/QUIC с агрессивным congestion control."
+    },
+    "en": {
+      "title": "Hysteria2",
+      "description": "UDP/QUIC с агрессивным congestion control."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_httpupgrade_reality",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-httpupgrade-reality"
+  ],
+  "short_name": "Trojan HUp+R",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan HTTPUpgrade Reality",
+      "description": "Trojan + Reality + HTTPUpgrade."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "httpupgrade",
+    "reality"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "Reality TLS then HTTP Upgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: hu_host, hu_path",
+    "hu_path_default": "/trojan-hu"
+  }
+}

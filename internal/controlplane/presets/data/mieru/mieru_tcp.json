@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "tag": "mieru_tcp",
+  "protocol": "mieru",
+  "aliases": [
+    "mieru",
+    "mieru-tcp"
+  ],
+  "short_name": "Mieru TCP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru TCP",
+      "description": "Mieru TCP transport (DPI: нестандартный TCP stream)."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "mieru framing",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "transport": "TCP",
+    "users": [],
+    "mtu": 1400,
+    "user_hint_is_mandatory": false,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "outbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "transport": "TCP",
+    "username": "{{user.name}}",
+    "password": "{{user.password}}",
+    "multiplexing": "MULTIPLEXING_HIGH",
+    "handshake_mode": "HANDSHAKE_STANDARD",
+    "mtu": 1400,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "requirements": {
+    "build_tag": "with_mieru"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: traffic_pattern"
+  }
+}

@@ -1,0 +1,173 @@
+//go:build with_controlplane
+
+package controlplane
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/ne-tort/sing-box-subserver/internal/configowner"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+)
+
+func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
+	h.Normalize()
+	hubAddr, _ := h.HubAddress()
+	out := map[string]any{
+		"enabled":       h.Enabled,
+		"profile":       h.Profile,
+		"subnet":        h.Subnet,
+		"listen_port":   h.ListenPort,
+		"system":        h.System,
+		"forward_allow": h.ForwardAllow,
+		"internet_allow": h.InternetAllowed(),
+		"hub_address":   hubAddr,
+		"hub_public_key": h.HubPublicKey,
+		"has_awg":       len(h.AWG) > 0,
+	}
+	if h.Name != "" {
+		out["name"] = h.Name
+	}
+	if h.MTU > 0 {
+		out["mtu"] = h.MTU
+	}
+	if h.UpMbps > 0 {
+		out["up_mbps"] = h.UpMbps
+	}
+	if h.DownMbps > 0 {
+		out["down_mbps"] = h.DownMbps
+	}
+	return out
+}
+
+func (s *Service) handleWgGet(w http.ResponseWriter, _ *http.Request) {
+	h, err := s.store.LoadWgHub()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	okJSON(w, 200, s.wgPublicView(h))
+}
+
+func (s *Service) handleWgPut(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	if err := decodeBody(r, &body); err != nil {
+		failJSON(w, 400, "bad_request", err.Error())
+		return
+	}
+	h, err := s.store.LoadWgHub()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	prevEnabled := h.Enabled
+	prevProfile := h.Profile
+	if v, ok := body["enabled"].(bool); ok {
+		h.Enabled = v
+	}
+	if v, ok := body["profile"].(string); ok && strings.TrimSpace(v) != "" {
+		h.Profile = strings.TrimSpace(v)
+	}
+	if v, ok := body["subnet"].(string); ok && strings.TrimSpace(v) != "" {
+		h.Subnet = strings.TrimSpace(v)
+	}
+	if v, ok := body["listen_port"].(float64); ok && v > 0 {
+		h.ListenPort = uint16(v)
+	}
+	if v, ok := body["system"].(bool); ok {
+		h.System = v
+	}
+	if v, ok := body["forward_allow"].(bool); ok {
+		h.ForwardAllow = v
+	}
+	if v, ok := body["internet_allow"].(bool); ok {
+		h.InternetAllow = &v
+	}
+	if v, ok := body["name"].(string); ok {
+		h.Name = strings.TrimSpace(v)
+	}
+	if v, ok := body["mtu"].(float64); ok {
+		h.MTU = int(v)
+	}
+	if v, ok := body["up_mbps"].(float64); ok {
+		h.UpMbps = int(v)
+	}
+	if v, ok := body["down_mbps"].(float64); ok {
+		h.DownMbps = int(v)
+	}
+	h.Normalize()
+	if err := h.Validate(); err != nil {
+		failJSON(w, 400, "cp_invalid_wg", err.Error())
+		return
+	}
+	if err := s.validateWgListenPort(h); err != nil {
+		failJSON(w, 409, "cp_port_conflict", err.Error())
+		return
+	}
+	forceAWG := h.Profile != domain.WgProfilePlain && (prevProfile != h.Profile || len(h.AWG) == 0)
+	if _, err := s.ensureWgHubSecrets(&h, forceAWG); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if h.Profile == domain.WgProfilePlain {
+		h.AWG = nil
+	}
+
+	if h.Enabled {
+		if s.cfg.Owner != nil {
+			if err := s.claimOwnership(configowner.ModeControlplane, "wg_enable", "wg"); err != nil {
+				failJSON(w, 409, "cp_claim_failed", err.Error())
+				return
+			}
+		}
+	}
+
+	if err := s.store.SaveWgHub(h); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+
+	if h.Enabled || prevEnabled {
+		if err := s.rematerialize(r.Context()); err != nil {
+			failJSON(w, 422, materializeErrorCode(err), err.Error())
+			return
+		}
+	}
+
+	if !h.Enabled {
+		st, _ := s.store.LoadState()
+		if len(st.ActiveSets) == 0 && s.cfg.Owner != nil {
+			_ = s.claimOwnership(configowner.ModeIdle, "wg_disable", "wg")
+		}
+	}
+
+	okJSON(w, 200, s.wgPublicView(h))
+}
+
+func (s *Service) handleWgRegenerateAWG(w http.ResponseWriter, r *http.Request) {
+	h, err := s.store.LoadWgHub()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	h.Normalize()
+	if h.Profile == domain.WgProfilePlain {
+		failJSON(w, 400, "bad_request", "regenerate-awg only for wg_awg2/wg_awg3")
+		return
+	}
+	if _, err := s.ensureWgHubSecrets(&h, true); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if err := s.store.SaveWgHub(h); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if h.Enabled {
+		if err := s.rematerialize(r.Context()); err != nil {
+			failJSON(w, 422, materializeErrorCode(err), err.Error())
+			return
+		}
+	}
+	okJSON(w, 200, s.wgPublicView(h))
+}

@@ -1,0 +1,31 @@
+protocol: vless
+mode: render
+cells:
+- tag: vless_tls
+  stage: 1
+- tag: vless_reality
+  stage: 1
+- tag: vless_ws_tls
+  stage: 1
+- tag: vless_grpc_tls
+  stage: 1
+- tag: vless_ws_reality
+  stage: 2
+- tag: vless_grpc_reality
+  stage: 2
+- tag: vless_http_tls
+  stage: 2
+- tag: vless_http_reality
+  stage: 2
+- tag: vless_httpupgrade_tls
+  stage: 2
+- tag: vless_httpupgrade_reality
+  stage: 2
+- tag: vless_tls_mux
+  stage: 2
+- tag: vless_quic_tls
+  stage: 2
+- tag: vless_hysteria_tls
+  stage: 2
+- tag: vless_tcp
+  stage: 2

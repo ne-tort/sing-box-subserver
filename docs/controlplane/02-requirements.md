@@ -28,7 +28,7 @@ Applies only when the binary is built with `with_controlplane`. Root agent FR/NF
 
 | ID | Requirement |
 |----|-------------|
-| FR-P-1 | Ship named presets as embedded JSON (inbound template + outbound template + traits + description). |
+| FR-P-1 | Ship named presets as embedded JSON files per protocol folder (inbound/outbound templates + traits + i18n + demux_hints + scores). |
 | FR-P-2 | List/get presets via API (read-only in v1). |
 | FR-P-3 | Traits must be sufficient for operators to author demux match rules (tcp/udp/h2/h3/… — documented enum in domain). |
 | FR-P-4 | Inbound and outbound templates are mirrors aside from listen/server address and secrets placeholders. |

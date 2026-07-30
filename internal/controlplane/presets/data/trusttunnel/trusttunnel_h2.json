@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel_h2",
+  "protocol": "trusttunnel",
+  "aliases": [
+    "trusttunnel",
+    "trusttunnel-h2"
+  ],
+  "short_name": "TT H2",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TrustTunnel HTTP/2",
+      "description": "TrustTunnel: anti_dpi, H2 transport, auth users; TLS через CP (custom tls block)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_custom",
+    "http2"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "hostname": "{{server}}",
+    "users": [],
+    "tls": {
+      "server_name": "{{server}}"
+    },
+    "transport": {
+      "upstream_protocol": "http2",
+      "anti_dpi": true,
+      "connection_timeout": "10s",
+      "max_idle_timeout": "60s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "enable_icmp": false
+  },
+  "outbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "hostname": "{{server}}",
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "server_name": "{{server}}",
+      "skip_verification": true
+    },
+    "transport": {
+      "upstream_protocol": "http2",
+      "anti_dpi": true,
+      "connection_timeout": "10s",
+      "max_idle_timeout": "60s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "headers": {
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "app_name": "Chrome",
+      "platform": "windows"
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "enable_icmp": false,
+    "health_check": {
+      "enabled": true,
+      "interval": "30s",
+      "timeout": "5s"
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "build_tag": "with_trusttunnel"
+  },
+  "client_notes": {
+    "tls": "TrustTunnel TLS — отдельный блок (не InboundTLSOptions); CP подставляет PEM при materialize"
+  }
+}

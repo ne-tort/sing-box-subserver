@@ -1,0 +1,26 @@
+[
+  {
+    "tag": "vless_reality",
+    "port": 59228,
+    "protocol": "vless",
+    "traits": [
+      "reality",
+      "tcp",
+      "tls"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.microsoft.com"
+  },
+  {
+    "tag": "shadowquic_jls",
+    "port": 58836,
+    "protocol": "shadowquic",
+    "traits": [
+      "jls",
+      "quic",
+      "udp"
+    ],
+    "iperf_mode": "tcp",
+    "demux_sni": "www.cloudflare.com"
+  }
+]

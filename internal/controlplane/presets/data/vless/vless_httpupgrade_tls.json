@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "tag": "vless_httpupgrade_tls",
+  "protocol": "vless",
+  "aliases": [
+    "vless-httpupgrade-tls"
+  ],
+  "short_name": "VLESS HUp",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS HTTPUpgrade TLS",
+      "description": "VLESS + TLS + HTTPUpgrade (один HTTP Upgrade, без WS framing)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "httpupgrade"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then HTTP Upgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_user_variants": [
+    "flow-none"
+  ],
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    },
+    "transport": {
+      "type": "httpupgrade",
+      "path": "{{param.hu_path}}",
+      "host": "{{param.hu_host}}",
+      "headers": {
+        "User-Agent": [
+          "Mozilla/5.0"
+        ]
+      }
+    },
+    "packet_encoding": "xudp"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "flow": "Vision/XTLS несовместим с WS/gRPC/HTTP/HTTPUpgrade — только flow-none",
+    "packet_encoding": "по умолчанию xudp; профили pkt-none / pkt-packetaddr через enabled_client_profiles",
+    "params": "optional bindings[].params overrides: hu_host, hu_path",
+    "hu_path_default": "/vless-hu"
+  }
+}

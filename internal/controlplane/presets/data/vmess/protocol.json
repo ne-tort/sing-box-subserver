@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "vmess",
+  "singbox_type": "vmess",
+  "short_name": "VMess",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess",
+      "description": "UUID-транспорт VMess (AES/auto)."
+    },
+    "en": {
+      "title": "VMess",
+      "description": "UUID-транспорт VMess (AES/auto)."
+    }
+  },
+  "default_cred_fields": [
+    "uuid"
+  ]
+}

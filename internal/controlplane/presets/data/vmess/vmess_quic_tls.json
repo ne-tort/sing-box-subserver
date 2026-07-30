@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_quic_tls",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-quic-tls"
+  ],
+  "short_name": "VMESS QUIC",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "vmess QUIC TLS",
+      "description": "vmess + TLS + transport.type=quic (UDP)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "transport": {
+      "type": "quic"
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "transport": {
+      "type": "quic"
+    },
+    "uuid": "{{user.uuid}}",
+    "security": "auto"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "client_notes": {
+    "utls": "uTLS несовместим с transport quic/hysteria"
+  }
+}

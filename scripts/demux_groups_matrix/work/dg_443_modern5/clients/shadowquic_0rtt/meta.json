@@ -1,0 +1,7 @@
+{
+  "tag": "shadowquic_0rtt",
+  "iperf_mode": "tcp",
+  "demux_sni": "dl.google.com",
+  "public_port": 1443,
+  "member_port": 55700
+}

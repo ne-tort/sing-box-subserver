@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_wbstream_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-wbstream",
+    "carrier-wbstream-shared"
+  ],
+  "short_name": "Carrier WB Stream",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier WB Stream",
+      "description": "WB Stream: guest-register join. params.room=URL комнаты; опц. params.token."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "wbstream"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "inbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "provider": "wbstream",
+    "auth": "shared",
+    "link": {
+      "room": "{{param.room}}",
+      "transport": "vp8channel",
+      "password": "{{peer.password}}",
+      "token": "{{param.token}}",
+      "key": "{{param.key}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "outbound_template": {
+    "type": "carrier",
+    "tag": "{{tag}}",
+    "provider": "wbstream",
+    "link": {
+      "room": "{{param.room}}",
+      "transport": "vp8channel",
+      "password": "{{peer.password}}",
+      "device_id": "{{user.device_id}}",
+      "token": "{{param.token}}",
+      "key": "{{param.key}}"
+    },
+    "lifecycle": {
+      "enabled": true,
+      "keepalive": true,
+      "liveness_interval": "15s",
+      "liveness_timeout": "5s",
+      "liveness_failures": 3,
+      "reconnect_backoff": "2s",
+      "reconnect_backoff_max": "30s"
+    }
+  },
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "token": "опц. bindings[].params.token; без token — guest-register path"
+  },
+  "peer_secret_fields": {
+    "password": "password"
+  },
+  "param_fields": [
+    "room"
+  ]
+}

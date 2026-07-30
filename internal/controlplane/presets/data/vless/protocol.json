@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "tag": "vless",
+  "singbox_type": "vless",
+  "short_name": "VLESS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS",
+      "description": "Лёгкий UUID-транспорт; часто с TLS/Reality."
+    },
+    "en": {
+      "title": "VLESS",
+      "description": "Лёгкий UUID-транспорт; часто с TLS/Reality."
+    }
+  },
+  "default_cred_fields": [
+    "uuid"
+  ],
+  "notes": {
+    "variants_family": "vless_flow"
+  }
+}

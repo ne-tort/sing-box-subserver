@@ -25,12 +25,21 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
     "active_sets": ["mixed-443", "hy2-8443"],
     "users_total": 10,
     "users_eligible": 8,
-    "presets_count": 13,
+    "presets_count": 15,
     "demux_recipes_count": 9,
+    "demux_groups_count": 18,
     "sets_count": 2,
     "demux_in_binary": true,
     "tls_mode": "self_signed",
     "tls_material_status": { "ready": true, "active_material": "self_signed_pem" },
+    "ready": {
+      "ok": true,
+      "box_up": true,
+      "supervisor_state": "Running",
+      "active_sets": true,
+      "reasons": [],
+      "poll": "GET /v1/controlplane/status → ready.ok == true"
+    },
     "materialize_status": {
       "last_success_at": "2026-07-29T10:00:00Z",
       "last_attempt_at": "2026-07-29T10:00:00Z",
@@ -53,6 +62,8 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
   }
 }
 ```
+
+`ready.ok` is the **wizard poll signal** after `activate` / `from-*` with `activate:true`: ownership healthy, active sets present, last materialize without error, TLS ready (ACME), supervisor `Running` + `box_up`.
 
 `GET /status/details` additionally returns:
 - `owner_transitions` (full recent log, up to 20 entries),
@@ -105,6 +116,16 @@ Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or no
 
 ---
 
+## WireGuard hub
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/controlplane/wg` | Singleton hub status (no private key) |
+| PUT | `/v1/controlplane/wg` | Update `{enabled, profile, subnet, listen_port, system, forward_allow, internet_allow, …}`; Claim(controlplane) when enabling |
+| POST | `/v1/controlplane/wg/regenerate-awg` | Rotate AWG2/3 + masquerade params |
+
+Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade). Subnet default `10.8.0.0/24`.
+
 ## TLS profile
 
 | Method | Path | Meaning |
@@ -143,20 +164,83 @@ Rules:
 
 ---
 
-## Presets
+## Protocols & presets
+
+File catalog under `internal/controlplane/presets/data/`. Operator how-to:
+[`docs/guides/controlplane-presets/`](../guides/controlplane-presets/00-index.md).
+
+Query `lang` (default/fallback `ru`).
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/presets` | List name, protocol, traits, description |
-| GET | `/v1/controlplane/presets/{name}` | Full preset including templates |
+| GET | `/v1/controlplane/protocols?lang=` | Protocol list + `invariant_tags` |
+| GET | `/v1/controlplane/protocols/{tag}?lang=` | Protocol meta + invariant summaries |
+| GET | `/v1/controlplane/presets?lang=&protocol=` | Invariant list (short; filter by protocol) |
+| GET | `/v1/controlplane/presets/{tag}?lang=` | Full invariant + templates + `protocol_meta` |
 
-Read-only in v1. `404` if unknown.
+`{tag}` accepts canonical (`vless_reality`) or legacy alias (`vless-reality-tcp`).
+Read-only. `404` if unknown / no templates.
+
+List compat fields: `name` (=tag), `protocol`, `description`, `traits`; plus `tag`, `short_name`, `scores`, `demux_hints`, `aliases`, `cred_fields`, `param_fields`, `networks`, `optional_params.listen_port`.
+Full templates remain on `GET /presets/{tag}`.
+
+---
+
+## Demux groups (catalog)
+
+First-class installable demux bundles (modern protocols only). Prefer these over raw `demux-recipes` for client UX.
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/controlplane/demux-groups?lang=` | List groups: tag, scores, slots, substitutes |
+| GET | `/v1/controlplane/demux-groups/{tag}?lang=` | Full group (i18n, notes, slots) |
+| GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + metadata (scores/traits/titles) |
+| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?`, `slot_presets?`, `activate?`) |
+| POST | `/v1/controlplane/sets/from-presets` | Batch install single-inbound sets with port policy |
+
+### Client install flow
+
+1. `GET /protocols` → pick protocol folder  
+2. `GET /presets?protocol=` → pick tags (+ `optional_params.listen_port`)  
+3. **or** `GET /demux-groups` → `GET .../substitutions` → choose slot replacements  
+4. `POST /sets/from-demux-group` or `/sets/from-presets` with `activate: true`  
+   - Response: `activated` is always a **boolean**; `from-presets` also returns `activated_sets: string[]`.  
+   - `listen_port` may be omitted → agent auto-picks a free port (prefers 443).  
+5. Poll `GET /status` until `ready.ok === true`  
+6. Create user → `subscription_url` (+ query filters from `/subscription-tags`)
+
+### Port policy
+
+- Single-inbound sets: at most **one TCP and one UDP** occupant per public `listen_port` (e.g. Reality TCP + Hy2 UDP on `:443` is allowed; two TCP on `:443` → `409 cp_port_conflict`).
+- Demux groups occupy networks declared in the group (`tcp`/`udp`) on one public port; members bind **random private** ports `41000–60000` on `127.0.0.1`.
+- Demux actions use **`dial` forward** to member ports (not inject).
+
+### `from-demux-group` body
+
+```json
+{
+  "group": "dg_443_dual",
+  "name": "edge-443",
+  "listen_port": 443,
+  "slot_presets": { "tcp": "vless_ws_reality", "quic": "tuic" },
+  "activate": true
+}
+```
+
+Response includes `set`, `member_ports`, `slot_snis`, `warnings`. Reality slots get unique SNIs aligned with demux match / Reality assignment.
+
+### Client bootstrap & ports
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/controlplane/client/bootstrap?lang=` | Flows + capabilities + counts for mobile/desktop UX |
+| GET | `/v1/controlplane/ports/availability?port=` | Free TCP/UDP on a port; `can_demux` |
 
 ---
 
 ## Demux recipes
 
-Named demux_template skeletons (separate from protocol presets). Operators copy `demux_template` + `required_presets` into a set.
+Named demux_template skeletons (legacy/manual; separate from demux-groups). Operators copy `demux_template` + `required_presets` into a set.
 
 | Method | Path | Meaning |
 |--------|------|---------|
@@ -198,12 +282,16 @@ Named demux_template skeletons (separate from protocol presets). Operators copy 
   - `subscription_tags[]` (optional),
   - `enabled_user_variants[]` (optional),
   - `enabled_client_profiles[]` (optional),
-  - `credential_instance_policy` (optional).
+  - `credential_instance_policy` (optional),
+  - `params` (optional map; **required keys** declared by preset `param_fields`, e.g. carrier SFU `room` URL; demux members may carry `demux_sni`).
+- Port uniqueness is **per L4 network** (TCP/UDP), not the whole port number.
 - if only `presets[]` is sent, server lazily normalizes to default bindings.
+- missing required `params` → `400` `cp_invalid_bindings`.
 
 `GET /sets/{name}/subscription-tags` response model:
 - returns per-binding `inbound_tag`, `preset`, `protocol`,
 - returns discoverable `subscription_tags`, `enabled_user_variants`, `enabled_client_profiles`,
+- returns `params` / `param_fields` (carrier room URL etc.),
 - this endpoint is for subscription UI/client selection only; server inbounds already keep all required user entries by variant policy.
 
 `GET /subscription-tags` returns `{ "sets": [ { "set", "active", "bindings": [...] }, ... ] }`.

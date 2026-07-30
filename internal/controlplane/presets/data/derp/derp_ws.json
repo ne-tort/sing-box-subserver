@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "tag": "derp_ws",
+  "protocol": "derp",
+  "aliases": [
+    "derp-ws"
+  ],
+  "short_name": "DERP WS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "DERP WS",
+      "description": "DERP WebSocket /derp + TLS; require_users."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "curve25519",
+    "websocket"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1",
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS → DERP upgrade/WS",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "private_key",
+    "public_key"
+  ],
+  "cred_generators": {
+    "private_key": "curve25519"
+  },
+  "peer_secret_fields": {
+    "private_key": "curve25519",
+    "public_key": "curve25519"
+  },
+  "inbound_template": {
+    "type": "derp",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "private_key": "{{peer.private_key}}",
+    "users": [],
+    "require_users": true,
+    "udp": "native",
+    "tailscale_relay": false,
+    "path": "{{param.path}}",
+    "websocket": true,
+    "keepalive": "60s",
+    "home": "s-ui derp",
+    "max_packet_size": 65536,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "http/1.1",
+        "h2"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "derp",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "private_key": "{{user.private_key}}",
+    "peer_public_key": "{{peer.public_key}}",
+    "udp": "native",
+    "path": "{{param.path}}",
+    "host": "{{server}}",
+    "websocket": true,
+    "keepalive": "60s",
+    "connect_timeout": "10s",
+    "max_packet_size": 65536,
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "http/1.1",
+        "h2"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "build_tag": "with_derp"
+  },
+  "client_notes": {
+    "keys": "server peer private/public + per-user private/public (curve25519 RawURL)",
+    "peer_public_key": "subscription uses set.peer_secrets[preset/public_key]",
+    "params": "optional bindings[].params overrides: path"
+  }
+}

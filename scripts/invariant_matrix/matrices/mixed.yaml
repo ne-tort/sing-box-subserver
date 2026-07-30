@@ -1,0 +1,7 @@
+protocol: mixed
+mode: render
+cells:
+- tag: mixed_auth
+  stage: 5
+- tag: mixed_tls
+  stage: 5

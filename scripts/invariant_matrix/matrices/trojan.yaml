@@ -1,0 +1,29 @@
+protocol: trojan
+mode: render
+cells:
+- tag: trojan_tls
+  stage: 1
+- tag: trojan_reality
+  stage: 1
+- tag: trojan_ws_tls
+  stage: 2
+- tag: trojan_ws_reality
+  stage: 2
+- tag: trojan_grpc_tls
+  stage: 2
+- tag: trojan_grpc_reality
+  stage: 2
+- tag: trojan_http_tls
+  stage: 2
+- tag: trojan_http_reality
+  stage: 2
+- tag: trojan_httpupgrade_tls
+  stage: 2
+- tag: trojan_httpupgrade_reality
+  stage: 2
+- tag: trojan_tls_mux
+  stage: 2
+- tag: trojan_quic_tls
+  stage: 2
+- tag: trojan_tls_fallback
+  stage: 2

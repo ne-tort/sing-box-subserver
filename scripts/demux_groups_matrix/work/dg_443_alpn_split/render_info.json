@@ -1,0 +1,23 @@
+{
+  "group": "dg_443_alpn_split",
+  "public_port": 1443,
+  "member_ports": {
+    "anytls": 50211,
+    "hy2": 55370,
+    "vless_grpc_tls": 47887
+  },
+  "slot_snis": {
+    "h1": "www.apple.com",
+    "h2": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "vless_grpc_tls": "www.microsoft.com",
+    "anytls": "www.apple.com"
+  },
+  "tags": [
+    "vless_grpc_tls",
+    "anytls",
+    "hy2"
+  ],
+  "reality": false
+}

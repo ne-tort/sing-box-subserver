@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "tag": "trojan",
+  "singbox_type": "trojan",
+  "short_name": "Trojan",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan",
+      "description": "Парольный прокси поверх TLS."
+    },
+    "en": {
+      "title": "Trojan",
+      "description": "Парольный прокси поверх TLS."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ]
+}

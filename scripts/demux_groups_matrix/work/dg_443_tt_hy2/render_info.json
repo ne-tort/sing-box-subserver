@@ -1,0 +1,19 @@
+{
+  "group": "dg_443_tt_hy2",
+  "public_port": 1443,
+  "member_ports": {
+    "hy2": 48710,
+    "vless_tls": 48573
+  },
+  "slot_snis": {
+    "tls": "www.microsoft.com"
+  },
+  "preset_sni": {
+    "vless_tls": "www.microsoft.com"
+  },
+  "tags": [
+    "vless_tls",
+    "hy2"
+  ],
+  "reality": false
+}

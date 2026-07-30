@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_aes",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-aes"
+  ],
+  "short_name": "Sudoku AES",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku AES-GCM",
+      "description": "Sudoku shared key + aes-128-gcm + entropy table."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku AES stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "peer_secret_fields": {
+    "key": "password"
+  },
+  "inbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "aes-128-gcm",
+    "padding_min": 3,
+    "padding_max": 12,
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "handshake_timeout": 5,
+    "fallback": "{{param.fallback}}",
+    "suspicious_action": "fallback",
+    "multiplex": "off"
+  },
+  "outbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "aes-128-gcm",
+    "padding_min": 3,
+    "padding_max": 12,
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "multiplex": "off"
+  },
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  }
+}

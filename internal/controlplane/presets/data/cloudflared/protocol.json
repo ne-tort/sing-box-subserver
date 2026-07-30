@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "tag": "cloudflared",
+  "singbox_type": "cloudflared",
+  "short_name": "Cloudflared",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Cloudflared",
+      "description": "Cloudflare Tunnel inbound (with_cloudflared); token в bindings[].params."
+    },
+    "en": {
+      "title": "Cloudflared",
+      "description": "Cloudflare Tunnel inbound."
+    }
+  },
+  "default_cred_fields": [],
+  "notes": {
+    "subscription": "нет симметричного outbound — только edge→router; sub не эмитит outbounds",
+    "params": "обязателен bindings[].params.token"
+  }
+}

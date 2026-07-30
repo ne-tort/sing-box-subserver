@@ -1,0 +1,7 @@
+{
+  "tag": "vless_reality",
+  "iperf_mode": "tcp",
+  "demux_sni": "www.microsoft.com",
+  "public_port": 1443,
+  "member_port": 55363
+}
