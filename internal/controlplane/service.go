@@ -1430,7 +1430,7 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, u := range users {
 		if u.Name == body.Name {
-			failJSON(w, 409, "conflict", "name already exists")
+			failJSON(w, 409, "cp_name_conflict", "name already exists")
 			return
 		}
 	}
@@ -1552,7 +1552,7 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 		if v != u.Name {
 			for j := range users {
 				if j != i && users[j].Name == v {
-					failJSON(w, 409, "conflict", "name already exists")
+					failJSON(w, 409, "cp_name_conflict", "name already exists")
 					return
 				}
 			}
@@ -2074,7 +2074,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, o := range sets {
 		if o.Name == set.Name {
-			failJSON(w, 409, "conflict", "set name exists")
+			failJSON(w, 409, "cp_name_conflict", "set name exists")
 			return
 		}
 	}
@@ -2358,7 +2358,7 @@ func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.Validate(); err != nil {
-		failJSON(w, 400, "bad_request", err.Error())
+		failJSON(w, 400, "cp_invalid_tls", err.Error())
 		return
 	}
 	if err := s.store.SaveTLSProfile(p); err != nil {
@@ -2493,6 +2493,10 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		accepted = append(accepted, ep)
+	}
+	if len(body.Profiles) > 0 && len(accepted) == 0 {
+		failJSON(w, 400, "cp_invalid_reality", "all profiles rejected")
+		return
 	}
 	cfg, err := s.loadRealityConfig()
 	if err != nil {

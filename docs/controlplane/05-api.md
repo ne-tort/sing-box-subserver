@@ -112,7 +112,7 @@ Optional `creds` on create / PUT body:
 
 Merge is per-preset field map (supplied fields overwrite; unspecified fields kept). Then field-level auto-fill completes the catalog. PATCH never accepts bulk creds.
 
-Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or non-string values), `409` name conflict, `404` missing.
+Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or non-string values), `409` `cp_name_conflict`, `404` missing.
 
 ---
 
@@ -131,10 +131,10 @@ Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade)
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/tls` | Self-signed profile + `material_status` |
-| PUT | `/v1/controlplane/tls` | Upsert `{self_signed}`; ensures PEM; rematerialize if active |
+| PUT | `/v1/controlplane/tls` | Upsert `{self_signed}`; validation failure → `400` `cp_invalid_tls`; ensures PEM; rematerialize if active (persist-then-422) |
 | POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM |
 | GET | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status |
-| PUT | `/v1/controlplane/cert-manager` | Replace ACME settings + domains list |
+| PUT | `/v1/controlplane/cert-manager` | Replace ACME settings + domains list; invalid → `400` `cp_invalid_cert_manager`; rematerialize persist-then-422 |
 
 TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager domains). See [11-tls](11-tls.md).
 
@@ -142,8 +142,8 @@ TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager dom
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server); PUT → `rematerialized` if CP owns dataplane |
-| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`); same rematerialize contract |
+| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server); PUT validates → `400` `cp_invalid_config`; rematerialize persist-then-422 if CP owns dataplane |
+| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`); same validate + rematerialize contract |
 
 ---
 
@@ -152,7 +152,7 @@ TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager dom
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/reality` | `user_overrides`, `effective_profiles`, `default_profiles`, `using_user_overrides`, `active_assignments` |
-| PUT | `/v1/controlplane/reality` | Replace-all profiles; response includes `accepted` / `rejected[{sni,reason}]` |
+| PUT | `/v1/controlplane/reality` | Replace-all profiles; response includes `accepted` / `rejected[{sni,reason}]`; all rejected → `400` `cp_invalid_reality` |
 
 PUT body:
 
@@ -171,6 +171,7 @@ Rules:
 - `handshake_port` default = `443`.
 - Validation filters unusable profiles (DNS/TCP/CDN heuristics).
 - Invalid entries are listed in `rejected` and omitted from the stored pool.
+- If `profiles` is non-empty and every entry is rejected → `400` `cp_invalid_reality` (store unchanged). Empty `profiles` clears user overrides (200).
 
 ---
 
@@ -288,7 +289,7 @@ Named demux_template skeletons (legacy/manual; separate from demux-groups). Oper
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/sets` | List (include `active` bool) |
-| POST | `/v1/controlplane/sets` | Create set (`201`; `demux_template` optional; port unique) |
+| POST | `/v1/controlplane/sets` | Create set (`201`; `demux_template` optional; `409` `cp_name_conflict` / `cp_port_conflict`) |
 | GET | `/v1/controlplane/sets/{name}` | Get (same shape as list item, includes `active`) |
 | GET | `/v1/controlplane/sets/{name}/subscription-tags` | List available subscription selection tags/variants/profiles per inbound binding |
 | GET | `/v1/controlplane/subscription-tags` | Aggregate subscription-tags across sets (`?active_only=true` default; `false` lists all sets) |
@@ -346,6 +347,7 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_user_ineligible` | Sub fetch for expired/limited user |
 | `cp_unknown_preset` | Set references missing preset |
 | `cp_invalid_creds` | Manual creds: unknown preset/field or empty/non-string value |
+| `cp_name_conflict` | User or set name already exists (409) |
 | `cp_claim_failed` | `configowner.Claim(controlplane)` failed during activate |
 | `cp_port_exhausted` | No free public/private port for install |
 | `cp_invalid_bindings` | Missing/invalid binding params (e.g. `params.sni`) |
@@ -355,6 +357,8 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_invalid_slot` | Slot preset not allowed / duplicate across slots |
 | `cp_invalid_set` | Generic set validation failure |
 | `cp_invalid_config` | DNS/route fragment validation failed |
+| `cp_invalid_tls` | TLS self-signed profile validation failed |
+| `cp_invalid_reality` | Reality PUT: all submitted profiles rejected |
 | `cp_invalid_cert_manager` | Cert-manager settings invalid |
 | `cp_materialize_failed` | Materialize build/validate failed before Apply |
 | `cp_apply_failed` | Supervisor Apply failed after materialize |
@@ -363,13 +367,14 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 
 `422` on activate / PUT active set / TLS / cert-manager / dns / route / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
 
+**Persist-then-422:** for `PUT` dns / route / tls / cert-manager (and rematerialize after users/reality), the store write happens before rematerialize. On `422` the new values are already on disk — client should retry rematerialize path or re-read via GET. Dry-run/rollback is out of scope.
+
 ### Follow-ups (не блокируют клиентский happy-path)
 
 | Item | Why later |
 |------|-----------|
 | `materializeErrorCode` эвристика по тексту ошибки | Достаточно для UI; точнее — typed errors из supervisor Apply |
-| Reality `PUT` всегда 200 + `accepted`/`rejected` | Клиент обязан смотреть `rejected[]`; `400` только если all-rejected — см. ниже TODO |
-| Persist-then-422 (dns/route/tls/cm/users) | Store уже записан; клиент ретраит или читает GET; dry-run/rollback — отдельный контракт |
+| Persist-then-422 dry-run/rollback | Store уже записан (см. выше); отдельный контракт если понадобится атомарность |
 | `peer_secrets` в GET set | Нужны оператору; для mobile UI — не светить без нужды (отдельный redaction flag) |
 | `substitutes` legacy alias на demux slots | Предпочитать `presets`; `substitutes` оставлен для совместимости |
 

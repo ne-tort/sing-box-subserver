@@ -148,6 +148,15 @@ func TestTLSProfileAPI(t *testing.T) {
 	if rr.Code != 400 {
 		t.Fatalf("expected 400 without self_signed, got %d %s", rr.Code, rr.Body.String())
 	}
+	var tlsErr struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &tlsErr)
+	if tlsErr.Error.Code != "cp_invalid_tls" {
+		t.Fatalf("want cp_invalid_tls got %q body=%s", tlsErr.Error.Code, rr.Body.String())
+	}
 
 	ss := []byte(`{
 		"self_signed":{
@@ -727,6 +736,15 @@ func TestUserRenameConflictAndTrafficReset(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPatch, "/v1/controlplane/users/"+id2, bytes.NewReader([]byte(`{"name":"a1"}`))))
 	if rr.Code != 409 {
 		t.Fatalf("rename conflict: want 409 got %d %s", rr.Code, rr.Body.String())
+	}
+	var conflictEnv struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &conflictEnv)
+	if conflictEnv.Error.Code != "cp_name_conflict" {
+		t.Fatalf("want cp_name_conflict got %q", conflictEnv.Error.Code)
 	}
 
 	rr = httptest.NewRecorder()
@@ -1388,6 +1406,23 @@ func TestRealityAPIAndStickyAssignment(t *testing.T) {
 	acc, _ := env.Data["accepted"].([]any)
 	if len(acc) == 0 {
 		t.Fatalf("expected accepted localhost, body=%s", rr.Body.String())
+	}
+
+	// All profiles rejected → 400 cp_invalid_reality (store unchanged).
+	putAllBad := []byte(`{"profiles":[{"sni":"1.2.3.4"},{"sni":"5.6.7.8"}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/reality", bytes.NewReader(putAllBad)))
+	if rr.Code != 400 {
+		t.Fatalf("put reality all-rejected: want 400 got %d %s", rr.Code, rr.Body.String())
+	}
+	var errEnv struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &errEnv)
+	if errEnv.Error.Code != "cp_invalid_reality" {
+		t.Fatalf("want cp_invalid_reality got %q", errEnv.Error.Code)
 	}
 }
 
