@@ -53,6 +53,8 @@ type InboundSet struct {
 	PeerSecrets map[string]string   `json:"peer_secrets,omitempty"`
 	// MemberPorts maps canonical preset → private loopback port when demux uses dial/forward.
 	MemberPorts map[string]uint16 `json:"member_ports,omitempty"`
+	// SlotSNIs maps demux slot id → SNI used for match / Reality (persisted for list/get after reload).
+	SlotSNIs map[string]string `json:"slot_snis,omitempty"`
 	// DemuxGroup is the catalog tag this set was installed from (optional).
 	DemuxGroup string `json:"demux_group,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`

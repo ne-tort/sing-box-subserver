@@ -78,10 +78,13 @@
     "tls_profile": true,
     "reality_assignment": true
   },
+  "default_user_variants": [
+    "flow-none"
+  ],
   "default_client_profiles": [
     "pkt-xudp"
   ],
   "client_notes": {
-    "variants": "flow-none / xtls-rprx-vision / udp-vision — отдельные inbound users"
+    "variants": "по умолчанию flow-none (совместимо с official sing-box); Vision/udp-vision — через enabled_user_variants"
   }
 }

@@ -18,8 +18,12 @@ import (
 
 func (s *Service) handleDemuxGroupsList(w http.ResponseWriter, r *http.Request) {
 	lang := requestLang(r)
+	statusFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 	out := make([]any, 0)
 	for _, g := range demuxgroups.All() {
+		if statusFilter != "" && !strings.EqualFold(g.Status, statusFilter) {
+			continue
+		}
 		title, desc := g.ResolveI18n(lang)
 		meta := demuxgroups.BuildGroupMatchMeta(g)
 		slots := make([]any, 0, len(g.Slots))
@@ -83,11 +87,12 @@ func (s *Service) handleDemuxGroupsSubstitutions(w http.ResponseWriter, r *http.
 }
 
 // POST /v1/controlplane/sets/from-demux-group
-// Body: demuxgroups.InstallRequest + optional activate bool
+// Body: demuxgroups.InstallRequest + optional activate/replace bool
 func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		demuxgroups.InstallRequest
 		Activate bool `json:"activate"`
+		Replace  bool `json:"replace"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		failJSON(w, 400, "bad_request", err.Error())
@@ -110,6 +115,22 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		body.ListenPort = port
+	}
+	setName := strings.TrimSpace(body.SetName)
+	if setName == "" {
+		if g, gerr := demuxgroups.Get(body.GroupTag); gerr == nil {
+			setName = g.Tag
+		}
+	}
+	body.SetName = setName
+	sets, err = s.replaceOrConflictSet(r.Context(), sets, setName, body.Replace)
+	if err != nil {
+		code, ec := 409, "cp_name_conflict"
+		if strings.Contains(err.Error(), "cp_conflict_active") {
+			ec = "cp_conflict_active"
+		}
+		failJSON(w, code, ec, err.Error())
+		return
 	}
 	used := collectUsedPorts(sets)
 	if hub, err := s.store.LoadWgHub(); err == nil && hub.ListenPort != 0 {
@@ -152,17 +173,64 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		"slot_snis":    res.SlotSNIs,
 		"warnings":     res.Warnings,
 		"activated":    false,
+		"set_persisted": true,
 	}
 	if body.Activate {
 		if err := s.activateSetByName(r.Context(), set.Name); err != nil {
-			// Set is persisted; fail the request so clients do not treat ok:true as live.
-			failJSON(w, 422, activateErrorCode(err), fmt.Sprintf("set %q saved but activate failed: %v", set.Name, err))
+			failJSONData(w, 422, activateErrorCode(err), fmt.Sprintf("set %q saved but activate failed: %v", set.Name, err), map[string]any{
+				"set_persisted":       true,
+				"dataplane_unchanged": true,
+				"activated_sets":      []string{},
+				"failed_at":           set.Name,
+			})
 			return
 		}
 		resp["activated"] = true
 		resp["set"] = s.setPublicView(set, true)
 	}
 	okJSON(w, 201, resp)
+}
+
+// replaceOrConflictSet removes an existing set with the same name when replace=true.
+// Active sets must be deactivated first (or replace deactivates them).
+func (s *Service) replaceOrConflictSet(ctx context.Context, sets []domain.InboundSet, name string, replace bool) ([]domain.InboundSet, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return sets, nil
+	}
+	idx := -1
+	for i := range sets {
+		if sets[i].Name == name {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return sets, nil
+	}
+	if !replace {
+		return sets, fmt.Errorf("set name exists")
+	}
+	st, err := s.store.LoadState()
+	if err != nil {
+		return sets, err
+	}
+	if contains(st.ActiveSets, name) {
+		if err := s.deactivateSetByName(ctx, name); err != nil {
+			return sets, fmt.Errorf("cp_conflict_active: deactivate existing set before replace: %w", err)
+		}
+	}
+	out := make([]domain.InboundSet, 0, len(sets)-1)
+	for i, set := range sets {
+		if i == idx {
+			continue
+		}
+		out = append(out, set)
+	}
+	if err := s.store.SaveSets(out); err != nil {
+		return sets, err
+	}
+	return out, nil
 }
 
 // POST /v1/controlplane/sets/from-presets — install one or more single-inbound sets with port policy.
@@ -176,6 +244,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			Params     map[string]string `json:"params,omitempty"`
 		} `json:"items"`
 		Activate bool `json:"activate"`
+		Replace  bool `json:"replace"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		failJSON(w, 400, "bad_request", err.Error())
@@ -202,6 +271,22 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			failJSON(w, 400, "bad_request", "each item needs preset (and optional name)")
 			return
 		}
+		var rerr error
+		sets, rerr = s.replaceOrConflictSet(r.Context(), sets, name, body.Replace)
+		if rerr != nil {
+			code, ec := 409, "cp_name_conflict"
+			if strings.Contains(rerr.Error(), "cp_conflict_active") {
+				ec = "cp_conflict_active"
+			}
+			failJSON(w, code, ec, fmt.Sprintf("items[%d]: %v", i, rerr))
+			return
+		}
+		for _, o := range created {
+			if o.Name == name {
+				failJSON(w, 409, "cp_name_conflict", fmt.Sprintf("items[%d]: set name exists", i))
+				return
+			}
+		}
 		listenPort := it.ListenPort
 		if listenPort == 0 {
 			pmeta, err := presets.Get(preset)
@@ -219,7 +304,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			}
 			picked, err := suggestListenPort(others, need)
 			if err != nil {
-				failJSON(w, 409, "cp_port_conflict", fmt.Sprintf("items[%d]: %v", i, err))
+				failJSON(w, 409, "cp_port_exhausted", fmt.Sprintf("items[%d]: %v", i, err))
 				return
 			}
 			listenPort = picked
@@ -251,17 +336,30 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	// activated is always bool (same contract as from-demux-group); activated_sets lists successes.
 	views := make([]any, 0, len(created))
 	for _, set := range created {
 		views = append(views, s.setPublicView(set, false))
 	}
-	resp := map[string]any{"sets": views, "activated": false, "activated_sets": []string{}}
+	resp := map[string]any{
+		"sets":           views,
+		"activated":      false,
+		"activated_sets": []string{},
+		"set_persisted":  true,
+	}
 	if body.Activate {
 		activated := make([]string, 0, len(created))
 		for _, set := range created {
 			if err := s.activateSetByName(r.Context(), set.Name); err != nil {
-				failJSON(w, 422, activateErrorCode(err), fmt.Sprintf("sets saved (%d); activate failed at %q after %d ok: %v", len(created), set.Name, len(activated), err))
+				for _, name := range activated {
+					_ = s.deactivateSetByName(r.Context(), name)
+				}
+				failJSONData(w, 422, activateErrorCode(err), fmt.Sprintf("sets saved (%d); activate failed at %q; rolled back %d active: %v", len(created), set.Name, len(activated), err), map[string]any{
+					"set_persisted":       true,
+					"dataplane_unchanged": true,
+					"activated_sets":      []string{},
+					"failed_at":           set.Name,
+					"rolled_back":         activated,
+				})
 				return
 			}
 			activated = append(activated, set.Name)

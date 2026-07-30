@@ -578,31 +578,20 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 		t.Fatal(err)
 	}
 	outs, _ := sub["outbounds"].([]any)
-	if len(outs) != 2 {
-		t.Fatalf("outbounds=%d", len(outs))
+	if len(outs) != 1 {
+		t.Fatalf("outbounds=%d want 1 (default_user_variants flow-none)", len(outs))
 	}
-	foundFlowNone, foundFlowX := false, false
-	for _, o := range outs {
-		ob, _ := o.(map[string]any)
-		otls, _ := ob["tls"].(map[string]any)
-		if otls["server_name"] != "www.microsoft.com" {
-			t.Fatalf("sub server_name=%v", otls["server_name"])
-		}
-		if ob["flow"] != nil {
-			foundFlowX = true
-			if ob["flow"] != "xtls-rprx-vision" {
-				t.Fatalf("flow=%v", ob["flow"])
-			}
-		} else {
-			foundFlowNone = true
-		}
-		realityOut, _ := otls["reality"].(map[string]any)
-		if realityOut["public_key"] != assignments["r1/vless_reality"].PublicKeyBase64 {
-			t.Fatalf("public_key=%v", realityOut["public_key"])
-		}
+	ob, _ := outs[0].(map[string]any)
+	otls, _ := ob["tls"].(map[string]any)
+	if otls["server_name"] != "www.microsoft.com" {
+		t.Fatalf("sub server_name=%v", otls["server_name"])
 	}
-	if !foundFlowNone || !foundFlowX {
-		t.Fatalf("expected both flow variants; none=%v xtls=%v outs=%#v", foundFlowNone, foundFlowX, outs)
+	if ob["flow"] != nil && ob["flow"] != "" {
+		t.Fatalf("expected flow-none (empty flow), got %v", ob["flow"])
+	}
+	realityOut, _ := otls["reality"].(map[string]any)
+	if realityOut["public_key"] != assignments["r1/vless_reality"].PublicKeyBase64 {
+		t.Fatalf("public_key=%v", realityOut["public_key"])
 	}
 }
 

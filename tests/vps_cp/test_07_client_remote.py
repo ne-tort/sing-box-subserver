@@ -66,7 +66,18 @@ python3 - <<PY
 import json
 sub=json.load(open('/tmp/sub-pytest.json'))
 assert sub.get('outbounds'), sub
-ob=sub['outbounds'][{outbound_index}]
+# Prefer flow-none / first non-vision vless when multiple variants exist
+outs=[o for o in sub['outbounds'] if o.get('type') not in ('direct','block','dns','selector','urltest')]
+assert outs, sub
+idx={outbound_index}
+ob=outs[idx]
+if ob.get('type')=='vless' and idx==0:
+  for cand in outs:
+    flow=(cand.get('flow') or '')
+    if cand.get('type')=='vless' and 'vision' not in flow and 'udp443' not in flow:
+      ob=cand
+      break
+ob=dict(ob)
 {server_py}
 cfg={{
   'log':{{'level':'info'}},
@@ -127,14 +138,14 @@ def test_remote_client_single_inbound(set_name: str, expect_ok: bool, artifacts_
         assert not ok
 
 
-def test_remote_hy2_direct_member_works(artifacts_dir):
-    """Hy2 works to private member port; documents demux QUIC match gap if :443 fails."""
+def test_remote_demux_defaults_member_and_front(artifacts_dir):
+    """dg_443_dual defaults (vless_reality + hy2): member ports and demux :443 must both work."""
     script = r"""
 set -euo pipefail
 AUTH='Authorization: Bearer vps-cp-token-dev-only'
 BASE='https://127.0.0.1:8080'
 USERJSON=$(curl -sk -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"pytest-hy2-$RANDOM\",\"enabled\":true}" \
+  -d "{\"name\":\"pytest-demux-$RANDOM\",\"enabled\":true}" \
   "$BASE/v1/controlplane/users")
 TOKEN=$(python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok"), d; print(d["data"]["sub_token"])' <<<"$USERJSON")
 curl -sk "$BASE/v1/sub/$TOKEN?set=e2e-demux" -o /tmp/sub-demux.json
@@ -142,45 +153,67 @@ curl -sk -H "$AUTH" "$BASE/v1/controlplane/sets/e2e-demux" -o /tmp/set-demux.jso
 python3 - <<'PY'
 import json,subprocess,time
 sub=json.load(open('/tmp/sub-demux.json'))
-ports=json.load(open('/tmp/set-demux.json'))['data']['member_ports']
-ob=[o for o in sub['outbounds'] if o.get('type')=='hysteria2'][0]
-# member direct
-obm=dict(ob); obm['server']='127.0.0.1'; obm['server_port']=int(ports['hy2_salamander'])
-# demux front
-obd=dict(ob); obd['server']='127.0.0.1'; obd['server_port']=443
+setd=json.load(open('/tmp/set-demux.json'))['data']
+ports=setd.get('member_ports') or {}
+presets=setd.get('presets') or []
+print('PRESETS', presets)
+print('PORTS', ports)
+assert 'hy2_salamander' not in ports, ports
+assert 'hy2' in ports, ports
+assert any('vless_reality' == k or k == 'vless_reality' for k in ports) or 'vless_reality' in ports
+
+def pick_vless():
+  for o in sub['outbounds']:
+    if o.get('type')!='vless': continue
+    flow=o.get('flow') or ''
+    if 'vision' in flow or 'udp443' in flow: continue
+    return o
+  raise SystemExit('no flow-none vless')
+
+def pick_quic():
+  for o in sub['outbounds']:
+    if o.get('type') in ('hysteria2','tuic'):
+      return o
+  raise SystemExit('no quic outbound')
 
 def run(name, outbound, port):
   cfg={'log':{'level':'info'},'inbounds':[{'type':'mixed','tag':'m','listen':'127.0.0.1','listen_port':port}],'outbounds':[outbound,{'type':'direct','tag':'direct'}],'route':{'final':outbound['tag']}}
   json.dump(cfg, open('/tmp/c.json','w'), indent=2)
   subprocess.run(['docker','rm','-f',name], capture_output=True)
   subprocess.run(['docker','run','-d','--name',name,'--network','host','-v','/tmp/c.json:/work/client.json:ro','ghcr.io/sagernet/sing-box:v1.12.12','run','-c','/work/client.json'], check=True)
-  time.sleep(1.2)
+  time.sleep(1.5)
   p=subprocess.run(['curl','-x',f'http://127.0.0.1:{port}','-sS','-m','20','https://1.1.1.1/cdn-cgi/trace'], capture_output=True, text=True)
   ok=p.returncode==0 and 'ip=' in (p.stdout or '')
   print(name, 'OK' if ok else 'FAIL')
   if not ok:
     logs=subprocess.run(['docker','logs',name], capture_output=True, text=True)
-    print(((logs.stdout or '')+(logs.stderr or ''))[-400:])
+    print(((logs.stdout or '')+(logs.stderr or ''))[-500:])
   subprocess.run(['docker','rm','-f',name], capture_output=True)
   return ok
-m=run('hy2-member', obm, 19601)
-d=run('hy2-demux', obd, 19602)
-print('MEMBER', 'OK' if m else 'FAIL')
-print('DEMUX', 'OK' if d else 'FAIL')
+
+quic=pick_quic(); vl=pick_vless()
+quic_key=next(k for k in ports if k in ('hy2','tuic') or k.startswith('hy2') or k.startswith('tuic'))
+vl_key=next(k for k in ports if 'reality' in k)
+quic_port=int(ports[quic_key]); vl_port=int(ports[vl_key])
+
+obm=dict(quic); obm['server']='127.0.0.1'; obm['server_port']=quic_port
+obd=dict(quic); obd['server']='127.0.0.1'; obd['server_port']=443
+vlm=dict(vl); vlm['server']='127.0.0.1'; vlm['server_port']=vl_port
+vld=dict(vl); vld['server']='127.0.0.1'; vld['server_port']=443
+results={
+  'quic_member': run('quic-member', obm, 19601),
+  'quic_demux': run('quic-demux', obd, 19602),
+  'reality_member': run('vl-member', vlm, 19603),
+  'reality_demux': run('vl-demux', vld, 19604),
+}
+for k,v in results.items():
+  print(k.upper(), 'OK' if v else 'FAIL')
+assert all(results.values()), results
 PY
 """
-    out = _ssh(script, timeout=120)
-    (artifacts_dir / "client_remote_hy2.log").write_text(out, encoding="utf-8")
-    assert "MEMBER OK" in out, out[-2000:]
-    # Known gap: salamander/obfs may not match demux protocol=quic
-    if "DEMUX OK" not in out:
-        (artifacts_dir / "KNOWN_GAP_demux_hy2_quic.txt").write_text(
-            "Hy2 works on member port but fails via demux :443 (protocol=quic match vs salamander).\n" + out[-1500:],
-            encoding="utf-8",
-        )
-
-
-def test_remote_reality_tcp_already_covered():
-    """Plain vless_reality covered by test_remote_client_single_inbound[e2e-reality-tcp]."""
-    # Keep a note artifact for WS Reality gap observed in demux group.
-    pass
+    out = _ssh(script, timeout=180)
+    (artifacts_dir / "client_remote_demux.log").write_text(out, encoding="utf-8")
+    assert "QUIC_MEMBER OK" in out, out[-2500:]
+    assert "QUIC_DEMUX OK" in out, out[-2500:]
+    assert "REALITY_MEMBER OK" in out, out[-2500:]
+    assert "REALITY_DEMUX OK" in out, out[-2500:]

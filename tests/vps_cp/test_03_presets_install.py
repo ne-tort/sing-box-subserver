@@ -93,6 +93,35 @@ def test_from_presets_install_activate_user_sub(api, artifacts_dir):
     assert "sets" in tags
 
 
+def test_e2e_reality_tcp_for_remote_suite(api, artifacts_dir):
+    """Ensure e2e-reality-tcp exists so test_07_client_remote can probe it."""
+    name = "e2e-reality-tcp"
+    st = api.get(f"/v1/controlplane/sets/{name}", expect=(200, 404))
+    if st.get("ok"):
+        data = api.data(st)
+        if data.get("active"):
+            api.post(f"/v1/controlplane/sets/{name}/deactivate", expect=(200, 422))
+        api.delete(f"/v1/controlplane/sets/{name}", expect=(200, 404, 409))
+
+    install = api.data(
+        api.post(
+            "/v1/controlplane/sets/from-presets",
+            {
+                "items": [{"name": name, "preset": "vless_reality", "listen_port": 18445}],
+                "activate": True,
+                "replace": True,
+            },
+            expect=201,
+        )
+    )
+    api.dump(artifacts_dir, "from_presets_reality_tcp.json", install)
+    assert install["activated"] is True
+    api.wait_ready(timeout=120)
+    got = api.data(api.get(f"/v1/controlplane/sets/{name}"))
+    assert got.get("active") is True
+    assert "vless_reality" in (got.get("presets") or [])
+
+
 def test_sets_list_get_shape_parity(api):
     listing = api.data(api.get("/v1/controlplane/sets"))
     assert isinstance(listing, list)

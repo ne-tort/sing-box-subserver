@@ -3,6 +3,7 @@
 package controlplane
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,8 +15,35 @@ import (
 // GET /v1/controlplane/client/bootstrap — one-shot discovery for mobile/desktop clients.
 func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) {
 	lang := requestLang(r)
+	host := s.publicHost(r)
+	pubPort := 0
+	if s.cfg.Cfg != nil {
+		if s.cfg.Cfg.Controlplane.PublicPort > 0 {
+			pubPort = s.cfg.Cfg.Controlplane.PublicPort
+		} else if _, p, err := net.SplitHostPort(s.cfg.Cfg.Listen); err == nil {
+			if n, err := strconv.Atoi(p); err == nil {
+				pubPort = n
+			}
+		}
+	}
 	okJSON(w, 200, map[string]any{
-		"lang": lang,
+		"lang":        lang,
+		"public_host": host,
+		"public_port": pubPort,
+		"client_auth": map[string]any{
+			"management":   "Bearer agent token",
+			"subscription": "path token only (sub_token); Bearer not accepted",
+		},
+		"needs_tls_insecure": true, // management TLS is self-signed by default; Reality outbounds do not use insecure
+		"subscription": map[string]any{
+			"shape":            "raw_fragment",
+			"envelope":         "raw JSON {outbounds, meta?, endpoints?} — not {ok,data}",
+			"empty_means":      "filters matched zero outbounds (HTTP 200); check meta.matched",
+			"merge":            "client wraps outbounds into local inbounds+route",
+			"query_map":        "discovery token 'variant:flow-none' → ?variant=flow-none (not ?tag=flow-none)",
+			"prefer_variant":   "flow-none",
+			"docs":             "docs/controlplane/07-subscriptions.md",
+		},
 		"capabilities": map[string]any{
 			"protocols":              true,
 			"presets":                true,
@@ -33,7 +61,12 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"optional_listen_port":   true, // omit listen_port → auto-pick free port (presets + demux)
 			"ready_poll":             true,
 			"wg_hub":                 true,
-			"activate_contract":      "activate:true must succeed (HTTP 201 + activated:true); activate failure → 422 with set already persisted",
+			"activate_contract":      "activate:true must succeed (HTTP 201 + activated:true); multi from-presets is all-or-nothing (rollback on fail); activate failure → 422 with set_persisted + dataplane_unchanged",
+			"claim_on_from_star":     "422 cp_claim_failed",
+			"claim_on_activate":      "409 cp_claim_failed",
+			"replace_on_from_star": true,
+			"sets_secrets_query":   "?secrets=1 on GET /sets to include peer_secrets",
+			"ready_context":        "ready.context=idle|install_ready|degraded",
 		},
 		"install_modes": []map[string]any{
 			{
@@ -95,6 +128,7 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 		"subscription_filters": map[string]any{
 			"discover": "GET /v1/controlplane/subscription-tags?active_only=true",
 			"apply_on": "GET /v1/sub/{token}",
+			"how_to_query_tags": "use variant=/flow=/profile= params; discovery may show 'variant:flow-none' — strip prefix when using typed params",
 			"params": []map[string]any{
 				{"name": "set", "type": "string", "repeatable": false, "description": "Filter by inbound set name"},
 				{"name": "preset", "type": "string", "repeatable": true, "description": "Filter by preset tag"},
@@ -111,12 +145,17 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"vs_panel":    "panel desired-config pull may diverge until CP sets deactivated / ownership reclaimed",
 		},
 		"hints": map[string]any{
-			"prefer_demux_groups_for_443":   true,
-			"reality_unique_sni":            true,
-			"slot_tls_per_demux_sni":        true,
-			"after_activate_poll_ready":     true,
-			"demux_is_not_a_protocol_folder": true,
+			"prefer_demux_groups_for_443":      true,
+			"demux_groups_default_filter":      "stable",
+			"demux_groups_list":                "GET /v1/controlplane/demux-groups?status=stable",
+			"prefer_variant":                   "flow-none",
+			"reality_unique_sni":               true,
+			"slot_tls_per_demux_sni":           true,
+			"after_activate_poll_ready":        true,
+			"demux_is_not_a_protocol_folder":   true,
 			"use_substitutions_before_install": true,
+			"install_requires_demux_compat_full": true,
+			"allow_lab_for_demux_lab_presets":  true,
 		},
 	})
 }

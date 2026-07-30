@@ -743,7 +743,7 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		// ShadowQUIC JLS
 		"jls_addr": "www.cloudflare.com:443", "jls_server_name": "www.cloudflare.com",
 		// ShadowTLS handshake
-		"handshake_server": "www.microsoft.com",
+		"handshake_server": "www.apple.com",
 		// WS / HTTPUpgrade / HTTP transports
 		"ws_host": "{{server}}", "ws_path": "/ws",
 		"hu_host": "{{server}}", "hu_path": "/upgrade",
@@ -1207,6 +1207,7 @@ func attachInboundReality(ib map[string]any, assignment domain.RealityAssignment
 		},
 	}
 	ib["tls"] = tlsObj
+	alignTransportHostToSNI(ib, assignment.SNI)
 }
 
 func privatePort(setName, preset string) uint16 {
@@ -1536,7 +1537,12 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 		}
 	}
 	sortOutboundsByTag(outbounds)
-	doc := map[string]any{"outbounds": outbounds}
+	doc := map[string]any{
+		"outbounds": outbounds,
+		"meta": map[string]any{
+			"matched": len(outbounds),
+		},
+	}
 	if hub != nil && hub.Enabled {
 		ep, err := RenderWireGuardClientEndpoint(user, *hub, publicHost)
 		if err != nil {
@@ -1574,7 +1580,32 @@ func attachOutboundReality(ob map[string]any, assignment domain.RealityAssignmen
 		tlsObj["alpn"] = []any{"h2", "http/1.1"}
 	}
 	ob["tls"] = tlsObj
+	alignTransportHostToSNI(ob, assignment.SNI)
 	stripUTLSForQUICTransport(ob)
+}
+
+// alignTransportHostToSNI sets WS/HTTPUpgrade/HTTP Host headers to Reality SNI
+// so camouflage Host matches ClientHello SNI (default param.ws_host was {{server}}=public_host).
+func alignTransportHostToSNI(obj map[string]any, sni string) {
+	sni = strings.TrimSpace(sni)
+	if sni == "" || obj == nil {
+		return
+	}
+	tr, _ := obj["transport"].(map[string]any)
+	if tr == nil {
+		return
+	}
+	switch tr["type"] {
+	case "ws", "httpupgrade", "http":
+	default:
+		return
+	}
+	headers, _ := tr["headers"].(map[string]any)
+	if headers == nil {
+		headers = map[string]any{}
+		tr["headers"] = headers
+	}
+	headers["Host"] = []any{sni}
 }
 
 // stripUTLSForQUICTransport removes utls from outbounds whose V2Ray transport

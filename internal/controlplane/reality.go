@@ -37,9 +37,11 @@ func defaultRealityProfiles() []domain.RealityEndpoint {
 	// Keep in sync with demuxgroups realitySNIPool.
 	// Curated via scripts/_curate_reality_sni.py: known hosts, correct www/bare,
 	// no Google/Yahoo/Cloudflare/CDN edges, no RU sites; TLS+redirect checked.
+	// www.microsoft.com removed: TLS dial works but Reality handshake fails
+	// (REALITY: processed invalid connection) on current lx + official clients.
 	return []domain.RealityEndpoint{
-		{SNI: "www.microsoft.com"},
 		{SNI: "www.apple.com"},
+		{SNI: "www.ieee.org"},
 		{SNI: "www.amazon.com"},
 		{SNI: "gateway.icloud.com"},
 		{SNI: "www.bing.com"},

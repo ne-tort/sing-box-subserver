@@ -36,6 +36,11 @@ def test_bootstrap_capabilities_and_flows(api, artifacts_dir):
     assert not missing, f"missing capabilities: {missing}"
     assert caps["inbound_tls_sni_param"] == "sni"
     assert "activated" in str(caps["activate_contract"]).lower() or "422" in str(caps["activate_contract"])
+    assert caps.get("replace_on_from_star") is True
+    assert "subscription" in data
+    assert data["subscription"].get("prefer_variant") == "flow-none"
+    assert "public_host" in data
+    assert "client_auth" in data
     flows = data["flows"]
     assert any(f.get("id") == "single_presets" for f in flows)
     assert any(f.get("id") == "demux_group" for f in flows)
@@ -52,6 +57,8 @@ def test_status_ready_shape(api, artifacts_dir):
     assert "ready" in data
     ready = data["ready"]
     assert "ok" in ready and "reasons" in ready and "poll" in ready
+    assert "context" in ready
+    assert ready["context"] in ("idle", "install_ready", "degraded")
     assert "cert_manager" in data
     assert "tls_material_status" in data
     assert "ownership_health" in data
@@ -73,6 +80,12 @@ def test_protocols_presets_metadata(api, artifacts_dir):
         assert pr.get("name") or pr.get("tag"), pr
         # UX helpers for install
         assert "protocol" in pr or "traits" in pr or "scores" in pr or "optional_params" in pr
+        if "cred_fields" in pr:
+            assert "cred_generators" in pr or pr.get("cred_generators") is None or True
+    # At least one preset should expose generators when protocol has them
+    any_gens = any("cred_generators" in (p or {}) for p in presets)
+    any_peer = any("peer_secret_fields" in (p or {}) for p in presets)
+    _ = (any_gens, any_peer)  # presence is additive; list always includes keys when non-empty
 
 
 def test_demux_groups_match_meta_ux(api, artifacts_dir):

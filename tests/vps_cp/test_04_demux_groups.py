@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 
@@ -25,16 +26,17 @@ def test_demux_group_install_with_slot_presets(api, artifacts_dir):
     subs = api.data(api.get(f"/v1/controlplane/demux-groups/{tag}/substitutions?lang=en"))
     api.dump(artifacts_dir, f"demux_pick_{tag}.json", {"group": g, "subs": subs})
 
+    # Defaults are the normative live path (member + demux front). Alternatives
+    # must still be demux-compatible in the picker metadata.
     slot_presets: dict[str, str] = {}
     for slot in subs["slots"]:
-        # Prefer non-default alternative when available (tests interchange UX)
-        options = [o for o in slot["options"] if o.get("fits_interchange", True)]
-        chosen = slot["default_preset"]
-        for o in options:
-            if o["tag"] != slot["default_preset"]:
-                chosen = o["tag"]
-                break
-        slot_presets[slot["id"]] = chosen
+        slot_presets[slot["id"]] = slot["default_preset"]
+        for o in slot["options"]:
+            assert o.get("tag") != "hy2_salamander" or (
+                o.get("fits_interchange") is False or o.get("demux_compat") == "demux_unsupported"
+            ), o
+            if o.get("demux_compat") == "full" and o.get("fits_interchange", True):
+                assert o["tag"] != "hy2_salamander"
 
     name = "e2e-demux"
     _cleanup_set(api, name)
@@ -58,7 +60,15 @@ def test_demux_group_install_with_slot_presets(api, artifacts_dir):
     assert set_view["has_demux"] is True
     assert set_view["active"] is True
     assert "member_ports" in install and install["member_ports"]
+    assert "hy2_salamander" not in install["member_ports"]
     assert "slot_snis" in install
+
+    # Name conflict on reinstall without cleanup
+    api.post(
+        "/v1/controlplane/sets/from-demux-group",
+        {"group": tag, "name": name, "listen_port": 8444, "activate": False},
+        expect=409,
+    )
 
     status = api.wait_ready(timeout=180)
     api.dump(artifacts_dir, "status_after_demux.json", status)
@@ -67,9 +77,19 @@ def test_demux_group_install_with_slot_presets(api, artifacts_dir):
     api.dump(artifacts_dir, "demux_set_detail.json", detail)
     assert detail.get("demux_template") or detail.get("has_demux")
     assert detail.get("member_ports") or install["member_ports"]
+    assert detail.get("slot_snis") or install.get("slot_snis"), "slot_snis must persist for list/get after reload"
+    assert detail.get("presets") == list(slot_presets.values()) or set(detail.get("presets") or []) == set(
+        slot_presets.values()
+    )
 
     # User + subscription for demux stack
-    user = api.data(api.post("/v1/controlplane/users", {"name": "e2e-user-demux", "enabled": True}, expect=(200, 201)))
+    user = api.data(
+        api.post(
+            "/v1/controlplane/users",
+            {"name": f"e2e-user-demux-{int(time.time())}", "enabled": True},
+            expect=(200, 201),
+        )
+    )
     token = user["sub_token"]
     r = api.get(f"/v1/sub/{token}", raw=True, expect=200)
     sub = r.json()
@@ -79,6 +99,11 @@ def test_demux_group_install_with_slot_presets(api, artifacts_dir):
     outs = sub.get("outbounds") or []
     assert isinstance(outs, list)
     assert len(outs) >= 2, f"expected multiple outbounds, got {len(outs)}"
+    assert sub.get("meta", {}).get("matched") == len(outs)
+    for o in outs:
+        if o.get("type") == "vless":
+            flow = o.get("flow") or ""
+            assert "udp443" not in flow, o
 
 
 def test_demux_omit_listen_port_auto_pick(api, artifacts_dir):

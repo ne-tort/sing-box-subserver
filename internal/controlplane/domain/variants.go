@@ -73,10 +73,11 @@ var VLESSUserVariantSpecs = []UserVariantSpec{
 		ProtocolFamily:             "vless",
 		Scope:                      FieldScopeUserSymmetric,
 		CredentialField:            "uuid_udp",
-		// lx branch supports this VLESS flow mode.
+		// lx branch supports this VLESS flow mode; not a subscription default
+		// (official sagernet sing-box rejects xtls-rprx-vision-udp443).
 		FlowValue:                  "xtls-rprx-vision-udp443",
 		RequiresUserSymmetricEntry: true,
-		SubscriptionDefault:        true,
+		SubscriptionDefault:        false,
 		QueryTags:                  []string{"variant:flow-udp-vision", "flow:udp-vision", "tag:flow-udp"},
 	},
 }
@@ -220,8 +221,13 @@ func resolveEnabledUserVariants(enabled []string, catalog []UserVariantSpec) []U
 		return nil
 	}
 	if len(enabled) == 0 {
-		out := make([]UserVariantSpec, len(catalog))
-		copy(out, catalog)
+		// Mirror ClientProfilesForProtocol: empty → SubscriptionDefault only.
+		out := make([]UserVariantSpec, 0, len(catalog))
+		for _, vv := range catalog {
+			if vv.SubscriptionDefault {
+				out = append(out, vv)
+			}
+		}
 		return out
 	}
 	seen := map[string]struct{}{}
@@ -240,8 +246,16 @@ func resolveEnabledUserVariants(enabled []string, catalog []UserVariantSpec) []U
 		}
 	}
 	if len(out) == 0 {
-		out = make([]UserVariantSpec, len(catalog))
-		copy(out, catalog)
+		out = make([]UserVariantSpec, 0, len(catalog))
+		for _, vv := range catalog {
+			if vv.SubscriptionDefault {
+				out = append(out, vv)
+			}
+		}
+		if len(out) == 0 {
+			out = make([]UserVariantSpec, len(catalog))
+			copy(out, catalog)
+		}
 	}
 	return out
 }

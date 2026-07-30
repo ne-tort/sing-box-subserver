@@ -22,8 +22,11 @@ type InstallRequest struct {
 	SlotPreset  map[string]string `json:"slot_presets,omitempty"` // slot_id → preset tag
 	// SlotSNI optionally overrides demux_sni (and params.sni for ACME) per slot.
 	// Empty → auto pool + per-slot self-signed as before.
-	SlotSNI     map[string]string `json:"slot_sni,omitempty"` // slot_id → sni
-	Description string            `json:"description,omitempty"`
+	SlotSNI map[string]string `json:"slot_sni,omitempty"` // slot_id → sni
+	// AllowLab permits demux_compat=demux_lab presets (TrustTunnel, ShadowQUIC, transport Reality).
+	// Default false → only demux_compat=full.
+	AllowLab    bool   `json:"allow_lab,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // InstallResult is a ready inbound set + allocated member ports / SNIs.
@@ -36,8 +39,8 @@ type InstallResult struct {
 
 // defaultSNIPool unique hostnames for TLS demux differentiation.
 var defaultSNIPool = []string{
-	"www.microsoft.com",
 	"www.apple.com",
+	"www.ieee.org",
 	"www.amazon.com",
 	"gateway.icloud.com",
 	"www.bing.com",
@@ -189,9 +192,11 @@ var defaultSNIPool = []string{
 }
 
 // realitySNIPool prefers hosts that pass CP Reality validation (no CDN-edge heuristics).
+// Keep in sync with controlplane.defaultRealityProfiles. Avoid www.microsoft.com:
+// TLS dial succeeds but Reality handshake fails with official sing-box clients.
 var realitySNIPool = []string{
-	"www.microsoft.com",
 	"www.apple.com",
+	"www.ieee.org",
 	"www.amazon.com",
 	"gateway.icloud.com",
 	"www.bing.com",
@@ -374,6 +379,26 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		if !slot.AllowsPreset(chosen) {
 			return InstallResult{}, fmt.Errorf("cp_invalid_slot: slot %q does not allow preset %q", slot.ID, chosen)
 		}
+		if inv, err := presets.GetInvariant(chosen); err == nil {
+			looks := ""
+			if inv.DemuxHints != nil {
+				if !inv.DemuxHints.CompatibleWithDemux {
+					return InstallResult{}, fmt.Errorf("cp_invalid_slot: preset %q is incompatible with demux (slot %q)", chosen, slot.ID)
+				}
+				looks = inv.DemuxHints.LooksLike
+			}
+			if !FitsInterchange(slot, inv.Traits, looks) {
+				return InstallResult{}, fmt.Errorf("cp_invalid_slot: preset %q does not fit interchange of slot %q", chosen, slot.ID)
+			}
+		}
+		compat := demuxCompatForPreset(chosen, slot.Role, slot.MatchHint)
+		if compat == "demux_unsupported" {
+			return InstallResult{}, fmt.Errorf("cp_invalid_slot: preset %q is demux_unsupported (slot %q)", chosen, slot.ID)
+		}
+		// Stable groups require allow_lab for demux_lab presets; lab groups may default to them.
+		if compat == "demux_lab" && !req.AllowLab && !strings.EqualFold(g.Status, "lab") {
+			return InstallResult{}, fmt.Errorf("cp_invalid_slot: preset %q is demux_lab (pass allow_lab:true to install, slot %q)", chosen, slot.ID)
+		}
 		slotPreset[slot.ID] = chosen
 	}
 
@@ -444,6 +469,7 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		Bindings:      bindings,
 		DemuxTemplate: tmpl,
 		MemberPorts:   memberPorts,
+		SlotSNIs:      snis,
 		DemuxGroup:    g.Tag,
 	}
 	return InstallResult{Set: set, MemberPorts: memberPorts, SlotSNIs: snis, Warnings: warn}, nil
@@ -718,7 +744,8 @@ func Substitutions(tag string, lang string) (SubstitutionsView, error) {
 				if inv.DemuxHints != nil {
 					opt.LooksLike = inv.DemuxHints.LooksLike
 					opt.DemuxHints = inv.DemuxHints
-					opt.FitsInterchange = FitsInterchange(s, inv.Traits, inv.DemuxHints.LooksLike)
+					opt.FitsInterchange = inv.DemuxHints.CompatibleWithDemux &&
+						FitsInterchange(s, inv.Traits, inv.DemuxHints.LooksLike)
 				} else {
 					opt.FitsInterchange = FitsInterchange(s, inv.Traits, "")
 				}
@@ -778,17 +805,28 @@ func resolvePresetI18n(m map[string]domain.LocalizedText, lang string) (string, 
 
 func demuxCompatForPreset(tag string, role Role, matchHint string) string {
 	t := strings.ToLower(tag)
+	if inv, err := presets.GetInvariant(tag); err == nil && inv.DemuxHints != nil && !inv.DemuxHints.CompatibleWithDemux {
+		return "demux_unsupported"
+	}
 	switch {
 	case strings.HasPrefix(t, "trusttunnel"):
 		return "demux_lab"
 	case strings.HasPrefix(t, "shadowquic"):
-		// JLS SNI must stay aligned with demux_sni (materialize + harness).
-		// sni_pool still lab until matrix proves parallel SQ+other QUIC.
-		if matchHint == "sni_pool" && role == RoleQUIC {
-			return "demux_lab"
-		}
+		// JLS + demux dial still lab; with_shadowquic not in tags.server.controlplane.
+		return "demux_lab"
+	case t == "vless_ws_reality":
+		// Wave E matrix (2026-07-30): member + demux front OK with allow_lab path;
+		// promote so stable installs can use it without allow_lab.
 		return "full"
+	case strings.Contains(t, "_ws_reality"),
+		strings.Contains(t, "_grpc_reality"),
+		strings.Contains(t, "_http_reality"),
+		strings.Contains(t, "_httpupgrade_reality"):
+		// Other transport Reality variants remain demux_lab until matrix covers them.
+		return "demux_lab"
 	default:
+		_ = role
+		_ = matchHint
 		return "full"
 	}
 }

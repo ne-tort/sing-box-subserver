@@ -18,6 +18,8 @@ flowchart TD
   arch[03_architecture]
   domain[04_domain]
   api[05_api]
+  apiMod[api_modules]
+  scenarios[scenarios]
   mat[06_materialize]
   sub[07_subscriptions]
   store[08_storage]
@@ -26,6 +28,8 @@ flowchart TD
   idx --> concept --> req --> arch
   arch --> domain
   arch --> api
+  api --> apiMod
+  api --> scenarios
   arch --> mat
   arch --> sub
   arch --> store
@@ -43,12 +47,14 @@ flowchart TD
 | [02-requirements.md](02-requirements.md) | 01 | FR/NFR, non-goals |
 | [03-architecture.md](03-architecture.md) | 01–02 | Packages, flows, dep rules |
 | [04-domain.md](04-domain.md) | 02–03 | Users, presets, sets, hooks |
-| [05-api.md](05-api.md) | 02–04 | REST surface |
+| [05-api.md](05-api.md) | 02–04 | REST endpoint catalog |
+| [api/](api/00-index.md) | 05, 07 | Modular API how-to + contracts |
+| [scenarios/](scenarios/00-index.md) | api/, 05–07 | Operator/client flows ↔ pytest |
 | [06-materialize.md](06-materialize.md) | 03–04 | Server JSON build + Apply |
 | [07-subscriptions.md](07-subscriptions.md) | 04–05 | Public sub URL contract |
 | [08-storage.md](08-storage.md) | 03–04 | JSON files under data_dir |
 | [09-build-and-ci.md](09-build-and-ci.md) | 03 | Tag, stubs, CI matrix |
-| [10-scenarios.md](10-scenarios.md) | 05–07 | Operator happy paths |
+| [10-scenarios.md](10-scenarios.md) | scenarios/ | Pointer to scenarios tree |
 | [11-tls.md](11-tls.md) | 04–06 | TLS profiles (self-signed / ACME) |
 | [12-vps-test-backlog.md](12-vps-test-backlog.md) | ops | Live VPS findings / follow-ups |
 | [adr/](adr/) | 01–08 | Locked module decisions |
@@ -56,8 +62,11 @@ flowchart TD
 ## Read order
 
 1. Concept → requirements → architecture  
-2. Domain (invariants) before API  
-3. Materialize + subscriptions + storage  
-4. Build/CI last  
+2. Domain (invariants) before API catalog (`05`)  
+3. **Integrators:** [api/](api/00-index.md) then [scenarios/](scenarios/00-index.md)  
+4. Materialize + subscriptions + storage  
+5. Build/CI last  
+
+Live verification: [`tests/vps_cp/`](../../tests/vps_cp/README.md).
 
 Implementation must not precede accepted docs in this tree ([root culture](../10-repo-culture.md)).

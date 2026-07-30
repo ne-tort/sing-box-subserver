@@ -23,13 +23,13 @@
     "network": [
       "udp"
     ],
-    "looks_like": "quic",
+    "looks_like": "obfuscated_quic",
     "alpn": [
       "h3"
     ],
     "sni_required": true,
-    "first_bytes": "obfuscated QUIC",
-    "compatible_with_demux": true
+    "first_bytes": "salamander-obfuscated QUIC — demux cannot match protocol=quic",
+    "compatible_with_demux": false
   },
   "scores": {
     "dpi": 8,

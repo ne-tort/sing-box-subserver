@@ -84,6 +84,31 @@ func TestSlotRejectUnknownPreset(t *testing.T) {
 	}
 }
 
+func TestSlotRejectSalamander(t *testing.T) {
+	_, err := BuildInstall(InstallRequest{
+		GroupTag:   "dg_443_dual",
+		SlotPreset: map[string]string{"quic": "hy2_salamander"},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected salamander rejected")
+	}
+	if !strings.Contains(err.Error(), "cp_invalid_slot") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestCatalogOmitsSalamander(t *testing.T) {
+	for _, g := range All() {
+		for _, s := range g.Slots {
+			for _, p := range s.AllPresets() {
+				if p == "hy2_salamander" {
+					t.Fatalf("%s/%s still lists hy2_salamander", g.Tag, s.ID)
+				}
+			}
+		}
+	}
+}
+
 func TestSubstitutions(t *testing.T) {
 	v, err := Substitutions("dg_443_triple", "ru")
 	if err != nil {

@@ -55,8 +55,10 @@ func builtInGroups() []Group {
 		"vless_tls", "vless_ws_tls", "vless_grpc_tls", "vless_http_tls",
 		"vless_httpupgrade_tls", "anytls", "trusttunnel_h2", "trusttunnel_auto",
 	}
+	// hy2_salamander intentionally omitted: salamander obfuscates QUIC first bytes,
+	// so demux match protocol=quic / tls.sni cannot classify the flow.
 	quicSubs := []string{
-		"hy2", "hy2_salamander", "tuic", "tuic_0rtt",
+		"hy2", "tuic", "tuic_0rtt",
 		"shadowquic_jls", "shadowquic_0rtt", "trusttunnel_h3",
 	}
 	tcpPlainSubs := []string{
@@ -101,7 +103,7 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "r1", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_ws_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_grpc_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "t1", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "t2", Role: RoleTCPTLS, DefaultPreset: "vless_http_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "t3", Role: RoleTCPTLS, DefaultPreset: "vless_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
@@ -117,12 +119,12 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "reality", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "reality2", Role: RoleTCPReality, DefaultPreset: "vless_ws_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "reality2", Role: RoleTCPReality, DefaultPreset: "vless_grpc_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "tls", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
-			Notes: "ShadowQUIC — substitute у hy2 (SNI-parallel demux_lab).",
+			Notes: "vless_ws_reality is demux_compat=full (matrix); gRPC Reality / ShadowQUIC remain demux_lab (allow_lab).",
 		},
 		{
 			Tag: "dg_443_dense8", ShortName: "443 Dense ×8", Status: "lab", SuggestedPort: 443,
@@ -207,7 +209,7 @@ func builtInGroups() []Group {
 				"en": {Title: "8443 QUIC pair", Description: "Hy2 + TUIC on UDP :8443."},
 			},
 			Slots: []Slot{
-				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "hy2_salamander"}, MatchHint: "sni_pool"},
+				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
 		},
@@ -221,7 +223,7 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "r1", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_ws_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_grpc_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "t1", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "t2", Role: RoleTCPTLS, DefaultPreset: "vless_httpupgrade_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "sni_pool"},
@@ -239,7 +241,7 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "vr", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "vws", Role: RoleTCPReality, DefaultPreset: "vless_ws_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "vws", Role: RoleTCPReality, DefaultPreset: "vless_grpc_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "vtls", Role: RoleTCPTLS, DefaultPreset: "vless_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "vgrpc", Role: RoleTCPTLS, DefaultPreset: "vless_grpc_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "protocol_only"},
@@ -254,7 +256,7 @@ func builtInGroups() []Group {
 				"en": {Title: "443 QUIC pair (SNI)", Description: "Hy2 + TUIC UDP-only, split by SNI."},
 			},
 			Slots: []Slot{
-				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "hy2_salamander"}, MatchHint: "sni_pool"},
+				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
 		},
@@ -272,19 +274,19 @@ func builtInGroups() []Group {
 			},
 		},
 		{
-			Tag: "dg_443_alpn_split", ShortName: "443 ALPN split", Status: "lab", SuggestedPort: 443,
+			Tag: "dg_443_alpn_split", ShortName: "443 SNI+ALPN hint", Status: "lab", SuggestedPort: 443,
 			Networks: []string{"tcp", "udp"},
 			Scores:   map[string]int{"dpi": 8, "speed": 7, "mobile": 6, "setup": 5},
 			I18n: map[string]I18n{
-				"ru": {Title: "443 ALPN split", Description: "h2 → TrustTunnel; http/1.1 → AnyTLS; QUIC → Hy2."},
-				"en": {Title: "443 ALPN split", Description: "h2→TrustTunnel; http/1.1→AnyTLS; QUIC→Hy2."},
+				"ru": {Title: "443 SNI + ALPN hint", Description: "Три слота по уникальным SNI; PreferredALPN задаёт inbound tls.alpn (demux НЕ матчит по ALPN)."},
+				"en": {Title: "443 SNI + ALPN hint", Description: "Three slots via unique SNIs; PreferredALPN sets inbound tls.alpn (demux does NOT match on ALPN)."},
 			},
 			Slots: []Slot{
 				{ID: "h2", Role: RoleTCPTLS, DefaultPreset: "vless_grpc_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"h2"}},
 				{ID: "h1", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"http/1.1"}},
 				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "protocol_only"},
 			},
-			Notes: "PreferredALPN — подсказка UI + inbound tls.alpn; demux match по уникальным SNI (не ALPN AND).",
+			Notes: "Tag kept as dg_443_alpn_split for API stability. Demux match = tls.sni only.",
 		},
 		{
 			Tag: "dg_443_reality_sq", ShortName: "Reality + SQ/Hy2", Status: "lab", SuggestedPort: 443,
@@ -296,9 +298,9 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "tcp", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "hy2_salamander", "shadowquic_jls", "shadowquic_0rtt", "tuic"}, MatchHint: "protocol_only"},
+				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "shadowquic_jls", "shadowquic_0rtt", "tuic"}, MatchHint: "protocol_only"},
 			},
-			Notes: "ShadowQUIC через demux dial нестабилен (demux_lab); default Hy2 проходит matrix.",
+			Notes: "ShadowQUIC через demux dial нестабилен (demux_lab); default Hy2 проходит matrix. Salamander obfs не в demux.",
 		},
 		{
 			Tag: "dg_443_snell_hy2", ShortName: "Snell + Hy2", Status: "lab", SuggestedPort: 443,
@@ -323,7 +325,7 @@ func builtInGroups() []Group {
 			},
 			Slots: []Slot{
 				{ID: "r1", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
-				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_httpupgrade_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "r2", Role: RoleTCPReality, DefaultPreset: "vless_grpc_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "t1", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"h2", "http/1.1"}},
 				{ID: "t2", Role: RoleTCPTLS, DefaultPreset: "vless_grpc_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"h2"}},
 				{ID: "plain", Role: RoleTCPPlain, DefaultPreset: "mieru_tcp", Substitutes: tcpPlainSubs, MatchHint: "always_plain"},

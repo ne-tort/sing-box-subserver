@@ -8,8 +8,20 @@ func TestUserVariantsForProtocolDefaultCatalog(t *testing.T) {
 	t.Parallel()
 	b := SetBinding{Preset: "vless-tcp"}
 	got := UserVariantsForProtocol("vless", b, nil)
-	if len(got) != len(VLESSUserVariantSpecs) {
-		t.Fatalf("got %d want %d", len(got), len(VLESSUserVariantSpecs))
+	// Empty enabled → SubscriptionDefault only (not full catalog).
+	want := 0
+	for _, vv := range VLESSUserVariantSpecs {
+		if vv.SubscriptionDefault {
+			want++
+		}
+	}
+	if len(got) != want {
+		t.Fatalf("got %d want %d SubscriptionDefault", len(got), want)
+	}
+	for _, vv := range got {
+		if !vv.SubscriptionDefault {
+			t.Fatalf("non-default variant %q in empty-enabled result", vv.Name)
+		}
 	}
 }
 
@@ -41,8 +53,14 @@ func TestUserVariantsForProtocolUnknownEnabledFallback(t *testing.T) {
 		EnabledUserVariants: []string{"flow-nope"},
 	}
 	got := UserVariantsForProtocol("vless", b, nil)
-	if len(got) != len(VLESSUserVariantSpecs) {
-		t.Fatalf("fallback catalog: got %d", len(got))
+	want := 0
+	for _, vv := range VLESSUserVariantSpecs {
+		if vv.SubscriptionDefault {
+			want++
+		}
+	}
+	if len(got) != want {
+		t.Fatalf("fallback SubscriptionDefault: got %d want %d", len(got), want)
 	}
 }
 

@@ -24,13 +24,13 @@
     "network": [
       "udp"
     ],
-    "looks_like": "quic",
+    "looks_like": "obfuscated_quic",
     "alpn": [
       "h3"
     ],
     "sni_required": true,
     "first_bytes": "gecko-obfuscated QUIC",
-    "compatible_with_demux": true
+    "compatible_with_demux": false
   },
   "scores": {
     "dpi": 9,

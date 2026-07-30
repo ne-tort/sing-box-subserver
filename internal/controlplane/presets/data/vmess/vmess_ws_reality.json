@@ -68,9 +68,7 @@
         "User-Agent": [
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         ]
-      },
-      "max_early_data": 2048,
-      "early_data_header_name": "Sec-WebSocket-Protocol"
+      }
     }
   },
   "outbound_template": {
@@ -103,9 +101,7 @@
         "User-Agent": [
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         ]
-      },
-      "max_early_data": 2048,
-      "early_data_header_name": "Sec-WebSocket-Protocol"
+      }
     }
   },
   "requirements": {
@@ -114,6 +110,7 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: ws_host, ws_path",
-    "ws_path_default": "/vmess"
+    "ws_path_default": "/vmess",
+    "early_data": "disabled by default for Reality WS (enable via template fork if needed)"
   }
 }

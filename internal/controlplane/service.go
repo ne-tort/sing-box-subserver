@@ -675,8 +675,13 @@ func (s *Service) activeSetObjects() ([]domain.InboundSet, error) {
 	if err != nil {
 		return nil, err
 	}
+	// First occurrence wins — duplicate names are a store corruption that create
+	// paths must reject (cp_name_conflict). Prefer stable GET/list semantics.
 	byName := map[string]domain.InboundSet{}
 	for _, set := range sets {
+		if _, exists := byName[set.Name]; exists {
+			continue
+		}
 		byName[set.Name] = set
 	}
 	names := append([]string{}, st.ActiveSets...)
@@ -1011,12 +1016,23 @@ func okJSON(w http.ResponseWriter, code int, data any) {
 }
 
 func failJSON(w http.ResponseWriter, code int, errCode, msg string) {
+	failJSONData(w, code, errCode, msg, nil)
+}
+
+func failJSONData(w http.ResponseWriter, code int, errCode, msg string, extra map[string]any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	body := map[string]any{
 		"ok": false,
 		"error": map[string]any{"code": errCode, "message": msg},
-	})
+	}
+	for k, v := range extra {
+		if k == "ok" || k == "error" {
+			continue
+		}
+		body[k] = v
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // validateSetHTTP maps validateSet errors to stable HTTP status + error.code for clients.
@@ -1027,6 +1043,8 @@ func validateSetHTTP(err error) (code int, errCode string) {
 	}
 	msg := err.Error()
 	switch {
+	case strings.Contains(msg, "cp_port_exhausted"):
+		return 409, "cp_port_exhausted"
 	case strings.Contains(msg, "cp_port_conflict"):
 		return 409, "cp_port_conflict"
 	case strings.Contains(msg, "cp_unknown_preset"):
@@ -1043,19 +1061,24 @@ func validateSetHTTP(err error) (code int, errCode string) {
 }
 
 // setPublicView is the list/get shape for inbound sets (active flag for clients).
+// Peer secrets are omitted unless includeSecrets is true (?secrets=1).
 func (s *Service) setPublicView(set domain.InboundSet, active bool) map[string]any {
+	return s.setPublicViewOpts(set, active, false)
+}
+
+func (s *Service) setPublicViewOpts(set domain.InboundSet, active, includeSecrets bool) map[string]any {
 	bindings := set.EffectiveBindings()
 	m := map[string]any{
-		"name":          set.Name,
-		"description":   set.Description,
-		"listen":        set.Listen,
-		"listen_port":   set.ListenPort,
-		"presets":       uniqueSetPresets(bindings),
-		"bindings":      bindings,
-		"has_demux":     set.HasDemux(),
-		"active":        active,
-		"created_at":    set.CreatedAt,
-		"updated_at":    set.UpdatedAt,
+		"name":        set.Name,
+		"description": set.Description,
+		"listen":      set.Listen,
+		"listen_port": set.ListenPort,
+		"presets":     uniqueSetPresets(bindings),
+		"bindings":    bindings,
+		"has_demux":   set.HasDemux(),
+		"active":      active,
+		"created_at":  set.CreatedAt,
+		"updated_at":  set.UpdatedAt,
 	}
 	if len(set.DemuxTemplate) > 0 {
 		m["demux_template"] = set.DemuxTemplate
@@ -1063,11 +1086,16 @@ func (s *Service) setPublicView(set domain.InboundSet, active bool) map[string]a
 	if len(set.MemberPorts) > 0 {
 		m["member_ports"] = set.MemberPorts
 	}
+	if len(set.SlotSNIs) > 0 {
+		m["slot_snis"] = set.SlotSNIs
+	}
 	if set.DemuxGroup != "" {
 		m["demux_group"] = set.DemuxGroup
 	}
-	if len(set.PeerSecrets) > 0 {
+	if includeSecrets && len(set.PeerSecrets) > 0 {
 		m["peer_secrets"] = set.PeerSecrets
+	} else if len(set.PeerSecrets) > 0 {
+		m["has_peer_secrets"] = true
 	}
 	return m
 }
@@ -1291,8 +1319,24 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 		"active_sets":      len(st.ActiveSets) > 0,
 		"wg_hub":           wgEnabled,
 		"reasons":          reasons,
+		"context":          readyContext(live, wgEnabled, ok, reasons),
 		"poll":             "GET /v1/controlplane/status → ready.ok == true",
 	}
+}
+
+// readyContext separates install-wizard readiness from idle health.
+func readyContext(live, wgEnabled, ok bool, reasons []string) string {
+	if !live && !wgEnabled {
+		for _, r := range reasons {
+			if r == "no_active_sets" {
+				return "idle" // no install yet — not a failed health check
+			}
+		}
+	}
+	if ok {
+		return "install_ready"
+	}
+	return "degraded"
 }
 
 // activeBindingSNIs returns params.sni values used by currently active sets (ACME leaf domains).
@@ -1339,6 +1383,9 @@ func (s *Service) buildActiveSetDetails(active []string, sets []domain.InboundSe
 	}
 	byName := map[string]domain.InboundSet{}
 	for _, set := range sets {
+		if _, exists := byName[set.Name]; exists {
+			continue
+		}
 		byName[set.Name] = set
 	}
 	out := make([]any, 0, len(active))
@@ -1759,6 +1806,72 @@ func requestLang(r *http.Request) string {
 	return domain.NormalizeLang(r.URL.Query().Get("lang"))
 }
 
+func presetOptionalParams(pp domain.ProtocolPreset) map[string]any {
+	out := map[string]any{
+		"listen_port": map[string]any{
+			"type":        "uint16",
+			"required":    false,
+			"description": "Public listen port for single-inbound install. Omit to auto-pick a free port (prefers 443).",
+			"constraint":  "At most one TCP and one UDP occupant per port.",
+		},
+	}
+	for _, f := range pp.ParamFields {
+		if f == "" || f == "listen_port" {
+			continue
+		}
+		out[f] = map[string]any{
+			"type":        "string",
+			"required":    false,
+			"description": paramFieldDescription(f, pp),
+		}
+	}
+	return out
+}
+
+func presetOptionalParamsDetail(pp domain.ProtocolPreset) map[string]any {
+	out := presetOptionalParams(pp)
+	out["listen_port"] = map[string]any{
+		"type":        "uint16",
+		"required":    false,
+		"description": "Public listen port when installing as a single-inbound set (not demux member). Omit to auto-pick.",
+		"constraint":  "At most one TCP and one UDP inbound may share a port across sets.",
+	}
+	out["demux_sni"] = map[string]any{
+		"type":        "string",
+		"description": "SNI used for demux match / TLS server_name when installed inside a demux group.",
+	}
+	out["sni"] = map[string]any{
+		"type":        "string",
+		"description": "Optional ACME domain from cert-manager; for TLS non-Reality inbounds. Also syncs demux_sni.",
+	}
+	return out
+}
+
+func paramFieldDescription(field string, pp domain.ProtocolPreset) string {
+	switch field {
+	case "ws_host", "hu_host", "http_host":
+		if hasTrait(pp.Traits, "reality") {
+			return "HTTP Host header; materialize aligns to Reality SNI when omitted/default."
+		}
+		return "HTTP Host header for the transport."
+	case "ws_path", "hu_path", "grpc_service_name", "http_path":
+		return "Transport path / gRPC service name."
+	case "sni":
+		return "TLS server_name / ACME domain."
+	default:
+		return "Optional preset parameter."
+	}
+}
+
+func hasTrait(traits []string, want string) bool {
+	for _, t := range traits {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 	lang := requestLang(r)
 	protocolFilter := strings.TrimSpace(r.URL.Query().Get("protocol"))
@@ -1784,16 +1897,12 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			"aliases":      pp.Aliases,
 			"scores":       pp.Scores,
 			"demux_hints":  pp.DemuxHints,
-			"cred_fields":  pp.CredFields,
-			"param_fields": pp.ParamFields,
-			"optional_params": map[string]any{
-				"listen_port": map[string]any{
-					"type":        "uint16",
-					"required":    false,
-					"description": "Public listen port for single-inbound install. Omit to auto-pick a free port (prefers 443).",
-					"constraint":  "At most one TCP and one UDP occupant per port.",
-				},
-			},
+			"cred_fields":         pp.CredFields,
+			"cred_generators":     pp.CredGenerators,
+			"peer_secret_fields":  pp.PeerSecretFields,
+			"param_fields":        pp.ParamFields,
+			"default_user_variants": pp.DefaultUserVariants,
+			"optional_params":     presetOptionalParams(pp),
 		}
 		if nets := networksFromTraits(pp.Traits); len(nets) > 0 {
 			item["networks"] = nets
@@ -1829,25 +1938,13 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		"scores":            pp.Scores,
 		"demux_hints":       pp.DemuxHints,
 		"requirements":      pp.Requirements,
-		"cred_fields":       pp.CredFields,
-		"param_fields":      pp.ParamFields,
-		"client_notes":      inv.ClientNotes,
-		"optional_params": map[string]any{
-			"listen_port": map[string]any{
-				"type":        "uint16",
-				"required":    false,
-				"description": "Public listen port when installing as a single-inbound set (not demux member). Omit to auto-pick.",
-				"constraint":  "At most one TCP and one UDP inbound may share a port across sets.",
-			},
-			"demux_sni": map[string]any{
-				"type":        "string",
-				"description": "SNI used for demux match / TLS server_name when installed inside a demux group.",
-			},
-			"sni": map[string]any{
-				"type":        "string",
-				"description": "Optional ACME domain from cert-manager; for TLS non-Reality inbounds. Also syncs demux_sni.",
-			},
-		},
+		"cred_fields":           pp.CredFields,
+		"cred_generators":       pp.CredGenerators,
+		"peer_secret_fields":    pp.PeerSecretFields,
+		"param_fields":          pp.ParamFields,
+		"default_user_variants": pp.DefaultUserVariants,
+		"client_notes":          inv.ClientNotes,
+		"optional_params":       presetOptionalParamsDetail(pp),
 		"inbound_template":  pp.InboundTemplate,
 		"outbound_template": pp.OutboundTemplate,
 		"protocol_meta": map[string]any{
@@ -2046,16 +2143,17 @@ func syncBindingSNI(set *domain.InboundSet) {
 	}
 }
 
-func (s *Service) handleSetsList(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleSetsList(w http.ResponseWriter, r *http.Request) {
 	sets, err := s.store.LoadSets()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	includeSecrets := parseBoolQuery(r, "secrets", false)
 	st, _ := s.store.LoadState()
 	out := make([]any, 0, len(sets))
 	for _, set := range sets {
-		out = append(out, s.setPublicView(set, contains(st.ActiveSets, set.Name)))
+		out = append(out, s.setPublicViewOpts(set, contains(st.ActiveSets, set.Name), includeSecrets))
 	}
 	okJSON(w, 200, out)
 }
@@ -2105,9 +2203,10 @@ func (s *Service) handleSetsGet(w http.ResponseWriter, r *http.Request) {
 	}
 	st, _ := s.store.LoadState()
 	name := r.PathValue("name")
+	includeSecrets := parseBoolQuery(r, "secrets", false)
 	for _, set := range sets {
 		if set.Name == name {
-			okJSON(w, 200, s.setPublicView(set, contains(st.ActiveSets, name)))
+			okJSON(w, 200, s.setPublicViewOpts(set, contains(st.ActiveSets, name), includeSecrets))
 			return
 		}
 	}
@@ -2183,7 +2282,11 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	active := contains(st.ActiveSets, name)
 	if active {
 		if err := s.rematerialize(r.Context()); err != nil {
-			failJSON(w, 422, materializeErrorCode(err), err.Error())
+			failJSONData(w, 422, materializeErrorCode(err), err.Error(), map[string]any{
+				"set_persisted":        true,
+				"dataplane_unchanged":  false,
+				"persisted":            true,
+			})
 			return
 		}
 	}
@@ -2198,7 +2301,7 @@ func (s *Service) handleSetsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if contains(st.ActiveSets, name) {
-		failJSON(w, 409, "conflict", "deactivate set first")
+		failJSON(w, 409, "cp_conflict_active", "deactivate set first")
 		return
 	}
 	sets, err := s.store.LoadSets()
@@ -2296,6 +2399,22 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !contains(st.ActiveSets, name) {
+		sets, loadErr := s.store.LoadSets()
+		if loadErr != nil {
+			failJSON(w, 500, "internal", loadErr.Error())
+			return
+		}
+		found := false
+		for _, set := range sets {
+			if set.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			failJSON(w, 404, "not_found", "set not found")
+			return
+		}
 		// Idempotent deactivate: already inactive is OK.
 		mode := "idle"
 		if s.cfg.Owner != nil {
@@ -2304,33 +2423,7 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 		okJSON(w, 200, map[string]any{"active_sets": st.ActiveSets, "config_mode": mode, "noop": true})
 		return
 	}
-	prev := append([]string{}, st.ActiveSets...)
-	st.ActiveSets = removeStr(st.ActiveSets, name)
-	if err := s.store.SaveState(st); err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
-	if len(st.ActiveSets) == 0 {
-		hub, _ := s.store.LoadWgHub()
-		if hub.Enabled {
-			if err := s.rematerialize(r.Context()); err != nil {
-				if cur, loadErr := s.store.LoadState(); loadErr == nil {
-					cur.ActiveSets = prev
-					_ = s.store.SaveState(cur)
-				}
-				failJSON(w, 422, materializeErrorCode(err), err.Error())
-				return
-			}
-		} else if s.cfg.Owner != nil {
-			if err := s.claimOwnership(configowner.ModeIdle, "deactivate_last_set", name); err != nil && s.log != nil {
-				s.log.Warn("controlplane deactivate claim idle failed", "err", err, "set", name)
-			}
-		}
-	} else if err := s.rematerialize(r.Context()); err != nil {
-		if cur, loadErr := s.store.LoadState(); loadErr == nil {
-			cur.ActiveSets = prev
-			_ = s.store.SaveState(cur)
-		}
+	if err := s.deactivateSetByName(r.Context(), name); err != nil {
 		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
@@ -2340,6 +2433,47 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 	}
 	st, _ = s.store.LoadState()
 	okJSON(w, 200, map[string]any{"active_sets": st.ActiveSets, "config_mode": mode})
+}
+
+// deactivateSetByName removes name from active_sets and rematerializes (or claims idle).
+func (s *Service) deactivateSetByName(ctx context.Context, name string) error {
+	st, err := s.store.LoadState()
+	if err != nil {
+		return err
+	}
+	if !contains(st.ActiveSets, name) {
+		return nil
+	}
+	prev := append([]string{}, st.ActiveSets...)
+	st.ActiveSets = removeStr(st.ActiveSets, name)
+	if err := s.store.SaveState(st); err != nil {
+		return err
+	}
+	if len(st.ActiveSets) == 0 {
+		hub, _ := s.store.LoadWgHub()
+		if hub.Enabled {
+			if err := s.rematerialize(ctx); err != nil {
+				if cur, loadErr := s.store.LoadState(); loadErr == nil {
+					cur.ActiveSets = prev
+					_ = s.store.SaveState(cur)
+				}
+				return err
+			}
+		} else if s.cfg.Owner != nil {
+			if err := s.claimOwnership(configowner.ModeIdle, "deactivate_last_set", name); err != nil && s.log != nil {
+				s.log.Warn("controlplane deactivate claim idle failed", "err", err, "set", name)
+			}
+		}
+		return nil
+	}
+	if err := s.rematerialize(ctx); err != nil {
+		if cur, loadErr := s.store.LoadState(); loadErr == nil {
+			cur.ActiveSets = prev
+			_ = s.store.SaveState(cur)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) handleTLSGet(w http.ResponseWriter, _ *http.Request) {

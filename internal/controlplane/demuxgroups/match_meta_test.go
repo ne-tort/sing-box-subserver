@@ -230,6 +230,12 @@ func TestFitsInterchange(t *testing.T) {
 	if !FitsInterchange(quic, []string{"udp", "quic", "tls"}, "quic") {
 		t.Fatal("hy2-like should fit quic")
 	}
+	if FitsInterchange(quic, []string{"udp", "quic", "tls", "obfs"}, "quic") {
+		t.Fatal("obfs (salamander) must not fit quic demux slot")
+	}
+	if FitsInterchange(quic, []string{"udp", "quic", "tls"}, "obfuscated_quic") {
+		t.Fatal("obfuscated_quic looks_like must not fit")
+	}
 	plain := Slot{Role: RoleTCPPlain, MatchHint: "always_plain"}
 	if FitsInterchange(plain, []string{"tcp", "tls"}, "") {
 		t.Fatal("tls must not fit plain")

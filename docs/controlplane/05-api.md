@@ -8,6 +8,13 @@ Base: `/v1/controlplane`. JSON envelopes match root [05-api](../05-api.md).
 
 Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{token}`, **no** agent Bearer).
 
+### How-to (modular)
+
+- **Contracts & wizards:** [api/00-index.md](api/00-index.md)
+- **End-to-end scenarios ↔ pytest:** [scenarios/00-index.md](scenarios/00-index.md)
+
+This file remains the **endpoint catalog**. Prefer the modules above for install order, error codes, and test anchors.
+
 ---
 
 ## Status
@@ -54,8 +61,8 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
     },
     "reality": {
       "using_user_overrides": false,
-      "effective_profiles": [{ "sni": "www.microsoft.com", "handshake_server": "www.microsoft.com", "handshake_port": 443 }],
-      "active_assignments": [{ "inbound_key": "rset/vless-reality-tcp", "sni": "www.microsoft.com" }]
+      "effective_profiles": [{ "sni": "www.apple.com", "handshake_server": "www.apple.com", "handshake_port": 443 }],
+      "active_assignments": [{ "inbound_key": "rset/vless-reality-tcp", "sni": "www.apple.com" }]
     },
     "last_materialize_sha256": "...",
     "last_materialize_at": "..."
@@ -159,7 +166,7 @@ PUT body:
 ```json
 {
   "profiles": [
-    { "sni": "www.microsoft.com" },
+    { "sni": "www.apple.com" },
     { "sni": "localhost", "handshake_server": "localhost", "handshake_port": 443 }
   ]
 }
@@ -255,10 +262,14 @@ Substitutions options also expose `looks_like`, `demux_hints`, `fits_interchange
   "group": "dg_443_dual",
   "name": "edge-443",
   "listen_port": 443,
-  "slot_presets": { "tcp": "vless_ws_reality", "quic": "tuic" },
+  "slot_presets": { "tcp": "vless_reality", "quic": "tuic" },
   "activate": true
 }
 ```
+
+`409` `cp_name_conflict` if `name` already exists (same as `POST /sets`). Omit `listen_port` to auto-pick a free port.
+
+Slot presets must `fits_interchange` and `compatible_with_demux` (e.g. `hy2_salamander` is rejected — obfuscated QUIC is invisible to demux `protocol=quic`).
 
 Response includes `set`, `member_ports`, `slot_snis`, `warnings`. Reality slots get unique SNIs aligned with demux match / Reality assignment.
 

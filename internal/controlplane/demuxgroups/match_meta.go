@@ -204,6 +204,9 @@ func FitsInterchange(slot Slot, traits []string, looksLike string) bool {
 		}
 		return looksLike == "" || looksLike == "tls_clienthello"
 	case RoleQUIC:
+		if has("obfs") {
+			return false // salamander etc. hide QUIC from demux classifiers
+		}
 		return (has("quic") || has("udp")) && (looksLike == "" || looksLike == "quic")
 	case RoleTCPPlain:
 		if has("tls") || has("tls_custom") || has("quic") || has("reality") {
