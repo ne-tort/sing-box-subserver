@@ -31,4 +31,15 @@ Artifacts (subscriptions, status dumps) land in `tests/vps_cp/artifacts/`.
 | `test_05_tls_acme` | self-signed, cert-manager domain, params.sni, optional IP SAN |
 | `test_06_reality` | profiles put + all-rejected |
 
-Client-in-docker phase is separate (uses dumped `sub_*.url.txt`).
+| `test_07_client_remote` | Client docker **on VPS** (`--network host`): presets, ACME, Reality TCP, Hy2 member |
+| `test_07_client_docker` | Optional local Docker Desktop (`CP_WIN_DOCKER=1`) |
+
+```powershell
+$env:CP_BASE='https://163.5.180.181:8080'
+$env:CP_TOKEN='vps-cp-token-dev-only'
+$env:CP_INSECURE='1'
+$env:CP_SSH_HOST='163.5.180.181'
+python -m pytest tests/vps_cp/test_07_client_remote.py -v --tb=short
+```
+
+Known gaps (artifacts `KNOWN_GAP_*`): demux `:443` → Hy2 (salamander vs `protocol=quic`); demux WS Reality member path.
