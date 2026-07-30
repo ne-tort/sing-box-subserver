@@ -253,7 +253,7 @@ func TestEnrichSlotAPI(t *testing.T) {
 
 func TestSubstitutionsIncludesMatchMeta(t *testing.T) {
 	t.Parallel()
-	view, err := Substitutions("dg_443_triple")
+	view, err := Substitutions("dg_443_triple", "ru")
 	if err != nil {
 		t.Fatal(err)
 	}

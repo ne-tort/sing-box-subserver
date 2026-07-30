@@ -1190,10 +1190,22 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		}
 	}
 	if cm, err := s.ensureCertManager(); err == nil {
-		out["cert_manager"] = map[string]any{
+		cmPayload := map[string]any{
 			"enabled": cm.Enabled(),
 			"domains": cm.NormalizedDomains(),
 		}
+		if domains := cm.NormalizedDomains(); len(domains) > 0 {
+			ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
+			cmPayload["ready"] = ready
+			cmPayload["acme_certs_missing"] = missing
+			cmPayload["acme_certs_found"] = found
+		} else {
+			cmPayload["ready"] = true
+		}
+		out["cert_manager"] = cmPayload
+	}
+	if hub, err := s.store.LoadWgHub(); err == nil {
+		out["wg_hub"] = map[string]any{"enabled": hub.Enabled, "listen_port": hub.ListenPort, "profile": hub.Profile}
 	}
 	if rc, err := s.loadRealityConfig(); err == nil {
 		out["reality"] = s.realityStatusPayload(rc)
@@ -1232,7 +1244,14 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 			}
 		}
 	}
-	if len(st.ActiveSets) == 0 {
+	live := s.cpDataplaneLive(st)
+	wgEnabled := false
+	if hub, okHub := payload["wg_hub"].(map[string]any); okHub {
+		wgEnabled, _ = hub["enabled"].(bool)
+	} else if hub, err := s.store.LoadWgHub(); err == nil {
+		wgEnabled = hub.Enabled
+	}
+	if !live {
 		ok = false
 		reasons = append(reasons, "no_active_sets")
 	}
@@ -1244,6 +1263,14 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 		if ready, _ := ms["ready"].(bool); !ready {
 			ok = false
 			reasons = append(reasons, "tls_not_ready")
+		}
+	}
+	if snis := s.activeBindingSNIs(st); len(snis) > 0 {
+		ready, missing, _ := acmeCertificateReady(s.cfg.DataDir, snis)
+		if !ready {
+			ok = false
+			reasons = append(reasons, "acme_not_ready")
+			_ = missing
 		}
 	}
 	boxUp := false
@@ -1262,9 +1289,48 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 		"box_up":           boxUp,
 		"supervisor_state": supState,
 		"active_sets":      len(st.ActiveSets) > 0,
+		"wg_hub":           wgEnabled,
 		"reasons":          reasons,
 		"poll":             "GET /v1/controlplane/status → ready.ok == true",
 	}
+}
+
+// activeBindingSNIs returns params.sni values used by currently active sets (ACME leaf domains).
+func (s *Service) activeBindingSNIs(st domain.State) []string {
+	if s == nil || s.store == nil || len(st.ActiveSets) == 0 {
+		return nil
+	}
+	sets, err := s.store.LoadSets()
+	if err != nil {
+		return nil
+	}
+	active := map[string]struct{}{}
+	for _, n := range st.ActiveSets {
+		active[n] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	for _, set := range sets {
+		if _, ok := active[set.Name]; !ok {
+			continue
+		}
+		for _, b := range set.EffectiveBindings() {
+			if b.Params == nil {
+				continue
+			}
+			sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
+			if sni == "" {
+				continue
+			}
+			sni = strings.ToLower(sni)
+			if _, ok := seen[sni]; ok {
+				continue
+			}
+			seen[sni] = struct{}{}
+			out = append(out, sni)
+		}
+	}
+	return out
 }
 
 func (s *Service) buildActiveSetDetails(active []string, sets []domain.InboundSet) []any {

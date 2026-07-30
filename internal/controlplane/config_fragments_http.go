@@ -64,6 +64,7 @@ func (s *Service) handleConfigDNSPut(w http.ResponseWriter, r *http.Request) {
 		"dns":            obj,
 		"config_mode":    s.configModeString(),
 		"rematerialized": live,
+		"persisted":      true,
 	})
 }
 
@@ -119,6 +120,7 @@ func (s *Service) handleConfigRoutePut(w http.ResponseWriter, r *http.Request) {
 		"route":          obj,
 		"config_mode":    s.configModeString(),
 		"rematerialized": live,
+		"persisted":      true,
 	})
 }
 

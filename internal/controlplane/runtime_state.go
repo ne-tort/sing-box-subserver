@@ -104,7 +104,8 @@ func (s *Service) reconcileOwnershipOnBoot(ctx context.Context) {
 		_ = s.store.SaveState(st)
 		return
 	}
-	if mode == configowner.ModeControlplane && len(st.ActiveSets) == 0 {
+	live := s.cpDataplaneLive(st)
+	if mode == configowner.ModeControlplane && !live {
 		if err := s.claimOwnership(configowner.ModeIdle, "boot_reconcile_orphan", ""); err != nil && s.log != nil {
 			s.log.Warn("controlplane boot orphan ownership rollback failed", "err", err)
 		} else if s.log != nil {
@@ -112,11 +113,24 @@ func (s *Service) reconcileOwnershipOnBoot(ctx context.Context) {
 		}
 		return
 	}
-	if mode == configowner.ModeControlplane && len(st.ActiveSets) > 0 {
+	if mode == configowner.ModeControlplane && live {
 		if err := s.rematerialize(ctx); err != nil && s.log != nil {
 			s.log.Warn("controlplane boot rematerialize failed", "err", err)
 		}
 	}
+}
+
+// cpDataplaneLive reports whether controlplane owns live dataplane work
+// (active inbound sets and/or enabled WireGuard hub).
+func (s *Service) cpDataplaneLive(st domain.State) bool {
+	if len(st.ActiveSets) > 0 {
+		return true
+	}
+	if s == nil || s.store == nil {
+		return false
+	}
+	hub, err := s.store.LoadWgHub()
+	return err == nil && hub.Enabled
 }
 
 func (s *Service) ownershipHealth(st domain.State) map[string]any {
@@ -124,9 +138,10 @@ func (s *Service) ownershipHealth(st domain.State) map[string]any {
 	if s != nil && s.cfg.Owner != nil {
 		mode = s.cfg.Owner.Owner()
 	}
+	live := s.cpDataplaneLive(st)
 	health := "ok"
 	issues := make([]string, 0)
-	if mode == configowner.ModeControlplane && len(st.ActiveSets) == 0 {
+	if mode == configowner.ModeControlplane && !live {
 		health = "degraded"
 		issues = append(issues, "controlplane_mode_without_active_sets")
 	}
@@ -138,7 +153,7 @@ func (s *Service) ownershipHealth(st domain.State) map[string]any {
 		health = "degraded"
 		issues = append(issues, "last_materialize_failed")
 	}
-	if mode == configowner.ModeControlplane && len(st.ActiveSets) > 0 && st.LastMaterializeAt == nil {
+	if mode == configowner.ModeControlplane && live && st.LastMaterializeAt == nil {
 		health = "degraded"
 		issues = append(issues, "never_materialized")
 	}
@@ -159,7 +174,7 @@ func materializeErrorCode(err error) string {
 	return "cp_apply_failed"
 }
 
-// activateErrorCode maps activateSetByName failures for soft-fail install responses (HTTP 201 + activated=false).
+// activateErrorCode maps activateSetByName failures for from-* when activate:true → HTTP 422.
 func activateErrorCode(err error) string {
 	if err == nil {
 		return ""

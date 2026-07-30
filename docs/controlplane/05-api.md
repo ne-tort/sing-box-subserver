@@ -63,7 +63,7 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
 }
 ```
 
-`ready.ok` is the **wizard poll signal** after `activate` / `from-*` with `activate:true`: ownership healthy, active sets present, last materialize without error, TLS ready (ACME), supervisor `Running` + `box_up`.
+`ready.ok` is the **wizard poll signal** after `activate` / `from-*` with `activate:true`: ownership healthy, active sets **or** enabled WG hub, last materialize without error, self-signed TLS ready, ACME ready when active bindings use `params.sni`, supervisor `Running` + `box_up`.
 
 `GET /status/details` additionally returns:
 - `owner_transitions` (full recent log, up to 20 entries),
@@ -74,7 +74,7 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
 - `status`: `ok` | `degraded`,
 - `issues`: e.g. `controlplane_mode_without_active_sets`, `active_sets_without_controlplane_ownership`, `last_materialize_failed`, `never_materialized`.
 
-On bootstrap, if `config_mode=controlplane` but `active_sets` is empty (orphan after crash), ownership is rolled back to `idle` with reason `boot_reconcile_orphan`.
+On bootstrap, if `config_mode=controlplane` but there is no live dataplane (`active_sets` empty **and** WG hub disabled), ownership is rolled back to `idle` with reason `boot_reconcile_orphan`.
 If `config_mode` is not `controlplane` but `active_sets` is non-empty, stale entries are cleared on bootstrap.
 
 `config_mode` is the **global** owner value from `configowner` (may be `direct` / `subscribed` / `idle` even if CP data exists).
@@ -205,8 +205,10 @@ First-class installable demux bundles (modern protocols only). Prefer these over
 | GET | `/v1/controlplane/demux-groups?lang=` | List groups: tag, scores, slots (+ match tags), `separation_summary` |
 | GET | `/v1/controlplane/demux-groups/{tag}?lang=` | Full group + `match_plan` + enriched slots |
 | GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + `separation_tags` / `interchange_tags` / `fits_interchange` |
-| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?`, `slot_presets?`, `slot_sni?`, `activate?`) |
+| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?` auto-pick, `slot_presets?`, `slot_sni?`, `activate?`) |
 | POST | `/v1/controlplane/sets/from-presets` | Batch install single-inbound sets with port policy |
+
+`activate:true` must fully succeed: HTTP `201` + `activated:true`. If the set(s) were saved but activate failed → HTTP `422` (`cp_claim_failed` / `cp_materialize_failed` / `cp_apply_failed` / `unsupported_build_tag`); resource remains on disk for retry via `POST .../activate`.
 
 ### Match metadata (client)
 
@@ -234,7 +236,8 @@ Substitutions options also expose `looks_like`, `demux_hints`, `fits_interchange
 3. **or** `GET /demux-groups` → `GET .../substitutions` → choose slot replacements  
 4. `POST /sets/from-demux-group` or `/sets/from-presets` with `activate: true`  
    - Response: `activated` is always a **boolean**; `from-presets` also returns `activated_sets: string[]`.  
-   - `listen_port` may be omitted → agent auto-picks a free port (prefers 443).  
+   - On activate failure with `activate:true` → **422** (set already persisted).  
+   - `listen_port` may be omitted → agent auto-picks a free port (presets + demux; prefers 443).  
 5. Poll `GET /status` until `ready.ok === true`  
 6. Create user → `subscription_url` (+ query filters from `/subscription-tags`)
 
@@ -344,6 +347,7 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_unknown_preset` | Set references missing preset |
 | `cp_invalid_creds` | Manual creds: unknown preset/field or empty/non-string value |
 | `cp_claim_failed` | `configowner.Claim(controlplane)` failed during activate |
+| `cp_port_exhausted` | No free public/private port for install |
 | `cp_invalid_bindings` | Missing/invalid binding params (e.g. `params.sni`) |
 | `cp_invalid_preset` | Preset not allowed in this context (e.g. WG via sets) |
 | `cp_invalid_demux` | Demux template invalid |
@@ -364,9 +368,10 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | Item | Why later |
 |------|-----------|
 | `materializeErrorCode` эвристика по тексту ошибки | Достаточно для UI; точнее — typed errors из supervisor Apply |
-| Reality `PUT` всегда 200 + `accepted`/`rejected` | Клиент обязан смотреть `rejected[]`; смена на 400 при all-rejected — breaking |
-| Soft-fail `from-*` + `activate:true` → HTTP 201 + `activated:false` | Уже контракт bootstrap; не превращать в 422 без версии API |
+| Reality `PUT` всегда 200 + `accepted`/`rejected` | Клиент обязан смотреть `rejected[]`; `400` только если all-rejected — см. ниже TODO |
+| Persist-then-422 (dns/route/tls/cm/users) | Store уже записан; клиент ретраит или читает GET; dry-run/rollback — отдельный контракт |
 | `peer_secrets` в GET set | Нужны оператору; для mobile UI — не светить без нужды (отдельный redaction flag) |
+| `substitutes` legacy alias на demux slots | Предпочитать `presets`; `substitutes` оставлен для совместимости |
 
 ---
 

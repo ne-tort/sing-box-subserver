@@ -74,7 +74,7 @@ func (s *Service) handleDemuxGroupsGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleDemuxGroupsSubstitutions(w http.ResponseWriter, r *http.Request) {
-	view, err := demuxgroups.Substitutions(r.PathValue("tag"))
+	view, err := demuxgroups.Substitutions(r.PathValue("tag"), requestLang(r))
 	if err != nil {
 		failJSON(w, 404, "not_found", err.Error())
 		return
@@ -98,6 +98,19 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	if body.ListenPort == 0 {
+		g, gerr := demuxgroups.Get(body.GroupTag)
+		if gerr != nil {
+			failJSON(w, 404, "not_found", gerr.Error())
+			return
+		}
+		port, perr := suggestListenPort(sets, g.Networks)
+		if perr != nil {
+			failJSON(w, 409, "cp_port_exhausted", perr.Error())
+			return
+		}
+		body.ListenPort = port
+	}
 	used := collectUsedPorts(sets)
 	if hub, err := s.store.LoadWgHub(); err == nil && hub.ListenPort != 0 {
 		used[hub.ListenPort] = struct{}{}
@@ -105,13 +118,17 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 	res, err := demuxgroups.BuildInstall(body.InstallRequest, used)
 	if err != nil {
 		code, ec := 400, "cp_invalid_demux_group"
-		if strings.Contains(err.Error(), "unknown demux group") {
+		msg := err.Error()
+		if strings.Contains(msg, "unknown demux group") {
 			code, ec = 404, "not_found"
 		}
-		if strings.Contains(err.Error(), "cp_invalid_slot") {
+		if strings.Contains(msg, "cp_invalid_slot") {
 			ec = "cp_invalid_slot"
 		}
-		failJSON(w, code, ec, err.Error())
+		if strings.Contains(msg, "cp_port_exhausted") {
+			code, ec = 409, "cp_port_exhausted"
+		}
+		failJSON(w, code, ec, msg)
 		return
 	}
 	set := res.Set
@@ -130,7 +147,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	resp := map[string]any{
-		"set":          set,
+		"set":          s.setPublicView(set, false),
 		"member_ports": res.MemberPorts,
 		"slot_snis":    res.SlotSNIs,
 		"warnings":     res.Warnings,
@@ -138,13 +155,12 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 	}
 	if body.Activate {
 		if err := s.activateSetByName(r.Context(), set.Name); err != nil {
-			resp["activate_error"] = err.Error()
-			resp["activate_error_code"] = activateErrorCode(err)
-			// Set is persisted; client must not treat install as live without activated=true.
-			okJSON(w, 201, resp)
+			// Set is persisted; fail the request so clients do not treat ok:true as live.
+			failJSON(w, 422, activateErrorCode(err), fmt.Sprintf("set %q saved but activate failed: %v", set.Name, err))
 			return
 		}
 		resp["activated"] = true
+		resp["set"] = s.setPublicView(set, true)
 	}
 	okJSON(w, 201, resp)
 }
@@ -236,22 +252,27 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// activated is always bool (same contract as from-demux-group); activated_sets lists successes.
-	resp := map[string]any{"sets": created, "activated": false, "activated_sets": []string{}}
+	views := make([]any, 0, len(created))
+	for _, set := range created {
+		views = append(views, s.setPublicView(set, false))
+	}
+	resp := map[string]any{"sets": views, "activated": false, "activated_sets": []string{}}
 	if body.Activate {
 		activated := make([]string, 0, len(created))
 		for _, set := range created {
 			if err := s.activateSetByName(r.Context(), set.Name); err != nil {
-				resp["activate_error"] = err.Error()
-				resp["activate_error_code"] = activateErrorCode(err)
-				resp["activated_sets"] = activated
-				resp["activated"] = false
-				okJSON(w, 201, resp)
+				failJSON(w, 422, activateErrorCode(err), fmt.Sprintf("sets saved (%d); activate failed at %q after %d ok: %v", len(created), set.Name, len(activated), err))
 				return
 			}
 			activated = append(activated, set.Name)
 		}
+		activeViews := make([]any, 0, len(created))
+		for _, set := range created {
+			activeViews = append(activeViews, s.setPublicView(set, true))
+		}
+		resp["sets"] = activeViews
 		resp["activated_sets"] = activated
-		resp["activated"] = len(activated) == len(created)
+		resp["activated"] = true
 	}
 	okJSON(w, 201, resp)
 }

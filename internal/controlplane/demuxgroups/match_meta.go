@@ -161,7 +161,8 @@ func EnrichSlotAPI(slot Slot) map[string]any {
 		"id":               slot.ID,
 		"role":             slot.Role,
 		"default_preset":   slot.DefaultPreset,
-		"substitutes":      slot.AllPresets(),
+		"substitutes":      slot.AllPresets(), // legacy alias
+		"presets":          slot.AllPresets(),
 		"match_hint":       slot.MatchHint,
 		"separation_tags":  m.SeparationTags,
 		"interchange_tags": m.InterchangeTags,

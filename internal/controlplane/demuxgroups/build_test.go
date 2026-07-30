@@ -85,7 +85,7 @@ func TestSlotRejectUnknownPreset(t *testing.T) {
 }
 
 func TestSubstitutions(t *testing.T) {
-	v, err := Substitutions("dg_443_triple")
+	v, err := Substitutions("dg_443_triple", "ru")
 	if err != nil {
 		t.Fatal(err)
 	}

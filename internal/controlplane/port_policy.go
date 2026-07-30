@@ -146,5 +146,5 @@ func suggestListenPort(sets []domain.InboundSet, need []string) (uint16, error) 
 			return p, nil
 		}
 	}
-	return 0, fmt.Errorf("no free listen_port for networks %v", need)
+	return 0, fmt.Errorf("cp_port_exhausted: no free listen_port for networks %v", need)
 }

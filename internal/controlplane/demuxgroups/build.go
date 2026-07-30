@@ -690,10 +690,13 @@ type PresetOption struct {
 }
 
 // Substitutions builds UI view for a group with preset metadata for pickers.
-func Substitutions(tag string) (SubstitutionsView, error) {
+func Substitutions(tag string, lang string) (SubstitutionsView, error) {
 	g, err := Get(tag)
 	if err != nil {
 		return SubstitutionsView{}, err
+	}
+	if strings.TrimSpace(lang) == "" {
+		lang = "ru"
 	}
 	slots := make([]SlotSubstitution, 0, len(g.Slots))
 	for _, s := range g.Slots {
@@ -704,7 +707,7 @@ func Substitutions(tag string) (SubstitutionsView, error) {
 			opt := PresetOption{Tag: pn, DemuxCompat: demuxCompatForPreset(pn, s.Role, s.MatchHint), FitsInterchange: true}
 			if inv, err := presets.GetInvariant(pn); err == nil {
 				title, desc := "", ""
-				if t, d := resolvePresetI18n(inv.I18n, "ru"); t != "" || d != "" {
+				if t, d := resolvePresetI18n(inv.I18n, lang); t != "" || d != "" {
 					title, desc = t, d
 				}
 				opt.Title = title
