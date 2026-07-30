@@ -20,6 +20,9 @@ type InstallRequest struct {
 	Listen      string            `json:"listen,omitempty"`
 	ListenPort  uint16            `json:"listen_port,omitempty"`
 	SlotPreset  map[string]string `json:"slot_presets,omitempty"` // slot_id → preset tag
+	// DisabledSlots lists slot IDs to skip entirely (not installed).
+	// Omitted / empty string in slot_presets still means default_preset — use this field to disable.
+	DisabledSlots []string `json:"disabled_slots,omitempty"`
 	// SlotSNI optionally overrides demux_sni (and params.sni for ACME) per slot.
 	// Empty → auto pool + per-slot self-signed as before.
 	SlotSNI map[string]string `json:"slot_sni,omitempty"` // slot_id → sni
@@ -371,7 +374,17 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 	}
 
 	slotPreset := map[string]string{}
+	disabled := map[string]struct{}{}
+	for _, id := range req.DisabledSlots {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			disabled[id] = struct{}{}
+		}
+	}
 	for _, slot := range g.Slots {
+		if _, skip := disabled[slot.ID]; skip {
+			continue
+		}
 		chosen := strings.TrimSpace(req.SlotPreset[slot.ID])
 		if chosen == "" {
 			chosen = slot.DefaultPreset
@@ -401,6 +414,9 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		}
 		slotPreset[slot.ID] = chosen
 	}
+	if len(slotPreset) == 0 {
+		return InstallResult{}, fmt.Errorf("cp_invalid_demux_group: all slots disabled for group %q", g.Tag)
+	}
 
 	// Unique presets across slots (same preset twice is ambiguous for tags).
 	seenPreset := map[string]string{}
@@ -417,10 +433,13 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		return InstallResult{}, err
 	}
 
-	bindings := make([]domain.SetBinding, 0, len(g.Slots))
-	presetList := make([]string, 0, len(g.Slots))
+	bindings := make([]domain.SetBinding, 0, len(slotPreset))
+	presetList := make([]string, 0, len(slotPreset))
 	for _, slot := range g.Slots {
 		pn := slotPreset[slot.ID]
+		if pn == "" {
+			continue
+		}
 		presetList = append(presetList, pn)
 		params := map[string]string{}
 		if sni := snis[slot.ID]; sni != "" {
@@ -504,6 +523,9 @@ func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]
 	}
 	// Apply explicit overrides first so auto-assigned SNIs stay unique.
 	for _, slot := range g.Slots {
+		if strings.TrimSpace(slotPreset[slot.ID]) == "" {
+			continue
+		}
 		ov := strings.ToLower(strings.TrimSpace(overrides[slot.ID]))
 		if ov == "" {
 			continue
@@ -512,6 +534,9 @@ func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]
 		used[ov] = struct{}{}
 	}
 	for _, slot := range g.Slots {
+		if strings.TrimSpace(slotPreset[slot.ID]) == "" {
+			continue
+		}
 		if out[slot.ID] != "" {
 			continue
 		}
@@ -583,6 +608,9 @@ func buildDemuxTemplate(g Group, slotPreset map[string]string, ports map[string]
 	var quicProtocolOnly []Slot
 	for i := range g.Slots {
 		slot := g.Slots[i]
+		if strings.TrimSpace(slotPreset[slot.ID]) == "" {
+			continue
+		}
 		switch {
 		case slot.Role == RoleTCPPlain || slot.MatchHint == "always_plain":
 			plainSlot = &g.Slots[i]

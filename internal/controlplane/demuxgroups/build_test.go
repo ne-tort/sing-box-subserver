@@ -51,6 +51,28 @@ func TestBuildInstallDual(t *testing.T) {
 	}
 }
 
+func TestBuildInstallDisabledSlots(t *testing.T) {
+	res, err := BuildInstall(InstallRequest{
+		GroupTag:      "dg_443_dual",
+		SetName:       "test-disabled",
+		DisabledSlots: []string{"quic"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.MemberPorts) != 1 {
+		t.Fatalf("expected 1 member port after disabling quic, got %v", res.MemberPorts)
+	}
+	_, err = BuildInstall(InstallRequest{
+		GroupTag:      "dg_443_dual",
+		SetName:       "test-all-disabled",
+		DisabledSlots: []string{"tcp", "quic"},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error when all slots disabled")
+	}
+}
+
 func TestBuildInstallSlotSNIOverride(t *testing.T) {
 	res, err := BuildInstall(InstallRequest{
 		GroupTag: "dg_443_triple",
