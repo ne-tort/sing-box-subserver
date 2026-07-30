@@ -67,7 +67,7 @@ func TestUsersCRUDAndSub(t *testing.T) {
 	setBody := []byte(`{"name":"s1","listen":"0.0.0.0","listen_port":8443,"presets":["shadowsocks-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 
@@ -230,7 +230,7 @@ func TestCertManagerAPI(t *testing.T) {
 	setBody := []byte(`{"name":"t1","listen":"::","listen_port":8443,"bindings":[{"preset":"trojan-tcp","params":{"sni":"vpn.example.com"}}]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set with sni: %d %s", rr.Code, rr.Body.String())
 	}
 	badSNI := []byte(`{"name":"t2","listen":"::","listen_port":8444,"bindings":[{"preset":"trojan-tcp","params":{"sni":"other.example.com"}}]}`)
@@ -426,7 +426,7 @@ func TestTLSRegenerateForcesBoxReload(t *testing.T) {
 	setBody := []byte(`{"name":"t1","listen":"0.0.0.0","listen_port":8443,"presets":["trojan-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -857,7 +857,7 @@ func TestSubVariantTagProfileFilters(t *testing.T) {
 	}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -935,7 +935,7 @@ func TestSetSubscriptionTagsAPI(t *testing.T) {
 	}`)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 
@@ -1001,7 +1001,7 @@ func TestActivateRollbackOnApplyFailure(t *testing.T) {
 	setBody := []byte(`{"name":"s1","listen":"0.0.0.0","listen_port":8443,"presets":["shadowsocks-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -1053,7 +1053,7 @@ func TestStatusDetailsEndpoint(t *testing.T) {
 	setBody := []byte(`{"name":"s2","listen":"0.0.0.0","listen_port":9443,"presets":["vless-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -1143,7 +1143,7 @@ func TestBootReconcileStaleActiveSetsWhenIdle(t *testing.T) {
 	setBody := []byte(`{"name":"stale-set","listen":"0.0.0.0","listen_port":8443,"presets":["vless-tcp"]}`)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	if err := svc.store.SaveState(domain.State{ActiveSets: []string{"stale-set"}}); err != nil {
@@ -1194,7 +1194,7 @@ func TestSubStrictFiltersRejectUnknown(t *testing.T) {
 	setBody := []byte(`{"name":"strict-set","listen":"0.0.0.0","listen_port":8443,"presets":["vless-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -1234,13 +1234,13 @@ func TestSubscriptionTagsAggregateAPI(t *testing.T) {
 	setBody := []byte(`{"name":"agg1","listen":"0.0.0.0","listen_port":9443,"presets":["vless-tcp"]}`)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	setBody2 := []byte(`{"name":"agg2","listen":"0.0.0.0","listen_port":9444,"presets":["trojan-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody2)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set2: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
@@ -1322,7 +1322,7 @@ func TestRealityAPIAndStickyAssignment(t *testing.T) {
 	setBody := []byte(`{"name":"rset","listen":"0.0.0.0","listen_port":8443,"presets":["vless-reality-tcp"]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()

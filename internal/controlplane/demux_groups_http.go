@@ -108,6 +108,9 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		if strings.Contains(err.Error(), "unknown demux group") {
 			code, ec = 404, "not_found"
 		}
+		if strings.Contains(err.Error(), "cp_invalid_slot") {
+			ec = "cp_invalid_slot"
+		}
 		failJSON(w, code, ec, err.Error())
 		return
 	}
@@ -117,10 +120,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 	set.CreatedAt = now
 	set.UpdatedAt = now
 	if err := s.validateSet(set, sets); err != nil {
-		code, ec := 400, "cp_invalid_set"
-		if strings.Contains(err.Error(), "cp_port_conflict") {
-			code, ec = 409, "cp_port_conflict"
-		}
+		code, ec := validateSetHTTP(err)
 		failJSON(w, code, ec, err.Error())
 		return
 	}
@@ -139,7 +139,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 	if body.Activate {
 		if err := s.activateSetByName(r.Context(), set.Name); err != nil {
 			resp["activate_error"] = err.Error()
-			resp["activate_error_code"] = "cp_activate_failed"
+			resp["activate_error_code"] = activateErrorCode(err)
 			// Set is persisted; client must not treat install as live without activated=true.
 			okJSON(w, 201, resp)
 			return
@@ -224,10 +224,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 		syncBindingSNI(&set)
 		others := append(append([]domain.InboundSet{}, sets...), created...)
 		if err := s.validateSet(set, others); err != nil {
-			code, ec := 400, "cp_invalid_set"
-			if strings.Contains(err.Error(), "cp_port_conflict") {
-				code, ec = 409, "cp_port_conflict"
-			}
+			code, ec := validateSetHTTP(err)
 			failJSON(w, code, ec, fmt.Sprintf("items[%d]: %v", i, err))
 			return
 		}
@@ -245,7 +242,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 		for _, set := range created {
 			if err := s.activateSetByName(r.Context(), set.Name); err != nil {
 				resp["activate_error"] = err.Error()
-				resp["activate_error_code"] = "cp_activate_failed"
+				resp["activate_error_code"] = activateErrorCode(err)
 				resp["activated_sets"] = activated
 				resp["activated"] = false
 				okJSON(w, 201, resp)

@@ -158,3 +158,19 @@ func materializeErrorCode(err error) string {
 	}
 	return "cp_apply_failed"
 }
+
+// activateErrorCode maps activateSetByName failures for soft-fail install responses (HTTP 201 + activated=false).
+func activateErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "cp_claim_failed") || strings.Contains(msg, "claim"):
+		return "cp_claim_failed"
+	case strings.Contains(msg, "unsupported_build_tag") || strings.Contains(msg, "with_demux"):
+		return "unsupported_build_tag"
+	default:
+		return materializeErrorCode(err)
+	}
+}

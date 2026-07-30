@@ -132,7 +132,7 @@ func (s *Service) handleCertManagerPut(w http.ResponseWriter, r *http.Request) {
 	}
 	cm.Domains = cm.NormalizedDomains()
 	if err := cm.Validate(); err != nil {
-		failJSON(w, 400, "bad_request", err.Error())
+		failJSON(w, 400, "cp_invalid_cert_manager", err.Error())
 		return
 	}
 	if err := s.store.SaveCertManager(cm); err != nil {
@@ -152,7 +152,7 @@ func (s *Service) handleCertManagerPut(w http.ResponseWriter, r *http.Request) {
 	s.mgmtTLS.cert = nil
 	s.mgmtTLS.mu.Unlock()
 	if err := s.rematerializeForce(r.Context(), true); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, s.certManagerStatusPayload(cm))

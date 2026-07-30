@@ -1019,6 +1019,59 @@ func failJSON(w http.ResponseWriter, code int, errCode, msg string) {
 	})
 }
 
+// validateSetHTTP maps validateSet errors to stable HTTP status + error.code for clients.
+func validateSetHTTP(err error) (code int, errCode string) {
+	code, errCode = 400, "cp_invalid_set"
+	if err == nil {
+		return code, errCode
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "cp_port_conflict"):
+		return 409, "cp_port_conflict"
+	case strings.Contains(msg, "cp_unknown_preset"):
+		return code, "cp_unknown_preset"
+	case strings.Contains(msg, "cp_invalid_demux"):
+		return code, "cp_invalid_demux"
+	case strings.Contains(msg, "cp_invalid_bindings"):
+		return code, "cp_invalid_bindings"
+	case strings.Contains(msg, "cp_invalid_preset"):
+		return code, "cp_invalid_preset"
+	default:
+		return code, errCode
+	}
+}
+
+// setPublicView is the list/get shape for inbound sets (active flag for clients).
+func (s *Service) setPublicView(set domain.InboundSet, active bool) map[string]any {
+	bindings := set.EffectiveBindings()
+	m := map[string]any{
+		"name":          set.Name,
+		"description":   set.Description,
+		"listen":        set.Listen,
+		"listen_port":   set.ListenPort,
+		"presets":       uniqueSetPresets(bindings),
+		"bindings":      bindings,
+		"has_demux":     set.HasDemux(),
+		"active":        active,
+		"created_at":    set.CreatedAt,
+		"updated_at":    set.UpdatedAt,
+	}
+	if len(set.DemuxTemplate) > 0 {
+		m["demux_template"] = set.DemuxTemplate
+	}
+	if len(set.MemberPorts) > 0 {
+		m["member_ports"] = set.MemberPorts
+	}
+	if set.DemuxGroup != "" {
+		m["demux_group"] = set.DemuxGroup
+	}
+	if len(set.PeerSecrets) > 0 {
+		m["peer_secrets"] = set.PeerSecrets
+	}
+	return m
+}
+
 func redactUser(u domain.User, secrets bool) map[string]any {
 	m := map[string]any{
 		"id":                       u.ID,
@@ -1369,7 +1422,7 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	path, url := s.subscriptionURL(r, u.SubToken)
@@ -1506,7 +1559,7 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 		s.trafficHooks.OnBecameIneligible([]string{u.ID})
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, redactUser(*u, false))
@@ -1532,7 +1585,7 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		s.trafficHooks.OnBecameIneligible([]string{deletedID})
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, map[string]any{"deleted": true})
@@ -1588,7 +1641,7 @@ func (s *Service) handleUsersRotateCreds(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, redactUser(users[i], true))
@@ -1630,7 +1683,7 @@ func (s *Service) handleUsersPutCreds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, redactUser(users[i], true))
@@ -1936,13 +1989,7 @@ func (s *Service) handleSetsList(w http.ResponseWriter, _ *http.Request) {
 	st, _ := s.store.LoadState()
 	out := make([]any, 0, len(sets))
 	for _, set := range sets {
-		bindings := set.EffectiveBindings()
-		m := map[string]any{
-			"name": set.Name, "description": set.Description, "listen": set.Listen,
-			"listen_port": set.ListenPort, "presets": uniqueSetPresets(bindings), "bindings": bindings,
-			"has_demux": set.HasDemux(), "active": contains(st.ActiveSets, set.Name),
-		}
-		out = append(out, m)
+		out = append(out, s.setPublicView(set, contains(st.ActiveSets, set.Name)))
 	}
 	okJSON(w, 200, out)
 }
@@ -1970,20 +2017,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
-		code := 400
-		ec := "bad_request"
-		if strings.Contains(err.Error(), "cp_port_conflict") {
-			code, ec = 409, "cp_port_conflict"
-		}
-		if strings.Contains(err.Error(), "cp_unknown_preset") {
-			ec = "cp_unknown_preset"
-		}
-		if strings.Contains(err.Error(), "cp_invalid_demux") {
-			ec = "cp_invalid_demux"
-		}
-		if strings.Contains(err.Error(), "cp_invalid_bindings") {
-			ec = "cp_invalid_bindings"
-		}
+		code, ec := validateSetHTTP(err)
 		failJSON(w, code, ec, err.Error())
 		return
 	}
@@ -1994,7 +2028,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	okJSON(w, 200, set)
+	okJSON(w, 201, s.setPublicView(set, false))
 }
 
 func (s *Service) handleSetsGet(w http.ResponseWriter, r *http.Request) {
@@ -2003,10 +2037,11 @@ func (s *Service) handleSetsGet(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	st, _ := s.store.LoadState()
 	name := r.PathValue("name")
 	for _, set := range sets {
 		if set.Name == name {
-			okJSON(w, 200, set)
+			okJSON(w, 200, s.setPublicView(set, contains(st.ActiveSets, name)))
 			return
 		}
 	}
@@ -2060,16 +2095,7 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
-		code, ec := 400, "bad_request"
-		if strings.Contains(err.Error(), "cp_port_conflict") {
-			code, ec = 409, "cp_port_conflict"
-		}
-		if strings.Contains(err.Error(), "cp_unknown_preset") {
-			ec = "cp_unknown_preset"
-		}
-		if strings.Contains(err.Error(), "cp_invalid_demux") {
-			ec = "cp_invalid_demux"
-		}
+		code, ec := validateSetHTTP(err)
 		failJSON(w, code, ec, err.Error())
 		return
 	}
@@ -2088,10 +2114,14 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st, _ := s.store.LoadState()
-	if contains(st.ActiveSets, name) {
-		_ = s.rematerialize(r.Context())
+	active := contains(st.ActiveSets, name)
+	if active {
+		if err := s.rematerialize(r.Context()); err != nil {
+			failJSON(w, 422, materializeErrorCode(err), err.Error())
+			return
+		}
 	}
-	okJSON(w, 200, set)
+	okJSON(w, 200, s.setPublicView(set, active))
 }
 
 func (s *Service) handleSetsDelete(w http.ResponseWriter, r *http.Request) {
@@ -2208,6 +2238,7 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 		okJSON(w, 200, map[string]any{"active_sets": st.ActiveSets, "config_mode": mode, "noop": true})
 		return
 	}
+	prev := append([]string{}, st.ActiveSets...)
 	st.ActiveSets = removeStr(st.ActiveSets, name)
 	if err := s.store.SaveState(st); err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -2216,19 +2247,32 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 	if len(st.ActiveSets) == 0 {
 		hub, _ := s.store.LoadWgHub()
 		if hub.Enabled {
-			_ = s.rematerialize(r.Context())
+			if err := s.rematerialize(r.Context()); err != nil {
+				if cur, loadErr := s.store.LoadState(); loadErr == nil {
+					cur.ActiveSets = prev
+					_ = s.store.SaveState(cur)
+				}
+				failJSON(w, 422, materializeErrorCode(err), err.Error())
+				return
+			}
 		} else if s.cfg.Owner != nil {
 			if err := s.claimOwnership(configowner.ModeIdle, "deactivate_last_set", name); err != nil && s.log != nil {
 				s.log.Warn("controlplane deactivate claim idle failed", "err", err, "set", name)
 			}
 		}
-	} else {
-		_ = s.rematerialize(r.Context())
+	} else if err := s.rematerialize(r.Context()); err != nil {
+		if cur, loadErr := s.store.LoadState(); loadErr == nil {
+			cur.ActiveSets = prev
+			_ = s.store.SaveState(cur)
+		}
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
+		return
 	}
 	mode := "idle"
 	if s.cfg.Owner != nil {
 		mode = string(s.cfg.Owner.Owner())
 	}
+	st, _ = s.store.LoadState()
 	okJSON(w, 200, map[string]any{"active_sets": st.ActiveSets, "config_mode": mode})
 }
 
@@ -2266,7 +2310,7 @@ func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
 	s.mgmtTLS.cert = nil
 	s.mgmtTLS.mu.Unlock()
 	if err := s.rematerializeForce(r.Context(), forceReload); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, s.tlsStatusPayload(p))
@@ -2290,7 +2334,7 @@ func (s *Service) handleTLSRegenerate(w http.ResponseWriter, r *http.Request) {
 	s.mgmtTLS.cert = nil
 	s.mgmtTLS.mu.Unlock()
 	if err := s.rematerializeForce(r.Context(), true); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	okJSON(w, 200, s.tlsStatusPayload(p))
@@ -2412,7 +2456,7 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, "config_invalid", err.Error())
+		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
 	payload := s.realityStatusPayload(refreshed)

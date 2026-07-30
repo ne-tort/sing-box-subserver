@@ -142,8 +142,8 @@ TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager dom
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server) |
-| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`) |
+| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server); PUT → `rematerialized` if CP owns dataplane |
+| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`); same rematerialize contract |
 
 ---
 
@@ -285,8 +285,8 @@ Named demux_template skeletons (legacy/manual; separate from demux-groups). Oper
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/sets` | List (include `active` bool) |
-| POST | `/v1/controlplane/sets` | Create set (`demux_template` optional; port unique) |
-| GET | `/v1/controlplane/sets/{name}` | Get |
+| POST | `/v1/controlplane/sets` | Create set (`201`; `demux_template` optional; port unique) |
+| GET | `/v1/controlplane/sets/{name}` | Get (same shape as list item, includes `active`) |
 | GET | `/v1/controlplane/sets/{name}/subscription-tags` | List available subscription selection tags/variants/profiles per inbound binding |
 | GET | `/v1/controlplane/subscription-tags` | Aggregate subscription-tags across sets (`?active_only=true` default; `false` lists all sets) |
 | PUT | `/v1/controlplane/sets/{name}` | Replace definition (`409` port conflict; if active → rematerialize) |
@@ -344,10 +344,29 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_unknown_preset` | Set references missing preset |
 | `cp_invalid_creds` | Manual creds: unknown preset/field or empty/non-string value |
 | `cp_claim_failed` | `configowner.Claim(controlplane)` failed during activate |
+| `cp_invalid_bindings` | Missing/invalid binding params (e.g. `params.sni`) |
+| `cp_invalid_preset` | Preset not allowed in this context (e.g. WG via sets) |
+| `cp_invalid_demux` | Demux template invalid |
+| `cp_invalid_demux_group` | from-demux-group install request invalid |
+| `cp_invalid_slot` | Slot preset not allowed / duplicate across slots |
+| `cp_invalid_set` | Generic set validation failure |
+| `cp_invalid_config` | DNS/route fragment validation failed |
+| `cp_invalid_cert_manager` | Cert-manager settings invalid |
 | `cp_materialize_failed` | Materialize build/validate failed before Apply |
 | `cp_apply_failed` | Supervisor Apply failed after materialize |
 | `cp_invalid_sub_filter` | Subscription query filter unknown/disallowed when `strict_filters=true` |
 | `unsupported_build_tag` | Same family as root validate 422 |
+
+`422` on activate / PUT active set / TLS / cert-manager / dns / route / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
+
+### Follow-ups (не блокируют клиентский happy-path)
+
+| Item | Why later |
+|------|-----------|
+| `materializeErrorCode` эвристика по тексту ошибки | Достаточно для UI; точнее — typed errors из supervisor Apply |
+| Reality `PUT` всегда 200 + `accepted`/`rejected` | Клиент обязан смотреть `rejected[]`; смена на 400 при all-rejected — breaking |
+| Soft-fail `from-*` + `activate:true` → HTTP 201 + `activated:false` | Уже контракт bootstrap; не превращать в 422 без версии API |
+| `peer_secrets` в GET set | Нужны оператору; для mobile UI — не светить без нужды (отдельный redaction flag) |
 
 ---
 

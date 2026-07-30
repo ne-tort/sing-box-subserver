@@ -103,7 +103,7 @@ func createUserAndActivateSS(t *testing.T, mux *http.ServeMux, name string) (id,
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader([]byte(
 		`{"name":"s1","listen":"0.0.0.0","listen_port":8443,"presets":["shadowsocks-tcp"]}`,
 	))))
-	if rr.Code != 200 {
+	if rr.Code != 201 {
 		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
