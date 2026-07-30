@@ -115,13 +115,13 @@ func redactDNS01(in map[string]any) any {
 	return red
 }
 
-func (s *Service) handleCertManagerGet(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleCertManagerGet(w http.ResponseWriter, r *http.Request) {
 	cm, err := s.ensureCertManager()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	okJSON(w, 200, s.certManagerStatusPayload(cm))
+	okJSONETag(w, r, s.certManagerStatusPayload(cm))
 }
 
 func (s *Service) handleCertManagerPut(w http.ResponseWriter, r *http.Request) {

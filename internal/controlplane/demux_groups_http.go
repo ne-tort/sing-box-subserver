@@ -44,7 +44,7 @@ func (s *Service) handleDemuxGroupsList(w http.ResponseWriter, r *http.Request) 
 			"separation_summary":  meta.SeparationSummary,
 		})
 	}
-	okJSON(w, 200, out)
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handleDemuxGroupsGet(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +60,7 @@ func (s *Service) handleDemuxGroupsGet(w http.ResponseWriter, r *http.Request) {
 	for _, slot := range g.Slots {
 		slots = append(slots, demuxgroups.EnrichSlotAPI(slot))
 	}
-	okJSON(w, 200, map[string]any{
+	okJSONETag(w, r, map[string]any{
 		"tag":                g.Tag,
 		"short_name":         g.ShortName,
 		"status":             g.Status,
@@ -83,7 +83,7 @@ func (s *Service) handleDemuxGroupsSubstitutions(w http.ResponseWriter, r *http.
 		failJSON(w, 404, "not_found", err.Error())
 		return
 	}
-	okJSON(w, 200, view)
+	okJSONETag(w, r, view)
 }
 
 // POST /v1/controlplane/sets/from-demux-group

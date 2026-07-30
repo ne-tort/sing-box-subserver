@@ -1165,12 +1165,12 @@ func parseTimePtr(s string) (*time.Time, error) {
 	return &t, nil
 }
 
-func (s *Service) handleStatus(w http.ResponseWriter, _ *http.Request) {
-	okJSON(w, http.StatusOK, s.buildStatusPayload(false))
+func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
+	okJSONETag(w, r, s.buildStatusPayload(false))
 }
 
-func (s *Service) handleStatusDetails(w http.ResponseWriter, _ *http.Request) {
-	okJSON(w, http.StatusOK, s.buildStatusPayload(true))
+func (s *Service) handleStatusDetails(w http.ResponseWriter, r *http.Request) {
+	okJSONETag(w, r, s.buildStatusPayload(true))
 }
 
 func (s *Service) buildStatusPayload(details bool) map[string]any {
@@ -1433,7 +1433,7 @@ func (s *Service) rollbackFirstActivate(wasOwner bool, prev []string, trigger st
 	_ = s.claimOwnership(configowner.ModeIdle, "activate_rollback", trigger)
 }
 
-func (s *Service) handleUsersList(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleUsersList(w http.ResponseWriter, r *http.Request) {
 	users, err := s.store.LoadUsers()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -1443,7 +1443,7 @@ func (s *Service) handleUsersList(w http.ResponseWriter, _ *http.Request) {
 	for _, u := range users {
 		out = append(out, redactUser(u, false))
 	}
-	okJSON(w, 200, out)
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
@@ -1806,72 +1806,6 @@ func requestLang(r *http.Request) string {
 	return domain.NormalizeLang(r.URL.Query().Get("lang"))
 }
 
-func presetOptionalParams(pp domain.ProtocolPreset) map[string]any {
-	out := map[string]any{
-		"listen_port": map[string]any{
-			"type":        "uint16",
-			"required":    false,
-			"description": "Public listen port for single-inbound install. Omit to auto-pick a free port (prefers 443).",
-			"constraint":  "At most one TCP and one UDP occupant per port.",
-		},
-	}
-	for _, f := range pp.ParamFields {
-		if f == "" || f == "listen_port" {
-			continue
-		}
-		out[f] = map[string]any{
-			"type":        "string",
-			"required":    false,
-			"description": paramFieldDescription(f, pp),
-		}
-	}
-	return out
-}
-
-func presetOptionalParamsDetail(pp domain.ProtocolPreset) map[string]any {
-	out := presetOptionalParams(pp)
-	out["listen_port"] = map[string]any{
-		"type":        "uint16",
-		"required":    false,
-		"description": "Public listen port when installing as a single-inbound set (not demux member). Omit to auto-pick.",
-		"constraint":  "At most one TCP and one UDP inbound may share a port across sets.",
-	}
-	out["demux_sni"] = map[string]any{
-		"type":        "string",
-		"description": "SNI used for demux match / TLS server_name when installed inside a demux group.",
-	}
-	out["sni"] = map[string]any{
-		"type":        "string",
-		"description": "Optional ACME domain from cert-manager; for TLS non-Reality inbounds. Also syncs demux_sni.",
-	}
-	return out
-}
-
-func paramFieldDescription(field string, pp domain.ProtocolPreset) string {
-	switch field {
-	case "ws_host", "hu_host", "http_host":
-		if hasTrait(pp.Traits, "reality") {
-			return "HTTP Host header; materialize aligns to Reality SNI when omitted/default."
-		}
-		return "HTTP Host header for the transport."
-	case "ws_path", "hu_path", "grpc_service_name", "http_path":
-		return "Transport path / gRPC service name."
-	case "sni":
-		return "TLS server_name / ACME domain."
-	default:
-		return "Optional preset parameter."
-	}
-}
-
-func hasTrait(traits []string, want string) bool {
-	for _, t := range traits {
-		if t == want {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 	lang := requestLang(r)
 	protocolFilter := strings.TrimSpace(r.URL.Query().Get("protocol"))
@@ -1900,16 +1834,17 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			"cred_fields":         pp.CredFields,
 			"cred_generators":     pp.CredGenerators,
 			"peer_secret_fields":  pp.PeerSecretFields,
-			"param_fields":        pp.ParamFields,
+			"param_fields":          pp.ParamFields,
 			"default_user_variants": pp.DefaultUserVariants,
-			"optional_params":     presetOptionalParams(pp),
+			"params_schema":         buildParamsSchema(pp, false),
+			"optional_params":       presetOptionalParams(pp),
 		}
 		if nets := networksFromTraits(pp.Traits); len(nets) > 0 {
 			item["networks"] = nets
 		}
 		out = append(out, item)
 	}
-	okJSON(w, 200, out)
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
@@ -1926,27 +1861,28 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 	pp := inv.ToProtocolPreset(lang)
 	proto, _ := presets.GetProtocol(inv.Protocol)
 	_, pDesc := domain.ResolveI18n(proto.I18n, lang)
-	okJSON(w, 200, map[string]any{
-		"name":              pp.Name,
-		"tag":               pp.Name,
-		"protocol":          pp.Protocol,
-		"description":       pp.Description,
-		"short_name":        pp.ShortName,
-		"traits":            pp.Traits,
-		"status":            pp.Status,
-		"aliases":           pp.Aliases,
-		"scores":            pp.Scores,
-		"demux_hints":       pp.DemuxHints,
-		"requirements":      pp.Requirements,
+	okJSONETag(w, r, map[string]any{
+		"name":                  pp.Name,
+		"tag":                   pp.Name,
+		"protocol":              pp.Protocol,
+		"description":           pp.Description,
+		"short_name":            pp.ShortName,
+		"traits":                pp.Traits,
+		"status":                pp.Status,
+		"aliases":               pp.Aliases,
+		"scores":                pp.Scores,
+		"demux_hints":           pp.DemuxHints,
+		"requirements":          pp.Requirements,
 		"cred_fields":           pp.CredFields,
 		"cred_generators":       pp.CredGenerators,
 		"peer_secret_fields":    pp.PeerSecretFields,
 		"param_fields":          pp.ParamFields,
 		"default_user_variants": pp.DefaultUserVariants,
 		"client_notes":          inv.ClientNotes,
+		"params_schema":         buildParamsSchema(pp, true),
 		"optional_params":       presetOptionalParamsDetail(pp),
-		"inbound_template":  pp.InboundTemplate,
-		"outbound_template": pp.OutboundTemplate,
+		"inbound_template":      pp.InboundTemplate,
+		"outbound_template":     pp.OutboundTemplate,
 		"protocol_meta": map[string]any{
 			"tag":         proto.Tag,
 			"short_name":  proto.ShortName,
@@ -1971,7 +1907,7 @@ func (s *Service) handleProtocolsList(w http.ResponseWriter, r *http.Request) {
 			"singbox_type":    p.SingBoxType,
 		})
 	}
-	okJSON(w, 200, out)
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
@@ -2001,7 +1937,7 @@ func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		invOut = append(invOut, item)
 	}
-	okJSON(w, 200, map[string]any{
+	okJSONETag(w, r, map[string]any{
 		"tag":            p.Tag,
 		"short_name":     p.ShortName,
 		"status":         p.Status,
@@ -2013,18 +1949,18 @@ func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Service) handleDemuxRecipesList(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleDemuxRecipesList(w http.ResponseWriter, r *http.Request) {
 	all := demuxrecipes.All()
 	out := make([]any, 0, len(all))
-	for _, r := range all {
+	for _, rec := range all {
 		out = append(out, map[string]any{
-			"name":             r.Name,
-			"description":      r.Description,
-			"required_presets": r.RequiredPresets,
-			"suggested_port":   r.SuggestedPort,
+			"name":             rec.Name,
+			"description":      rec.Description,
+			"required_presets": rec.RequiredPresets,
+			"suggested_port":   rec.SuggestedPort,
 		})
 	}
-	okJSON(w, 200, out)
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handleDemuxRecipesGet(w http.ResponseWriter, r *http.Request) {
@@ -2033,7 +1969,7 @@ func (s *Service) handleDemuxRecipesGet(w http.ResponseWriter, r *http.Request) 
 		failJSON(w, 404, "not_found", err.Error())
 		return
 	}
-	okJSON(w, 200, rec)
+	okJSONETag(w, r, rec)
 }
 
 func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet) error {
@@ -2155,7 +2091,11 @@ func (s *Service) handleSetsList(w http.ResponseWriter, r *http.Request) {
 	for _, set := range sets {
 		out = append(out, s.setPublicViewOpts(set, contains(st.ActiveSets, set.Name), includeSecrets))
 	}
-	okJSON(w, 200, out)
+	if includeSecrets {
+		okJSON(w, 200, out)
+		return
+	}
+	okJSONETag(w, r, out)
 }
 
 func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
@@ -2206,7 +2146,12 @@ func (s *Service) handleSetsGet(w http.ResponseWriter, r *http.Request) {
 	includeSecrets := parseBoolQuery(r, "secrets", false)
 	for _, set := range sets {
 		if set.Name == name {
-			okJSON(w, 200, s.setPublicViewOpts(set, contains(st.ActiveSets, name), includeSecrets))
+			view := s.setPublicViewOpts(set, contains(st.ActiveSets, name), includeSecrets)
+			if includeSecrets {
+				okJSON(w, 200, view)
+				return
+			}
+			okJSONETag(w, r, view)
 			return
 		}
 	}
@@ -2476,13 +2421,13 @@ func (s *Service) deactivateSetByName(ctx context.Context, name string) error {
 	return nil
 }
 
-func (s *Service) handleTLSGet(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleTLSGet(w http.ResponseWriter, r *http.Request) {
 	p, err := s.ensureTLSProfile(false)
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	okJSON(w, 200, s.tlsStatusPayload(p))
+	okJSONETag(w, r, s.tlsStatusPayload(p))
 }
 
 func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
@@ -2598,13 +2543,13 @@ func (s *Service) realityStatusPayload(cfg domain.RealityConfig) map[string]any 
 	return payload
 }
 
-func (s *Service) handleRealityGet(w http.ResponseWriter, _ *http.Request) {
+func (s *Service) handleRealityGet(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.loadRealityConfig()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	okJSON(w, 200, s.realityStatusPayload(cfg))
+	okJSONETag(w, r, s.realityStatusPayload(cfg))
 }
 
 func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {

@@ -12,8 +12,14 @@ List/get items include (when present):
 
 - `traits`, `scores`, `demux_hints` (`compatible_with_demux`, `looks_like`, …)
 - `cred_fields`, `cred_generators`, `peer_secret_fields`
-- `param_fields`, `default_user_variants`
-- `optional_params` (at least `listen_port`; detail also `sni` / `demux_sni`)
+- `param_fields` — **required** binding param keys (e.g. carrier `room`)
+- `params_schema` — map of `{type, required, description, …}` for thin clients (**prefer this**)
+- `optional_params` — subset of `params_schema` where `required=false` (compat; does **not** include required keys)
+- `default_user_variants`
+
+Thin-client rule: render install forms from `params_schema` only. Never hardcode preset tags or which params are required.
+
+Conditional GET: send `If-None-Match` with prior `ETag` (`"sha256:…"`). Unchanged → **304**. Capability: `catalog_etag`.
 
 UI rule for demux slot pickers:
 

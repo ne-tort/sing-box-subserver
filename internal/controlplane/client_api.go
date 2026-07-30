@@ -26,7 +26,7 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-	okJSON(w, 200, map[string]any{
+	okJSONETag(w, r, map[string]any{
 		"lang":        lang,
 		"public_host": host,
 		"public_port": pubPort,
@@ -67,6 +67,8 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"replace_on_from_star": true,
 			"sets_secrets_query":   "?secrets=1 on GET /sets to include peer_secrets",
 			"ready_context":        "ready.context=idle|install_ready|degraded",
+			"params_schema":        true,
+			"catalog_etag":         true,
 		},
 		"install_modes": []map[string]any{
 			{
@@ -96,7 +98,7 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 				"title": pickFlowTitle(lang, "Одиночные пресеты", "Single presets"),
 				"steps": []map[string]any{
 					{"method": "GET", "path": "/v1/controlplane/protocols", "why": "list protocol folders"},
-					{"method": "GET", "path": "/v1/controlplane/presets?protocol={tag}", "why": "list tags + metadata + optional_params"},
+					{"method": "GET", "path": "/v1/controlplane/presets?protocol={tag}", "why": "list tags + params_schema (required/optional) + optional_params"},
 					{"method": "GET", "path": "/v1/controlplane/ports/availability?port=443", "why": "check free L4 networks (optional if omitting listen_port)"},
 					{"method": "POST", "path": "/v1/controlplane/sets/from-presets", "why": "install; listen_port optional (auto); activate:true", "check": "HTTP 201 && response.activated === true"},
 					{"method": "GET", "path": "/v1/controlplane/status", "why": "poll until ready.ok === true"},
