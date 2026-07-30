@@ -130,37 +130,26 @@ func TestTLSProfileAPI(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
 		t.Fatal(err)
 	}
-	if env.Data["mode"] != "self_signed" {
-		t.Fatalf("mode=%v", env.Data["mode"])
+	if env.Data["self_signed"] == nil {
+		t.Fatalf("expected self_signed, got %v", env.Data)
+	}
+	if _, hasMode := env.Data["mode"]; hasMode {
+		t.Fatal("tls modes removed; mode must not appear")
 	}
 	ms, _ := env.Data["material_status"].(map[string]any)
 	if ms["self_signed_cert_present"] != true {
 		t.Fatalf("material_status=%v", ms)
 	}
 
-	put := []byte(`{
-		"mode":"acme_domain",
-		"acme":{"email":"admin@example.com","domains":["vpn.example.com"],"provider":"letsencrypt"}
-	}`)
+	// ACME on /tls must fail validation (no self_signed).
+	put := []byte(`{"acme":{"email":"admin@example.com","domains":["vpn.example.com"]}}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/tls", bytes.NewReader(put)))
-	if rr.Code != 200 {
-		t.Fatalf("PUT tls: %d %s", rr.Code, rr.Body.String())
-	}
-
-	bad := []byte(`{
-		"mode":"acme_ip",
-		"acme":{"email":"admin@example.com","domains":["203.0.113.10"],"provider":"zerossl"}
-	}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/tls", bytes.NewReader(bad)))
 	if rr.Code != 400 {
-		t.Fatalf("expected 400 for zerossl+ip, got %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("expected 400 without self_signed, got %d %s", rr.Code, rr.Body.String())
 	}
 
-	// Restore self_signed then regenerate.
 	ss := []byte(`{
-		"mode":"self_signed",
 		"self_signed":{
 			"common_name":"203.0.113.10",
 			"dns_sans":["localhost"],
@@ -179,15 +168,222 @@ func TestTLSProfileAPI(t *testing.T) {
 	if rr.Code != 200 {
 		t.Fatalf("regenerate: %d %s", rr.Code, rr.Body.String())
 	}
+}
 
-	badDNS := []byte(`{
-		"mode":"acme_ip",
-		"acme":{"email":"admin@example.com","domains":["203.0.113.10"],"provider":"letsencrypt","dns01_challenge":{"provider":"cloudflare","api_token":"secret"}}
-	}`)
+func TestCertManagerAPI(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "203.0.113.10", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	svc.Bootstrap(nil)
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+		return http.HandlerFunc(next)
+	})
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/cert-manager", nil))
+	if rr.Code != 200 {
+		t.Fatalf("GET cert-manager: %d %s", rr.Code, rr.Body.String())
+	}
+
+	put := []byte(`{"email":"admin@example.com","domains":["vpn.example.com"],"provider":"letsencrypt"}`)
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/tls", bytes.NewReader(badDNS)))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/cert-manager", bytes.NewReader(put)))
+	if rr.Code != 200 {
+		t.Fatalf("PUT cert-manager: %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["enabled"] != true {
+		t.Fatalf("enabled=%v", env.Data["enabled"])
+	}
+
+	bad := []byte(`{"email":"admin@example.com","domains":["203.0.113.10"],"provider":"zerossl"}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/cert-manager", bytes.NewReader(bad)))
 	if rr.Code != 400 {
-		t.Fatalf("expected 400 for dns01+acme_ip, got %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("expected 400 for zerossl+ip, got %d %s", rr.Code, rr.Body.String())
+	}
+
+	// Binding with params.sni must be in domains.
+	usersPut := []byte(`{"name":"u1"}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader(usersPut)))
+	setBody := []byte(`{"name":"t1","listen":"::","listen_port":8443,"bindings":[{"preset":"trojan-tcp","params":{"sni":"vpn.example.com"}}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 200 {
+		t.Fatalf("create set with sni: %d %s", rr.Code, rr.Body.String())
+	}
+	badSNI := []byte(`{"name":"t2","listen":"::","listen_port":8444,"bindings":[{"preset":"trojan-tcp","params":{"sni":"other.example.com"}}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(badSNI)))
+	if rr.Code != 400 {
+		t.Fatalf("expected 400 for unknown sni, got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestConfigDNSRouteAPI(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "203.0.113.10", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	svc.Bootstrap(nil)
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+		return http.HandlerFunc(next)
+	})
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/config/dns", nil))
+	if rr.Code != 200 {
+		t.Fatalf("GET dns: %d %s", rr.Code, rr.Body.String())
+	}
+	dnsPut := []byte(`{"dns":{"servers":[{"tag":"local","type":"local"},{"tag":"google","type":"udp","server":"8.8.8.8"}]}}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/dns", bytes.NewReader(dnsPut)))
+	if rr.Code != 200 {
+		t.Fatalf("PUT dns: %d %s", rr.Code, rr.Body.String())
+	}
+	routePut := []byte(`{"route":{"final":"direct","rules":[{"action":"reject","protocol":["quic"]}]}}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/route", bytes.NewReader(routePut)))
+	if rr.Code != 200 {
+		t.Fatalf("PUT route: %d %s", rr.Code, rr.Body.String())
+	}
+	bad := []byte(`{"dns":{"servers":[]}}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/dns", bytes.NewReader(bad)))
+	if rr.Code != 400 {
+		t.Fatalf("expected 400 empty servers, got %d", rr.Code)
+	}
+}
+
+func TestDemuxGroupsMatchMetaAPI(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "203.0.113.10", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+		return http.HandlerFunc(next)
+	})
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/client/bootstrap", nil))
+	if rr.Code != 200 {
+		t.Fatalf("bootstrap: %d %s", rr.Code, rr.Body.String())
+	}
+	var boot struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &boot)
+	caps, _ := boot.Data["capabilities"].(map[string]any)
+	if caps["demux_group_match_meta"] != true {
+		t.Fatalf("caps=%v", caps)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/demux-groups", nil))
+	if rr.Code != 200 {
+		t.Fatalf("list: %d %s", rr.Code, rr.Body.String())
+	}
+	var list struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, g := range list.Data {
+		if g["tag"] != "dg_443_triple" {
+			continue
+		}
+		found = true
+		if g["separation_summary"] == nil {
+			t.Fatal("list missing separation_summary")
+		}
+		slots, _ := g["slots"].([]any)
+		slot0, _ := slots[0].(map[string]any)
+		if slot0["separation_tags"] == nil || slot0["match_shape"] == nil {
+			t.Fatalf("slot meta missing: %v", slot0)
+		}
+	}
+	if !found {
+		t.Fatal("dg_443_triple not in list")
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/demux-groups/dg_443_triple", nil))
+	if rr.Code != 200 {
+		t.Fatalf("get: %d %s", rr.Code, rr.Body.String())
+	}
+	var one struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &one)
+	plan, _ := one.Data["match_plan"].([]any)
+	if len(plan) != 3 {
+		t.Fatalf("match_plan=%v", one.Data["match_plan"])
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/demux-groups/dg_443_triple/substitutions", nil))
+	if rr.Code != 200 {
+		t.Fatalf("substitutions: %d %s", rr.Code, rr.Body.String())
+	}
+	var sub struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &sub)
+	slots, _ := sub.Data["slots"].([]any)
+	s0, _ := slots[0].(map[string]any)
+	if s0["interchange_tags"] == nil {
+		t.Fatalf("substitutions slot=%v", s0)
 	}
 }
 
@@ -1155,6 +1351,10 @@ func TestRealityAPIAndStickyAssignment(t *testing.T) {
 		t.Fatalf("empty short_id in assignment: %v", first)
 	}
 
+	if env.Data["default_profiles"] == nil {
+		t.Fatal("expected default_profiles on GET reality")
+	}
+
 	// Trigger rematerialize and ensure sticky assignment is stable.
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPatch, "/v1/controlplane/users/"+envUserIDFromCreate(t, mux), bytes.NewReader([]byte(`{"enabled":true}`))))
@@ -1171,6 +1371,23 @@ func TestRealityAPIAndStickyAssignment(t *testing.T) {
 	second := active[0].(map[string]any)
 	if second["short_id"] != shortID {
 		t.Fatalf("sticky mismatch: before=%v after=%v", shortID, second["short_id"])
+	}
+
+	// Reject report: IP SNI is invalid (after sticky check — PUT rematerializes).
+	putBad := []byte(`{"profiles":[{"sni":"1.2.3.4"},{"sni":"localhost","handshake_server":"localhost","handshake_port":` + strconv.Itoa(port) + `}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/reality", bytes.NewReader(putBad)))
+	if rr.Code != 200 {
+		t.Fatalf("put reality rejected mix: %d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &env)
+	rej, _ := env.Data["rejected"].([]any)
+	if len(rej) == 0 {
+		t.Fatalf("expected rejected entries, body=%s", rr.Body.String())
+	}
+	acc, _ := env.Data["accepted"].([]any)
+	if len(acc) == 0 {
+		t.Fatalf("expected accepted localhost, body=%s", rr.Body.String())
 	}
 }
 

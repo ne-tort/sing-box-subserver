@@ -190,15 +190,32 @@ Boot reconciliation (see [05-api](05-api.md)): orphan `controlplane` without `ac
 
 ## TLSProfile (`tls_profile.json`)
 
-One active profile for all TLS-capable inbounds. See [11-tls](11-tls.md).
+Always self-signed material for default TLS / mgmt safety PEMs. See [11-tls](11-tls.md).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `mode` | string | `self_signed` \| `acme_domain` \| `acme_ip` |
-| `self_signed` | object \| null | Required for `self_signed`: `common_name`, `dns_sans`, `ip_sans`, `key_type`, `valid_days`, `organization` |
-| `acme` | object \| null | Required for `acme_*`: `email`, `domains`, `provider`, challenge flags, optional `dns01_challenge` |
+| `self_signed` | object | `common_name`, `dns_sans`, `ip_sans`, `key_type`, `valid_days`, `organization` |
 
-Defaults on first boot: `self_signed` from `controlplane.public_host` (IP → `ip_sans`).
+Defaults on first boot: from `controlplane.public_host` (IP → `ip_sans`).
+
+## CertManager (`cert_manager.json`)
+
+ACME domain pool; inbounds opt in via `bindings[].params.sni`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `email` | string | Required when `domains` non-empty |
+| `domains` | string[] | DNS names **or** single IP (not mixed) |
+| `provider` | string | `letsencrypt` (default), `zerossl`, or URL |
+| `key_type` | string | optional |
+| challenge flags | bool/int | `disable_http_challenge`, `alternative_*_port`, `dns01_challenge` |
+
+## ConfigFragments (`config_fragments.json`)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `dns` | raw JSON object | Optional; default local DNS |
+| `route` | raw JSON object | Optional; default `final=direct`, `rules=[]` |
 
 ## Reality config (`reality_config.json`)
 

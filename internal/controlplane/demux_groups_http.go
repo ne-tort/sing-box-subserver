@@ -21,31 +21,23 @@ func (s *Service) handleDemuxGroupsList(w http.ResponseWriter, r *http.Request) 
 	out := make([]any, 0)
 	for _, g := range demuxgroups.All() {
 		title, desc := g.ResolveI18n(lang)
+		meta := demuxgroups.BuildGroupMatchMeta(g)
 		slots := make([]any, 0, len(g.Slots))
 		for _, slot := range g.Slots {
-			item := map[string]any{
-				"id":             slot.ID,
-				"role":           slot.Role,
-				"default_preset": slot.DefaultPreset,
-				"substitutes":    slot.AllPresets(),
-				"match_hint":     slot.MatchHint,
-			}
-			if len(slot.PreferredALPN) > 0 {
-				item["preferred_alpn"] = slot.PreferredALPN
-			}
-			slots = append(slots, item)
+			slots = append(slots, demuxgroups.EnrichSlotAPI(slot))
 		}
 		out = append(out, map[string]any{
-			"tag":            g.Tag,
-			"short_name":     g.ShortName,
-			"status":         g.Status,
-			"title":          title,
-			"description":    desc,
-			"suggested_port": g.SuggestedPort,
-			"networks":       g.Networks,
-			"scores":         g.Scores,
-			"slots":          slots,
-			"slot_count":     len(g.Slots),
+			"tag":                 g.Tag,
+			"short_name":          g.ShortName,
+			"status":              g.Status,
+			"title":               title,
+			"description":         desc,
+			"suggested_port":      g.SuggestedPort,
+			"networks":            g.Networks,
+			"scores":              g.Scores,
+			"slots":               slots,
+			"slot_count":          len(g.Slots),
+			"separation_summary":  meta.SeparationSummary,
 		})
 	}
 	okJSON(w, 200, out)
@@ -59,18 +51,25 @@ func (s *Service) handleDemuxGroupsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title, desc := g.ResolveI18n(lang)
+	meta := demuxgroups.BuildGroupMatchMeta(g)
+	slots := make([]any, 0, len(g.Slots))
+	for _, slot := range g.Slots {
+		slots = append(slots, demuxgroups.EnrichSlotAPI(slot))
+	}
 	okJSON(w, 200, map[string]any{
-		"tag":            g.Tag,
-		"short_name":     g.ShortName,
-		"status":         g.Status,
-		"title":          title,
-		"description":    desc,
-		"suggested_port": g.SuggestedPort,
-		"networks":       g.Networks,
-		"scores":         g.Scores,
-		"notes":          g.Notes,
-		"slots":          g.Slots,
-		"i18n":           g.I18n,
+		"tag":                g.Tag,
+		"short_name":         g.ShortName,
+		"status":             g.Status,
+		"title":              title,
+		"description":        desc,
+		"suggested_port":     g.SuggestedPort,
+		"networks":           g.Networks,
+		"scores":             g.Scores,
+		"notes":              g.Notes,
+		"slots":              slots,
+		"i18n":               g.I18n,
+		"separation_summary": meta.SeparationSummary,
+		"match_plan":         meta.Plan,
 	})
 }
 
@@ -113,6 +112,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	set := res.Set
+	syncBindingSNI(&set)
 	now := time.Now().UTC()
 	set.CreatedAt = now
 	set.UpdatedAt = now
@@ -221,6 +221,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
+		syncBindingSNI(&set)
 		others := append(append([]domain.InboundSet{}, sets...), created...)
 		if err := s.validateSet(set, others); err != nil {
 			code, ec := 400, "cp_invalid_set"

@@ -30,7 +30,7 @@ Public subscription: [07-subscriptions](07-subscriptions.md) (`GET /v1/sub/{toke
     "demux_groups_count": 18,
     "sets_count": 2,
     "demux_in_binary": true,
-    "tls_mode": "self_signed",
+    "cert_manager": { "enabled": false, "domains": [] },
     "tls_material_status": { "ready": true, "active_material": "self_signed_pem" },
     "ready": {
       "ok": true,
@@ -126,15 +126,24 @@ Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or no
 
 Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade). Subnet default `10.8.0.0/24`.
 
-## TLS profile
+## TLS (self-signed) + cert-manager
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/tls` | Current profile + `material_status` (DNS tokens redacted) |
-| PUT | `/v1/controlplane/tls` | Upsert `{mode, self_signed?, acme?}`; ensures PEM for self_signed; rematerialize if active |
-| POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM (`400` if mode ≠ `self_signed`) |
+| GET | `/v1/controlplane/tls` | Self-signed profile + `material_status` |
+| PUT | `/v1/controlplane/tls` | Upsert `{self_signed}`; ensures PEM; rematerialize if active |
+| POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM |
+| GET | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status |
+| PUT | `/v1/controlplane/cert-manager` | Replace ACME settings + domains list |
 
-Modes: `self_signed` \| `acme_domain` \| `acme_ip`. See [11-tls](11-tls.md).
+TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager domains). See [11-tls](11-tls.md).
+
+## Config fragments (dns / route)
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server) |
+| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`) |
 
 ---
 
@@ -142,8 +151,8 @@ Modes: `self_signed` \| `acme_domain` \| `acme_ip`. See [11-tls](11-tls.md).
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/reality` | Returns `user_overrides`, `effective_profiles`, `using_user_overrides`, `active_assignments` |
-| PUT | `/v1/controlplane/reality` | Replaces user profile list; validates profiles; if validated user pool is empty, user overrides are cleared and defaults are used |
+| GET | `/v1/controlplane/reality` | `user_overrides`, `effective_profiles`, `default_profiles`, `using_user_overrides`, `active_assignments` |
+| PUT | `/v1/controlplane/reality` | Replace-all profiles; response includes `accepted` / `rejected[{sni,reason}]` |
 
 PUT body:
 
@@ -161,6 +170,7 @@ Rules:
 - `handshake_server` default = `sni`.
 - `handshake_port` default = `443`.
 - Validation filters unusable profiles (DNS/TCP/CDN heuristics).
+- Invalid entries are listed in `rejected` and omitted from the stored pool.
 
 ---
 
@@ -192,11 +202,30 @@ First-class installable demux bundles (modern protocols only). Prefer these over
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/demux-groups?lang=` | List groups: tag, scores, slots, substitutes |
-| GET | `/v1/controlplane/demux-groups/{tag}?lang=` | Full group (i18n, notes, slots) |
-| GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + metadata (scores/traits/titles) |
-| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?`, `slot_presets?`, `activate?`) |
+| GET | `/v1/controlplane/demux-groups?lang=` | List groups: tag, scores, slots (+ match tags), `separation_summary` |
+| GET | `/v1/controlplane/demux-groups/{tag}?lang=` | Full group + `match_plan` + enriched slots |
+| GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + `separation_tags` / `interchange_tags` / `fits_interchange` |
+| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?`, `slot_presets?`, `slot_sni?`, `activate?`) |
 | POST | `/v1/controlplane/sets/from-presets` | Batch install single-inbound sets with port policy |
+
+### Match metadata (client)
+
+Derived from slot `role` + `match_hint` (same first-match order as demux rule builder). Capability: `demux_group_match_meta`, vocab: `demux_match_tag_vocab`.
+
+Per slot:
+
+| Field | Meaning |
+|-------|---------|
+| `separation_tags` | How this slot is distinguished from siblings (`tcp`, `tls`, `sni`, `udp`, `quic`, …) |
+| `interchange_tags` | Class shared by substitutes (safe swap within the slot) |
+| `match_shape` | Rule shape: `tls.sni` \| `tls.alpn` \| `protocol.quic` \| `protocol.quic+sni` \| `always` |
+| `match_priority` | Lower = earlier in demux first-match |
+
+Group-level: `separation_summary` (union), `match_plan` (ordered steps with notes) on GET by tag.
+
+Example `dg_443_triple` plan order: Reality `tls.sni` → TLS `tls.sni` → Hy2 `protocol.quic`.
+
+Substitutions options also expose `looks_like`, `demux_hints`, `fits_interchange` (trait drift guard vs slot class).
 
 ### Client install flow
 

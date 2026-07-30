@@ -149,7 +149,7 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 			"wg": {"private_key": "PRIV", "public_key": "PUB", "wg_host_index": 3},
 		},
 	}
-	body, err := RenderSubscription(user, nil, "edge.example", domain.DefaultSelfSigned("edge.example"), SubscriptionFilters{}, nil, &hub)
+	body, err := RenderSubscription(user, nil, "edge.example", domain.DefaultSelfSigned("edge.example"), domain.CertManager{}, SubscriptionFilters{}, nil, &hub)
 	if err != nil {
 		t.Fatal(err)
 	}

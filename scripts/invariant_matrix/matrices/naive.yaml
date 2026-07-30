@@ -1,7 +1,6 @@
 protocol: naive
-mode: skip
+mode: render
 stage: 5
-skip_reason: "naive outbound requires Cronet native library (not in pure-go lx binary)"
 tags:
 - naive_tls
 - naive_quic

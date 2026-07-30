@@ -46,7 +46,7 @@ job only. Prefer a **checked-in** `build/tags.server.controlplane` for reproduci
 ```
 
 Builds a linux binary with `tags.server.controlplane`, runs `docker-compose.cp-smoke.yml`,
-and exercises: default `self_signed` (+ IP SAN), validation rejects for `acme_ip`+zerossl/dns01,
+and exercises: default `self_signed` (+ IP SAN), cert-manager validation rejects for IP+zerossl/dns01,
 shadowsocks + trojan activate, subscription `insecure`, TLS handshake, PEM regenerate + Force reload.
 
 Live Let's Encrypt is intentionally out of scope for this matrix.

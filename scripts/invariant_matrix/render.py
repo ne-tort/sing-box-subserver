@@ -31,6 +31,39 @@ DEFAULT_PRESETS = HERE / ".." / ".." / "internal" / "controlplane" / "presets" /
 DEFAULT_LX_BIN = Path(os.environ.get("LX_BIN", r"c:\Users\qwerty\git\sui\.tools\lx-client\sing-box"))
 IMAGE = os.environ.get("INVMATRIX_IMAGE", "sui-lx-iperf:local")
 
+
+def lx_cronet_so(lx_bin: Path) -> Path | None:
+    """libcronet.so beside the linux client binary (naive outbound / purego)."""
+    so = lx_bin.resolve().parent / "libcronet.so"
+    return so if so.is_file() else None
+
+
+def require_lx_cronet_for_naive(lx_bin: Path, tags: list[str]) -> None:
+    if not any(str(t).startswith("naive") for t in tags):
+        return
+    if lx_cronet_so(lx_bin) is not None:
+        return
+    raise SystemExit(
+        "naive presets need libcronet.so next to the lx client binary.\n"
+        f"  expected: {lx_bin.resolve().parent / 'libcronet.so'}\n"
+        "  fix: python scripts/ensure_lx_client.py\n"
+        "  (Cronet is client-only; subserver inbound does not need it.)"
+    )
+
+
+def lx_stage_cmds() -> str:
+    """Copy sing-box (+ optional libcronet.so) into /tmp so purego dlopen works."""
+    return (
+        "cp /bin-ro/sing-box /tmp/sing-box && chmod +x /tmp/sing-box && "
+        "if [ -f /bin-ro/libcronet.so ]; then cp /bin-ro/libcronet.so /tmp/libcronet.so; fi"
+    )
+
+
+def lx_bin_ro_mount(lx_bin: Path) -> str:
+    """Mount the client kit directory at /bin-ro (sing-box + libcronet.so)."""
+    return f"{docker_path(lx_bin.resolve().parent)}:/bin-ro:ro"
+
+
 PARAM_DEFAULTS: dict[str, str] = {
     "jls_addr": "www.cloudflare.com:443",
     "jls_server_name": "www.cloudflare.com",
@@ -701,12 +734,36 @@ def build_client_config(
         # Payload probe: TCP by default. Transport may be QUIC/UDP underneath.
         "network": ["udp"] if iperf_mode == "udp" else ["tcp"],
     }
-    return {
+    doc: dict[str, Any] = {
         "log": {"level": "warn"},
         "inbounds": [inbound],
         "outbounds": [ob, {"type": "direct", "tag": "direct"}],
         "route": {"final": tag},
     }
+    # Cronet naive outbound uses sing-box DNSRouter when present; without it it falls
+    # back to Google DoH (often IPv6) which is unreachable in the matrix network.
+    if str(ob.get("type") or "") == "naive":
+        doc["dns"] = {
+            "servers": [
+                {
+                    "type": "hosts",
+                    "tag": "hosts",
+                    "predefined": {
+                        TLS_SNI: ["127.0.0.1"],
+                        SERVER_DNS: ["127.0.0.1"],
+                    },
+                },
+                {"type": "local", "tag": "local"},
+            ],
+            "rules": [
+                {"domain": [TLS_SNI, SERVER_DNS], "server": "hosts"},
+            ],
+            "final": "local",
+            "strategy": "ipv4_only",
+        }
+        # Dial by IP (set in rewrite); hosts map still satisfies Cronet name lookups for SNI.
+        doc["route"] = {"final": tag, "default_domain_resolver": "hosts"}
+    return doc
 
 
 def write_json(path: Path, obj: Any) -> None:
@@ -831,9 +888,18 @@ def rewrite_client_iperf_ip(workdir: Path, tag: str, iperf_ip: str, server_ip: s
         for ob in doc.get("outbounds") or []:
             if ob.get("type") == "direct":
                 continue
-            # mieru UDP underlay cannot resolve Docker DNS names
+            # mieru UDP underlay cannot resolve Docker DNS names; naive also dials by IP
+            # (Cronet still needs the dns block below for SNI/name lookups).
             if "server" in ob:
                 ob["server"] = server_ip
+        dns = doc.get("dns")
+        if isinstance(dns, dict):
+            for srv in dns.get("servers") or []:
+                if isinstance(srv, dict) and srv.get("type") == "hosts":
+                    predefined = srv.get("predefined")
+                    if isinstance(predefined, dict):
+                        predefined[TLS_SNI] = [server_ip]
+                        predefined[SERVER_DNS] = [server_ip]
     write_json(client_path, doc)
     return client_path
 

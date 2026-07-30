@@ -51,6 +51,29 @@ func TestBuildInstallDual(t *testing.T) {
 	}
 }
 
+func TestBuildInstallSlotSNIOverride(t *testing.T) {
+	res, err := BuildInstall(InstallRequest{
+		GroupTag: "dg_443_triple",
+		SetName:  "test-sni",
+		SlotSNI:  map[string]string{"tls": "vpn.example.com"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range res.Set.Bindings {
+		if b.Params["demux_sni"] == "vpn.example.com" && b.Params["sni"] == "vpn.example.com" {
+			found = true
+		}
+		if strings.Contains(b.Preset, "reality") && b.Params["sni"] != "" {
+			t.Fatalf("reality binding must not get params.sni: %#v", b)
+		}
+	}
+	if !found {
+		t.Fatalf("expected TLS slot_sni to set demux_sni+sni, bindings=%v slot_snis=%v", res.Set.Bindings, res.SlotSNIs)
+	}
+}
+
 func TestSlotRejectUnknownPreset(t *testing.T) {
 	_, err := BuildInstall(InstallRequest{
 		GroupTag:   "dg_443_dual",

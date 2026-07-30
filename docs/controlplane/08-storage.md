@@ -11,10 +11,13 @@ data_dir/
     users.json
     sets.json
     state.json
-    tls_profile.json       # TLS mode + self_signed/acme specs
-    tls/server.crt|key     # only for mode=self_signed (active material)
+    tls_profile.json       # self_signed knobs only
+    cert_manager.json      # ACME domains + provider settings
+    config_fragments.json  # optional raw dns/route objects
+    tls/server.crt|key     # default self-signed PEM
     tls/self_signed.meta.json  # fingerprint of SelfSignedSpec (reuse / reissue)
-    acme/                  # certmagic data_directory for ACME modes
+    tls/slots/             # per-demux_sni self-signed PEMs
+    acme/                  # certmagic data_directory for cert-manager
 ```
 
 Presets live in the **binary** (`go:embed` of `internal/controlplane/presets/data/**`). No runtime-editable

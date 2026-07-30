@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	acmeObtainGrace   = 5 * time.Minute
-	acmeLostGrace     = 2 * time.Minute
-	mgmtCertCacheTTL  = 5 * time.Second
+	acmeObtainGrace  = 5 * time.Minute
+	acmeLostGrace    = 2 * time.Minute
+	mgmtCertCacheTTL = 5 * time.Second
 )
 
 // ServingHTTPS reports that the management API / subscription listener uses TLS.
@@ -25,8 +25,8 @@ func (s *Service) ServingHTTPS() bool {
 	return s != nil
 }
 
-// GetCertificate selects the active management certificate from the CP TLS profile:
-// ACME PEMs when issued; otherwise safety self_signed PEMs (interim or primary).
+// GetCertificate selects the active management certificate:
+// ACME PEMs from cert-manager when issued; otherwise safety self_signed PEMs.
 func (s *Service) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	if s == nil {
 		return nil, fmt.Errorf("controlplane unavailable")
@@ -43,24 +43,24 @@ func (s *Service) mgmtMaterialPaths() (certPath, keyPath, source string, err err
 	if err != nil {
 		return "", "", "", err
 	}
-	// Always keep self_signed PEMs for interim/emergency serving.
 	if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
 		return "", "", "", err
 	}
 	safetyCert, safetyKey := tlsMaterialPaths(s.cfg.DataDir)
 
-	switch p.Mode {
-	case domain.TLSModeACMEDomain, domain.TLSModeACMEIP:
-		if p.ACME != nil && len(p.ACME.Domains) > 0 {
-			root := filepath.Join(acmeDataDirectory(s.cfg.DataDir), "certificates")
-			if c, k, ok := acmeCertKeyPaths(root, p.ACME.Domains[0]); ok {
-				return c, k, "acme", nil
-			}
+	cm, err := s.ensureCertManager()
+	if err != nil {
+		return "", "", "", err
+	}
+	domains := cm.NormalizedDomains()
+	if len(domains) > 0 {
+		root := filepath.Join(acmeDataDirectory(s.cfg.DataDir), "certificates")
+		if c, k, ok := acmeCertKeyPaths(root, domains[0]); ok {
+			return c, k, "acme", nil
 		}
 		return safetyCert, safetyKey, "self_signed_interim", nil
-	default:
-		return safetyCert, safetyKey, "self_signed", nil
 	}
+	return safetyCert, safetyKey, "self_signed", nil
 }
 
 func (s *Service) ensureSafetySelfSignedPEMs(p domain.TLSProfile) error {
@@ -69,7 +69,7 @@ func (s *Service) ensureSafetySelfSignedPEMs(p domain.TLSProfile) error {
 		host = s.cfg.Cfg.Controlplane.PublicHost
 	}
 	spec := p.SelfSigned
-	if spec == nil || p.Mode != domain.TLSModeSelfSigned {
+	if spec == nil {
 		fallback := domain.DefaultSelfSigned(host)
 		spec = fallback.SelfSigned
 	}

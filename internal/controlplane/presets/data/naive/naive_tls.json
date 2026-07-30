@@ -65,14 +65,7 @@
     "password": "{{user.password}}",
     "tls": {
       "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2"
-      ],
-      "utls": {
-        "enabled": true,
-        "fingerprint": "chrome"
-      }
+      "server_name": "{{server}}"
     },
     "extra_headers": {
       "User-Agent": [

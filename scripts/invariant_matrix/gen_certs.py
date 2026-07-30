@@ -15,6 +15,9 @@ def ensure_certs(certs_dir: Path, cn: str = DEFAULT_CN, force: bool = False) -> 
     certs_dir.mkdir(parents=True, exist_ok=True)
     cert = certs_dir / "server.crt"
     key = certs_dir / "server.key"
+    if cert.is_file() and key.is_file() and not force and _cert_lifetime_days(cert) > 350:
+        # Old matrix certs used 3650d; Cronet rejects long-lived leaves.
+        force = True
     if not (cert.is_file() and key.is_file()) or force:
         _write_pair(certs_dir, cert, key, cn, extra_dns=["inv-server", "localhost"])
     # Local Reality handshake target (Docker often cannot reach www.microsoft.com:443).
@@ -30,6 +33,39 @@ def ensure_certs(certs_dir: Path, cn: str = DEFAULT_CN, force: bool = False) -> 
             conf_name="openssl-reality-hs.cnf",
         )
     return cert, key
+
+
+def _cert_lifetime_days(cert: Path) -> int:
+    openssl = shutil.which("openssl")
+    if not openssl:
+        return 0
+    try:
+        out = subprocess.check_output(
+            [openssl, "x509", "-in", str(cert), "-noout", "-dates"],
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return 0
+    # notBefore=... / notAfter=... — approximate via openssl -checkend if needed
+    import datetime as _dt
+
+    def parse(line: str) -> _dt.datetime | None:
+        # notBefore=Jul 30 11:22:41 2026 GMT
+        try:
+            raw = line.split("=", 1)[1].strip()
+            return _dt.datetime.strptime(raw, "%b %d %H:%M:%S %Y %Z")
+        except Exception:
+            return None
+
+    before = after = None
+    for line in out.splitlines():
+        if line.startswith("notBefore="):
+            before = parse(line)
+        elif line.startswith("notAfter="):
+            after = parse(line)
+    if before and after:
+        return max(0, (after - before).days)
+    return 0
 
 
 def _write_pair(
@@ -63,7 +99,8 @@ def _write_pair(
                 "[req_distinguished_name]",
                 f"CN = {cn}",
                 "[v3_req]",
-                "keyUsage = critical, digitalSignature, keyEncipherment",
+                "basicConstraints = critical, CA:TRUE, pathlen:0",
+                "keyUsage = critical, digitalSignature, keyEncipherment, keyCertSign",
                 "extendedKeyUsage = serverAuth",
                 "subjectAltName = @alt_names",
                 "[alt_names]",
@@ -86,7 +123,8 @@ def _write_pair(
             "-out",
             str(cert),
             "-days",
-            "3650",
+            # Chrome/Cronet leaf max ~398d; keep matrix leaves short.
+            "100",
             "-config",
             str(conf),
             "-extensions",

@@ -15,10 +15,13 @@ Demux-группа занимает **один** публичный порт (tc
 
 Типичный UX:
 
-1. `GET /demux-groups` — список наборов + scores  
-2. `GET /demux-groups/{tag}/substitutions` — замены по слотам (роли `tcp_reality` / `tcp_tls` / `tcp_plain` / `quic`) + метаданные пресетов  
-3. `POST /sets/from-demux-group` `{ group, slot_presets?, listen_port?, activate: true }`  
-4. Пользователь + subscription (+ query filters)
+1. `GET /demux-groups` — список наборов + scores + `separation_summary` / per-slot `separation_tags`
+2. `GET /demux-groups/{tag}` — `match_plan` (порядок first-match: tls.sni → protocol.quic → always)
+3. `GET /demux-groups/{tag}/substitutions` — замены по слотам + `interchange_tags` / `fits_interchange`
+4. `POST /sets/from-demux-group` `{ group, slot_presets?, listen_port?, activate: true }`  
+5. Пользователь + subscription (+ query filters)
+
+Клиентские теги разведения (`tcp`/`tls`/`sni`/`udp`/`quic`/…) и класс взаимозаменяемости substitutes — см. § Match metadata в [`05-api.md`](../../controlplane/05-api.md). Capability: `demux_group_match_meta`.
 
 ## Разведение по TLS / QUIC
 

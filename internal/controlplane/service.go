@@ -87,7 +87,7 @@ func (s *Service) OnLeaveOwnership() {
 	_ = s.store.ClearActiveSets()
 }
 
-// Bootstrap ensures default TLS profile and rematerializes if we own the dataplane.
+// Bootstrap ensures default TLS profile, migrates cert-manager, rematerializes if we own the dataplane.
 func (s *Service) Bootstrap(ctx context.Context) {
 	if s == nil {
 		return
@@ -99,13 +99,13 @@ func (s *Service) Bootstrap(ctx context.Context) {
 		if err := s.ensureSafetySelfSignedPEMs(p); err != nil && s.log != nil {
 			s.log.Warn("controlplane safety self_signed pems failed", "err", err)
 		}
-		if p.Mode == domain.TLSModeACMEDomain || p.Mode == domain.TLSModeACMEIP {
-			s.noteACMEModeEntered()
-			if p.ACME != nil {
-				ready, _, _ := acmeCertificateReady(s.cfg.DataDir, p.ACME.Domains)
-				s.noteACMEReady(ready)
-			}
-		}
+	}
+	if cm, err := s.ensureCertManager(); err != nil && s.log != nil {
+		s.log.Warn("controlplane cert-manager bootstrap failed", "err", err)
+	} else if cm.Enabled() {
+		s.noteACMEModeEntered()
+		ready, _, _ := acmeCertificateReady(s.cfg.DataDir, cm.NormalizedDomains())
+		s.noteACMEReady(ready)
 	}
 	if s.cfg.Owner == nil {
 		return
@@ -357,6 +357,12 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("GET /v1/controlplane/tls", requireAuth(s.handleTLSGet))
 	mux.HandleFunc("PUT /v1/controlplane/tls", requireAuth(s.handleTLSPut))
 	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
+	mux.HandleFunc("GET /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerGet))
+	mux.HandleFunc("PUT /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerPut))
+	mux.HandleFunc("GET /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSGet))
+	mux.HandleFunc("PUT /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSPut))
+	mux.HandleFunc("GET /v1/controlplane/config/route", requireAuth(s.handleConfigRouteGet))
+	mux.HandleFunc("PUT /v1/controlplane/config/route", requireAuth(s.handleConfigRoutePut))
 	mux.HandleFunc("GET /v1/controlplane/reality", requireAuth(s.handleRealityGet))
 	mux.HandleFunc("PUT /v1/controlplane/reality", requireAuth(s.handleRealityPut))
 	mux.HandleFunc("GET /v1/controlplane/wg", requireAuth(s.handleWgGet))
@@ -820,6 +826,14 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	if err != nil {
 		return err
 	}
+	cm, err := s.ensureCertManager()
+	if err != nil {
+		return err
+	}
+	fragments, err := s.store.LoadConfigFragments()
+	if err != nil {
+		return err
+	}
 	realityAssignments := map[string]domain.RealityAssignment{}
 	if hasRealityPreset(sets) {
 		realityCfg, _, err := s.refreshRealityConfig(ctx, false)
@@ -831,36 +845,31 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 			return err
 		}
 	}
+	if profile.SelfSigned == nil {
+		return fmt.Errorf("self_signed spec missing")
+	}
+	cert, key, pemChanged, err := ensureSelfSigned(s.cfg.DataDir, *profile.SelfSigned, false)
+	if err != nil {
+		return fmt.Errorf("tls material: %w", err)
+	}
 	in := materialize.Input{
 		ActiveSets:         sets,
 		Users:              users,
 		PublicHost:         host,
 		DataDir:            s.cfg.DataDir,
 		TLS:                profile,
+		TLSCertPath:        cert,
+		TLSKeyPath:         key,
+		CertManager:        cm,
+		DNS:                fragments.EffectiveDNS(),
+		Route:              fragments.EffectiveRoute(),
 		RealityAssignments: realityAssignments,
 	}
 	if hub.Enabled {
 		h := hub
 		in.WgHub = &h
 	}
-	pemChanged := false
-	if profile.Mode == domain.TLSModeSelfSigned {
-		if profile.SelfSigned == nil {
-			return fmt.Errorf("self_signed spec missing")
-		}
-		cert, key, changed, err := ensureSelfSigned(s.cfg.DataDir, *profile.SelfSigned, false)
-		if err != nil {
-			return fmt.Errorf("tls material: %w", err)
-		}
-		pemChanged = changed
-		in.TLSCertPath, in.TLSKeyPath = cert, key
-	} else if profile.Mode == domain.TLSModeACMEDomain || profile.Mode == domain.TLSModeACMEIP {
-		// TrustTunnel (and similar PEM-only inbounds) need concrete files; resolve ACME PEMs.
-		if cert, key, _, err := s.mgmtMaterialPaths(); err == nil {
-			in.TLSCertPath, in.TLSKeyPath = cert, key
-		}
-	}
-	slotTLS, slotChanged, err := s.ensureDemuxSlotTLS(sets)
+	slotTLS, slotChanged, err := s.ensureDemuxSlotTLS(sets, cm)
 	if err != nil {
 		return err
 	}
@@ -892,7 +901,7 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	return nil
 }
 
-func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet) (map[string]materialize.SlotTLSMaterial, bool, error) {
+func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet, cm domain.CertManager) (map[string]materialize.SlotTLSMaterial, bool, error) {
 	out := map[string]materialize.SlotTLSMaterial{}
 	changed := false
 	for _, set := range sets {
@@ -900,9 +909,15 @@ func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet) (map[string]mater
 			continue
 		}
 		for _, b := range set.EffectiveBindings() {
+			acmeSNI := ""
 			sni := ""
 			if b.Params != nil {
+				acmeSNI = strings.TrimSpace(b.Params[domain.BindingParamSNI])
 				sni = strings.TrimSpace(b.Params["demux_sni"])
+			}
+			if acmeSNI != "" && cm.HasDomain(acmeSNI) {
+				// Cert-manager provider path — no per-slot PEM.
+				continue
 			}
 			if sni == "" {
 				continue
@@ -941,7 +956,7 @@ func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error)
 	if err != nil {
 		return domain.TLSProfile{}, err
 	}
-	if !ok || forceDefault {
+	if !ok || forceDefault || p.SelfSigned == nil {
 		p = domain.DefaultSelfSigned(host)
 		if err := p.Validate(); err != nil {
 			return domain.TLSProfile{}, err
@@ -949,92 +964,44 @@ func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error)
 		if err := s.store.SaveTLSProfile(p); err != nil {
 			return domain.TLSProfile{}, err
 		}
-		if p.Mode == domain.TLSModeSelfSigned && p.SelfSigned != nil {
-			_, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false)
-			if err != nil {
-				return domain.TLSProfile{}, err
-			}
+		if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
+			return domain.TLSProfile{}, err
 		}
 		return p, nil
 	}
 	if err := p.Validate(); err != nil {
 		return domain.TLSProfile{}, err
 	}
-	if p.Mode == domain.TLSModeSelfSigned && p.SelfSigned != nil {
-		if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
-			return domain.TLSProfile{}, err
-		}
-	} else if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
+	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
 		return domain.TLSProfile{}, err
 	}
 	return p, nil
 }
 
 func (s *Service) acmeWatchdog(ctx context.Context) {
-	p, err := s.ensureTLSProfile(false)
-	if err != nil {
+	cm, err := s.ensureCertManager()
+	if err != nil || !cm.Enabled() {
 		return
 	}
-	if p.Mode != domain.TLSModeACMEDomain && p.Mode != domain.TLSModeACMEIP {
-		return
-	}
-	domains := []string{}
-	if p.ACME != nil {
-		domains = p.ACME.Domains
-	}
-	ready, _, _ := acmeCertificateReady(s.cfg.DataDir, domains)
+	ready, _, _ := acmeCertificateReady(s.cfg.DataDir, cm.NormalizedDomains())
 	s.noteACMEReady(ready)
 	if ready {
 		return
 	}
+	// Mgmt HTTPS always has self_signed PEMs; log obtain/renew stalls for ops.
 	ok, reason := s.shouldACMEFallback()
 	if !ok {
 		return
 	}
-	s.forceSelfSignedFallback(ctx, reason)
-}
-
-func (s *Service) forceSelfSignedFallback(ctx context.Context, reason string) {
-	host := ""
-	if s.cfg.Cfg != nil {
-		host = s.cfg.Cfg.Controlplane.PublicHost
+	if s.log != nil {
+		s.log.Warn("cert-manager ACME not ready", "reason", reason)
 	}
-	p := domain.DefaultSelfSigned(host)
-	if err := p.Validate(); err != nil {
-		if s.log != nil {
-			s.log.Error("acme fallback: invalid self_signed profile", "err", err, "reason", reason)
-		}
-		return
-	}
-	if err := s.store.SaveTLSProfile(p); err != nil {
-		if s.log != nil {
-			s.log.Error("acme fallback: save profile failed", "err", err, "reason", reason)
-		}
-		return
-	}
-	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, true); err != nil {
-		if s.log != nil {
-			s.log.Error("acme fallback: write pem failed", "err", err, "reason", reason)
-		}
-		return
-	}
-	// Reset ACME watch state after leaving ACME mode.
-	s.acmeWatch.mu.Lock()
-	s.acmeWatch.enteredAt = time.Time{}
-	s.acmeWatch.everReady = false
-	s.acmeWatch.lostSince = time.Time{}
-	s.acmeWatch.mu.Unlock()
+	// Invalidate mgmt cert cache so interim self_signed is preferred until ACME returns.
 	s.mgmtTLS.mu.Lock()
 	s.mgmtTLS.cert = nil
 	s.mgmtTLS.source = ""
 	s.mgmtTLS.mu.Unlock()
-
-	if s.log != nil {
-		s.log.Error("ACME emergency fallback to self_signed", "reason", reason)
-	}
-	if err := s.rematerializeForce(ctx, true); err != nil && s.log != nil {
-		s.log.Error("acme fallback rematerialize failed", "err", err)
-	}
+	_ = ctx
 }
 
 func okJSON(w http.ResponseWriter, code int, data any) {
@@ -1168,7 +1135,12 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		if ms, ok := tls["material_status"]; ok {
 			out["tls_material_status"] = ms
 		}
-		out["tls_mode"] = p.Mode
+	}
+	if cm, err := s.ensureCertManager(); err == nil {
+		out["cert_manager"] = map[string]any{
+			"enabled": cm.Enabled(),
+			"domains": cm.NormalizedDomains(),
+		}
 	}
 	if rc, err := s.loadRealityConfig(); err == nil {
 		out["reality"] = s.realityStatusPayload(rc)
@@ -1217,11 +1189,8 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 	}
 	if ms, okTLS := payload["tls_material_status"].(map[string]any); okTLS {
 		if ready, _ := ms["ready"].(bool); !ready {
-			// ACME may still be issuing; not fatal for self_signed but block "ready" if explicitly false.
-			if mode, _ := payload["tls_mode"].(string); mode == string(domain.TLSModeACMEDomain) || mode == string(domain.TLSModeACMEIP) {
-				ok = false
-				reasons = append(reasons, "tls_not_ready")
-			}
+			ok = false
+			reasons = append(reasons, "tls_not_ready")
 		}
 	}
 	boxUp := false
@@ -1755,6 +1724,10 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 				"type":        "string",
 				"description": "SNI used for demux match / TLS server_name when installed inside a demux group.",
 			},
+			"sni": map[string]any{
+				"type":        "string",
+				"description": "Optional ACME domain from cert-manager; for TLS non-Reality inbounds. Also syncs demux_sni.",
+			},
 		},
 		"inbound_template":  pp.InboundTemplate,
 		"outbound_template": pp.OutboundTemplate,
@@ -1859,6 +1832,10 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 	if !set.HasDemux() && len(presetsList) != 1 {
 		return fmt.Errorf("without demux exactly one preset required")
 	}
+	cm, err := s.ensureCertManager()
+	if err != nil {
+		return err
+	}
 	for _, pn := range presetsList {
 		p, err := presets.Get(pn)
 		if err != nil {
@@ -1882,7 +1859,7 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 		if err != nil {
 			return fmt.Errorf("cp_unknown_preset: %w", err)
 		}
-		if err := validateBindingParams(p, b); err != nil {
+		if err := validateBindingParams(p, b, cm); err != nil {
 			return err
 		}
 	}
@@ -1908,16 +1885,46 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 	return nil
 }
 
-func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding) error {
-	if len(p.ParamFields) == 0 {
-		return nil
-	}
+func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm domain.CertManager) error {
 	for _, field := range p.ParamFields {
 		if strings.TrimSpace(b.Params[field]) == "" {
 			return fmt.Errorf("cp_invalid_bindings: preset %q requires bindings[].params[%q] (e.g. carrier room URL)", p.Name, field)
 		}
 	}
+	sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
+	if sni == "" {
+		return nil
+	}
+	if presetHasTrait(p, "reality") {
+		return fmt.Errorf("cp_invalid_bindings: params.sni not allowed for Reality preset %q", p.Name)
+	}
+	needsTLS := presetHasTrait(p, "tls") || presetHasTrait(p, "tls_custom")
+	if !needsTLS {
+		return fmt.Errorf("cp_invalid_bindings: params.sni only for TLS presets, got %q", p.Name)
+	}
+	if !cm.HasDomain(sni) {
+		return fmt.Errorf("cp_invalid_bindings: params.sni %q not in cert-manager domains", sni)
+	}
 	return nil
+}
+
+// syncBindingSNI copies params.sni onto demux_sni so ClientHello matches cert/match.
+func syncBindingSNI(set *domain.InboundSet) {
+	if set == nil {
+		return
+	}
+	for i := range set.Bindings {
+		sni := strings.TrimSpace(set.Bindings[i].Params[domain.BindingParamSNI])
+		if sni == "" {
+			continue
+		}
+		sni = strings.ToLower(sni)
+		if set.Bindings[i].Params == nil {
+			set.Bindings[i].Params = map[string]string{}
+		}
+		set.Bindings[i].Params[domain.BindingParamSNI] = sni
+		set.Bindings[i].Params["demux_sni"] = sni
+	}
 }
 
 func (s *Service) handleSetsList(w http.ResponseWriter, _ *http.Request) {
@@ -1961,6 +1968,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 	if set.Listen == "" {
 		set.Listen = "::"
 	}
+	syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
 		code := 400
 		ec := "bad_request"
@@ -1972,6 +1980,9 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		if strings.Contains(err.Error(), "cp_invalid_demux") {
 			ec = "cp_invalid_demux"
+		}
+		if strings.Contains(err.Error(), "cp_invalid_bindings") {
+			ec = "cp_invalid_bindings"
 		}
 		failJSON(w, code, ec, err.Error())
 		return
@@ -2047,6 +2058,7 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	if set.Listen == "" {
 		set.Listen = "::"
 	}
+	syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
 		code, ec := 400, "bad_request"
 		if strings.Contains(err.Error(), "cp_port_conflict") {
@@ -2244,23 +2256,11 @@ func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forceReload := false
-	if p.Mode == domain.TLSModeSelfSigned && p.SelfSigned != nil {
-		if _, _, changed, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
-			failJSON(w, 500, "internal", err.Error())
-			return
-		} else {
-			forceReload = changed
-		}
+	if _, _, changed, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
 	} else {
-		// Mode switch away from self_signed still needs Apply when CP owns the box.
-		forceReload = true
-		if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
-			failJSON(w, 500, "internal", err.Error())
-			return
-		}
-		if p.Mode == domain.TLSModeACMEDomain || p.Mode == domain.TLSModeACMEIP {
-			s.noteACMEModeEntered()
-		}
+		forceReload = changed
 	}
 	s.mgmtTLS.mu.Lock()
 	s.mgmtTLS.cert = nil
@@ -2278,14 +2278,17 @@ func (s *Service) handleTLSRegenerate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	if p.Mode != domain.TLSModeSelfSigned || p.SelfSigned == nil {
-		failJSON(w, 400, "bad_request", "regenerate only for self_signed mode")
+	if p.SelfSigned == nil {
+		failJSON(w, 400, "bad_request", "self_signed spec required")
 		return
 	}
 	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, true); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	s.mgmtTLS.mu.Lock()
+	s.mgmtTLS.cert = nil
+	s.mgmtTLS.mu.Unlock()
 	if err := s.rematerializeForce(r.Context(), true); err != nil {
 		failJSON(w, 422, "config_invalid", err.Error())
 		return
@@ -2295,51 +2298,24 @@ func (s *Service) handleTLSRegenerate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
 	out := map[string]any{
-		"mode":        p.Mode,
 		"self_signed": p.SelfSigned,
-		"acme":        redactACME(p.ACME),
 	}
 	cert, key := tlsMaterialPaths(s.cfg.DataDir)
 	_, certErr := os.Stat(cert)
 	_, keyErr := os.Stat(key)
 	pemPresent := certErr == nil && keyErr == nil
 	status := map[string]any{
-		"mode":                p.Mode,
-		"acme_data_directory": acmeDataDirectory(s.cfg.DataDir),
+		"self_signed_cert_present": pemPresent,
+		"cert_path":                cert,
+		"key_path":                 key,
+		"active_material":          "self_signed_pem",
+		"ready":                    pemPresent,
+		"mgmt_https":               true,
+		"mgmt_cert_source":         s.mgmtCertSource(),
 	}
-	switch p.Mode {
-	case domain.TLSModeSelfSigned:
-		status["self_signed_cert_present"] = pemPresent
-		status["cert_path"] = cert
-		status["key_path"] = key
-		status["active_material"] = "self_signed_pem"
-		status["ready"] = pemPresent
-		if !pemPresent {
-			status["ready_reason"] = "self_signed pem missing"
-		}
-	case domain.TLSModeACMEDomain, domain.TLSModeACMEIP:
-		status["self_signed_cert_present"] = pemPresent // orphan files may remain
-		status["active_material"] = "certificate_provider"
-		status["certificate_provider_tag"] = domain.TLSProviderTag
-		domains := []string{}
-		if p.ACME != nil {
-			domains = p.ACME.Domains
-		}
-		ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
-		s.noteACMEReady(ready)
-		status["ready"] = ready
-		status["acme_certs_found"] = found
-		status["acme_certs_missing"] = missing
-		if !ready {
-			status["ready_reason"] = "waiting for ACME obtain (certmagic)"
-		}
-	default:
-		status["active_material"] = "unknown"
-		status["ready"] = false
-		status["ready_reason"] = "unknown mode"
+	if !pemPresent {
+		status["ready_reason"] = "self_signed pem missing"
 	}
-	status["mgmt_https"] = true
-	status["mgmt_cert_source"] = s.mgmtCertSource()
 	if _, _, src, err := s.mgmtMaterialPaths(); err == nil {
 		status["mgmt_cert_source"] = src
 	}
@@ -2347,30 +2323,11 @@ func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
 	return out
 }
 
-func redactACME(a *domain.ACMESpec) any {
-	if a == nil {
-		return nil
-	}
-	cp := *a
-	if len(cp.DNS01Challenge) > 0 {
-		red := map[string]any{}
-		for k, v := range cp.DNS01Challenge {
-			ks := strings.ToLower(k)
-			if strings.Contains(ks, "token") || strings.Contains(ks, "secret") || strings.Contains(ks, "password") || strings.Contains(ks, "key") {
-				red[k] = "[redacted]"
-			} else {
-				red[k] = v
-			}
-		}
-		cp.DNS01Challenge = red
-	}
-	return cp
-}
-
 func (s *Service) realityStatusPayload(cfg domain.RealityConfig) map[string]any {
 	payload := map[string]any{
 		"user_overrides":       cfg.UserProfiles,
 		"effective_profiles":   cfg.EffectiveProfiles,
+		"default_profiles":     defaultRealityProfiles(),
 		"using_user_overrides": cfg.UsingUserOverrides,
 		"updated_at":           cfg.UpdatedAt,
 	}
@@ -2414,21 +2371,26 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 400, "bad_request", err.Error())
 		return
 	}
-	normalized := make([]domain.RealityEndpoint, 0, len(body.Profiles))
+	accepted := make([]domain.RealityEndpoint, 0, len(body.Profiles))
+	rejected := make([]map[string]any, 0)
 	for _, p := range body.Profiles {
 		ep, err := normalizeRealityEndpoint(p)
 		if err != nil {
+			rejected = append(rejected, map[string]any{
+				"sni":    strings.TrimSpace(p.SNI),
+				"reason": err.Error(),
+			})
 			continue
 		}
-		normalized = append(normalized, ep)
+		accepted = append(accepted, ep)
 	}
 	cfg, err := s.loadRealityConfig()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	cfg.UserProfiles = normalized
-	cfg.UsingUserOverrides = len(normalized) > 0
+	cfg.UserProfiles = accepted
+	cfg.UsingUserOverrides = len(accepted) > 0
 	now := time.Now().UTC()
 	cfg.UpdatedAt = &now
 	if err := s.store.SaveRealityConfig(cfg); err != nil {
@@ -2453,7 +2415,10 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 422, "config_invalid", err.Error())
 		return
 	}
-	okJSON(w, 200, s.realityStatusPayload(refreshed))
+	payload := s.realityStatusPayload(refreshed)
+	payload["accepted"] = accepted
+	payload["rejected"] = rejected
+	okJSON(w, 200, payload)
 }
 
 func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
@@ -2540,6 +2505,11 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	cm, err := s.ensureCertManager()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
 	assignments, err := s.store.LoadRealityAssignments()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -2549,7 +2519,7 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	if hub.Enabled {
 		hubPtr = &hub
 	}
-	body, err := materialize.RenderSubscription(*user, sets, host, profile, materialize.SubscriptionFilters{
+	body, err := materialize.RenderSubscription(*user, sets, host, profile, cm, materialize.SubscriptionFilters{
 		Set:           filterSet,
 		Presets:       filterPresets,
 		Variants:      filterVariants,

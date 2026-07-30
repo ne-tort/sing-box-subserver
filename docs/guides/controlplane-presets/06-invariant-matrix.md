@@ -22,7 +22,9 @@ Env: `MIN_MBPS` (default `0.5`), `IPERF_TIME` (default `5`), `LX_BIN`, `INVMATRI
 `iperf3 -s` + lx **server** (все cells = отдельные inbounds) + per-cell lx **client**
 (`direct` inbound override → iperf IP:5201 → proxy outbound).
 
-Сеть: `invmatrix_net`. Бинарь: `.tools/lx-client/sing-box` (linux), image `sui-lx-iperf:local`.
+Сеть: `invmatrix_net`. Бинарь: `.tools/lx-client/sing-box` (linux) **и** рядом `libcronet.so` для naive outbound (`python ../ensure_lx_client.py`). Image `sui-lx-iperf:local`.
+
+Naive: Cronet нужен **только клиенту** (outbound, `with_naive_outbound`+purego). Inbound на агенте — pure-Go; в `build/tags.server` тег naive outbound **не** добавляем.
 
 ## Status legend
 
@@ -148,8 +150,8 @@ Env: `MIN_MBPS` (default `0.5`), `IPERF_TIME` (default `5`), `LX_BIN`, `INVMATRI
 | ssh | `ssh_password` | 5 | pass |  |
 | ssh | `ssh_uot` | 5 | pass |  |
 | ssh | `ssh_pubkey` | 5 | pass | host `ssh-keygen` ed25519 |
-| naive | `naive_tls` | 5 | skip | Cronet native lib missing in pure-go lx |
-| naive | `naive_quic` | 5 | skip | same |
+| naive | `naive_tls` | 5 | pass | client kit: `sing-box` + `libcronet.so` (см. `scripts/ensure_lx_client.py`) |
+| naive | `naive_quic` | 5 | pass | same; Cronet нужен только outbound/клиенту |
 | shadowtls | `shadowtls_v3` | 5 | skip | standalone no destination (needs detour) |
 | shadowtls | `shadowtls_v3_wildcard` | 5 | skip | same |
 | shadowtls | `shadowtls_v3_wildcard_all` | 5 | skip | same |

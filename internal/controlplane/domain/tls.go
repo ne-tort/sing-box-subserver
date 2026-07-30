@@ -8,21 +8,17 @@ import (
 	"strings"
 )
 
-// TLS modes for the single controlplane TLS profile.
-const (
-	TLSModeSelfSigned = "self_signed"
-	TLSModeACMEDomain = "acme_domain"
-	TLSModeACMEIP     = "acme_ip"
-)
-
-// ProviderTag is the certificate_providers tag emitted for ACME modes.
+// ProviderTag is the certificate_providers tag emitted for cert-manager ACME.
 const TLSProviderTag = "cp-tls"
 
-// TLSProfile is the active TLS configuration for all TLS inbounds.
+// BindingParamSNI is the optional inbound param that selects an ACME domain
+// from CertManager (non-Reality TLS inbounds only).
+const BindingParamSNI = "sni"
+
+// TLSProfile is always self-signed material for default TLS inbounds / mgmt safety PEMs.
+// ACME is managed separately via CertManager.
 type TLSProfile struct {
-	Mode       string          `json:"mode"`
-	SelfSigned *SelfSignedSpec `json:"self_signed,omitempty"`
-	ACME       *ACMESpec       `json:"acme,omitempty"`
+	SelfSigned *SelfSignedSpec `json:"self_signed"`
 }
 
 // SelfSignedSpec declares how controlplane generates PEM material.
@@ -35,10 +31,10 @@ type SelfSignedSpec struct {
 	Organization string   `json:"organization,omitempty"`
 }
 
-// ACMESpec is mapped into sing-box certificate_providers type=acme.
-type ACMESpec struct {
-	Email                   string         `json:"email"`
-	Domains                 []string       `json:"domains"`
+// CertManager is the ACME / sing-box certificate_providers configuration.
+type CertManager struct {
+	Email                   string         `json:"email,omitempty"`
+	Domains                 []string       `json:"domains,omitempty"`
 	Provider                string         `json:"provider,omitempty"` // letsencrypt default
 	KeyType                 string         `json:"key_type,omitempty"`
 	DisableHTTPChallenge    bool           `json:"disable_http_challenge,omitempty"`
@@ -66,30 +62,15 @@ func DefaultSelfSigned(publicHost string) TLSProfile {
 	} else if cn != "localhost" {
 		spec.DNSSANs = append([]string{cn}, spec.DNSSANs...)
 	}
-	return TLSProfile{Mode: TLSModeSelfSigned, SelfSigned: spec}
+	return TLSProfile{SelfSigned: spec}
 }
 
-// Validate checks profile invariants.
+// Validate checks self-signed profile invariants.
 func (p TLSProfile) Validate() error {
-	switch p.Mode {
-	case TLSModeSelfSigned:
-		if p.SelfSigned == nil {
-			return fmt.Errorf("self_signed spec required")
-		}
-		return p.SelfSigned.Validate()
-	case TLSModeACMEDomain:
-		if p.ACME == nil {
-			return fmt.Errorf("acme spec required")
-		}
-		return p.ACME.ValidateDomain()
-	case TLSModeACMEIP:
-		if p.ACME == nil {
-			return fmt.Errorf("acme spec required")
-		}
-		return p.ACME.ValidateIP()
-	default:
-		return fmt.Errorf("unknown tls mode %q", p.Mode)
+	if p.SelfSigned == nil {
+		return fmt.Errorf("self_signed spec required")
 	}
+	return p.SelfSigned.Validate()
 }
 
 func (s SelfSignedSpec) Validate() error {
@@ -112,86 +93,120 @@ func (s SelfSignedSpec) Validate() error {
 	return nil
 }
 
-func (a ACMESpec) ValidateDomain() error {
-	if strings.TrimSpace(a.Email) == "" {
-		return fmt.Errorf("acme.email required")
+// Enabled reports whether cert-manager has any domains configured.
+func (c CertManager) Enabled() bool {
+	return len(c.NormalizedDomains()) > 0
+}
+
+// NormalizedDomains returns trimmed non-empty domains (lowercased).
+func (c CertManager) NormalizedDomains() []string {
+	out := make([]string, 0, len(c.Domains))
+	seen := map[string]struct{}{}
+	for _, d := range c.Domains {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
 	}
-	if len(a.Domains) == 0 {
-		return fmt.Errorf("acme.domains required")
+	return out
+}
+
+// HasDomain reports whether domain is in the cert-manager pool.
+func (c CertManager) HasDomain(domain string) bool {
+	want := strings.ToLower(strings.TrimSpace(domain))
+	if want == "" {
+		return false
 	}
-	for _, d := range a.Domains {
+	for _, d := range c.NormalizedDomains() {
+		if d == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Validate checks cert-manager settings when domains are present.
+func (c CertManager) Validate() error {
+	domains := c.NormalizedDomains()
+	if len(domains) == 0 {
+		// Empty = disabled; OK.
+		return nil
+	}
+	if strings.TrimSpace(c.Email) == "" {
+		return fmt.Errorf("cert_manager.email required when domains are set")
+	}
+	hasIP := false
+	hasName := false
+	for _, d := range domains {
 		if net.ParseIP(d) != nil {
-			return fmt.Errorf("acme_domain must not use bare IP %q (use acme_ip)", d)
-		}
-		if strings.TrimSpace(d) == "" {
-			return fmt.Errorf("empty domain")
+			hasIP = true
+		} else {
+			hasName = true
 		}
 	}
-	prov := a.Provider
+	if hasIP && hasName {
+		return fmt.Errorf("cert_manager.domains must not mix IP and DNS names")
+	}
+	prov := c.Provider
 	if prov == "" {
 		prov = "letsencrypt"
 	}
-	if prov != "letsencrypt" && prov != "zerossl" && !strings.HasPrefix(prov, "https://") {
-		return fmt.Errorf("unsupported acme provider %q", prov)
+	if hasIP {
+		if len(domains) != 1 {
+			return fmt.Errorf("cert_manager IP mode requires exactly one IP in domains")
+		}
+		if prov != "letsencrypt" {
+			return fmt.Errorf("cert_manager IP only supports letsencrypt, got %q", prov)
+		}
+		if len(c.DNS01Challenge) > 0 {
+			return fmt.Errorf("dns01_challenge not allowed for IP domains")
+		}
+	} else {
+		if prov != "letsencrypt" && prov != "zerossl" && !strings.HasPrefix(prov, "https://") {
+			return fmt.Errorf("unsupported acme provider %q", prov)
+		}
 	}
-	return validateACMEPorts(a)
-}
-
-func (a ACMESpec) ValidateIP() error {
-	if strings.TrimSpace(a.Email) == "" {
-		return fmt.Errorf("acme.email required")
-	}
-	if len(a.Domains) != 1 {
-		return fmt.Errorf("acme_ip requires exactly one IP in domains")
-	}
-	if net.ParseIP(a.Domains[0]) == nil {
-		return fmt.Errorf("acme_ip domain must be an IP address")
-	}
-	prov := a.Provider
-	if prov == "" {
-		prov = "letsencrypt"
-	}
-	if prov != "letsencrypt" {
-		return fmt.Errorf("acme_ip only supports letsencrypt, got %q", prov)
-	}
-	if len(a.DNS01Challenge) > 0 {
-		return fmt.Errorf("dns01_challenge not allowed for acme_ip")
-	}
-	return validateACMEPorts(a)
-}
-
-func validateACMEPorts(a ACMESpec) error {
-	if a.AlternativeHTTPPort < 0 || a.AlternativeHTTPPort > 65535 {
+	if c.AlternativeHTTPPort < 0 || c.AlternativeHTTPPort > 65535 {
 		return fmt.Errorf("alternative_http_port out of range")
 	}
-	if a.AlternativeTLSPort < 0 || a.AlternativeTLSPort > 65535 {
+	if c.AlternativeTLSPort < 0 || c.AlternativeTLSPort > 65535 {
 		return fmt.Errorf("alternative_tls_port out of range")
 	}
-	if a.DisableHTTPChallenge && a.DisableTLSALPNChallenge && len(a.DNS01Challenge) == 0 {
+	if c.DisableHTTPChallenge && c.DisableTLSALPNChallenge && len(c.DNS01Challenge) == 0 {
 		return fmt.Errorf("all ACME challenge methods disabled")
 	}
 	return nil
 }
 
-// NeedsTLSReportsInsecure tells subscription outbounds to set tls.insecure.
-func (p TLSProfile) NeedsTLSReportsInsecure() bool {
-	return p.Mode == TLSModeSelfSigned
+// NeedsTLSReportsInsecure tells subscription outbounds to set tls.insecure
+// when the inbound uses default self-signed material (no ACME params.sni).
+func NeedsTLSReportsInsecure(bindingSNI string, cm CertManager) bool {
+	sni := strings.TrimSpace(bindingSNI)
+	if sni == "" {
+		return true
+	}
+	return !cm.HasDomain(sni)
 }
 
-// ServerNameForTLS returns SNI / server_name for inbounds and outbounds.
+// ServerNameForTLS returns default server_name for inbounds without params.sni.
 func (p TLSProfile) ServerNameForTLS(fallbackHost string) string {
-	switch p.Mode {
-	case TLSModeACMEDomain, TLSModeACMEIP:
-		if p.ACME != nil && len(p.ACME.Domains) > 0 {
-			return p.ACME.Domains[0]
-		}
-	case TLSModeSelfSigned:
-		if p.SelfSigned != nil && p.SelfSigned.CommonName != "" {
-			return p.SelfSigned.CommonName
-		}
+	if p.SelfSigned != nil && p.SelfSigned.CommonName != "" {
+		return p.SelfSigned.CommonName
 	}
 	if fallbackHost != "" {
 		return fallbackHost
 	}
 	return "localhost"
+}
+
+// LegacyTLSProfileJSON is used only for migrating old tls_profile.json with mode/acme.
+type LegacyTLSProfileJSON struct {
+	Mode       string          `json:"mode"`
+	SelfSigned *SelfSignedSpec `json:"self_signed,omitempty"`
+	ACME       *CertManager    `json:"acme,omitempty"`
 }

@@ -28,8 +28,12 @@ from render import (
     DEFAULT_PRESETS,
     IMAGE,
     SERVER_DNS,
+    TLS_SNI,
     docker_path,
+    lx_bin_ro_mount,
+    lx_stage_cmds,
     render_protocol_workdir,
+    require_lx_cronet_for_naive,
     rewrite_client_iperf_ip,
     write_json,
 )
@@ -141,18 +145,17 @@ def write_compose(workdir: Path, lx_bin: Path) -> Path:
                 "hostname": SERVER_DNS,
                 "networks": {
                     NET_NAME: {
-                        "aliases": [SERVER_DNS],
+                        "aliases": [SERVER_DNS, TLS_SNI],
                     }
                 },
                 "volumes": [
-                    f"{docker_path(lx_bin)}:/bin-ro/sing-box:ro",
+                    lx_bin_ro_mount(lx_bin),
                     f"{docker_path(workdir)}:/work:ro",
                 ],
                 "command": [
                     "bash",
                     "-c",
-                    "cp /bin-ro/sing-box /tmp/sing-box && chmod +x /tmp/sing-box && "
-                    "/tmp/sing-box run -c /work/server.json",
+                    f"{lx_stage_cmds()} && /tmp/sing-box run -c /work/server.json",
                 ],
                 "depends_on": ["iperf", "handshake"],
             },
@@ -247,8 +250,7 @@ def run_iperf_client(
     udp_flag = "-u -b 10M" if udp else ""
     script = f"""
 set -e
-cp /bin-ro/sing-box /tmp/sing-box
-chmod +x /tmp/sing-box
+{lx_stage_cmds()}
 /tmp/sing-box run -c /work/client.json >/tmp/box.log 2>&1 &
 pid=$!
 sleep 2
@@ -291,7 +293,7 @@ echo PASS
             "--network",
             NET_NAME,
             "-v",
-            f"{docker_path(lx_bin)}:/bin-ro/sing-box:ro",
+            lx_bin_ro_mount(lx_bin),
             "-v",
             f"{docker_path(client_dir)}:/work:ro",
             IMAGE,
@@ -568,6 +570,8 @@ def run_one_manifest(
         return protocol, []
 
     mode = str(manifest.get("mode") or "render")
+    if mode == "render":
+        require_lx_cronet_for_naive(lx_bin, [str(c["tag"]) for c in cells])
     if mode in ("reuse", "skip"):
         results = run_reuse(manifest, cells)
     else:

@@ -38,14 +38,14 @@ Example demux template (empty `tls:{}` is **invalid** — use `protocol: "tls"` 
 }
 ```
 
-8. Optional: `PUT /v1/controlplane/tls` with `acme_domain` / `acme_ip` → materialize emits `certificate_providers` tag `cp-tls` (needs `with_acme` in the binary).
+8. Optional: `PUT /v1/controlplane/cert-manager` with domains → materialize emits `certificate_providers` tag `cp-tls`; set `bindings[].params.sni` on TLS inbounds (needs `with_acme` in the binary).
 
 ### ACME on a shared VPS (ops notes)
 
 - Let's Encrypt **HTTP-01** needs inbound **:80**. If host nginx (or anything else) owns :80, prefer **TLS-ALPN-01** only: `disable_http_challenge: true` and publish container **:443** (must be free on the host).
 - `alternative_http_port` / `alternative_tls_port` still require forwarding from 80/443 on the public path.
-- Right after switching to `acme_*`, handshakes may fail briefly (`no certificate available`) until certmagic finishes obtain — retry/wait; check agent logs for ACME errors.
-- Bare IP (`acme_ip`) uses LE shortlived; `provider` must be `letsencrypt`; DNS-01 is rejected by API validation.
+- Right after enabling cert-manager domains + `params.sni`, handshakes may fail briefly (`no certificate available`) until certmagic finishes obtain — retry/wait; check agent logs for ACME errors.
+- Bare IP in cert-manager `domains` uses LE shortlived; `provider` must be `letsencrypt`; DNS-01 is rejected by API validation.
 
 
 ## B. User expiry

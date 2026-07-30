@@ -23,6 +23,8 @@ from render import (  # noqa: E402
     build_client_config,
     generate_reality_keypair,
     load_preset,
+    lx_bin_ro_mount,
+    lx_stage_cmds,
     needs_reality,
     needs_tls_certs,
     render_cell,
@@ -282,8 +284,9 @@ def render_group_workdir(
         )
 
     # compose
-    lx = str(lx_bin.resolve()).replace("\\", "/")
     work = str(workdir.resolve()).replace("\\", "/")
+    lx_mount = lx_bin_ro_mount(lx_bin)
+    stage = lx_stage_cmds()
     compose = f"""name: dgmatrix
 services:
   iperf:
@@ -312,12 +315,12 @@ services:
       invmatrix_net:
         aliases: [inv-server]
     volumes:
-      - {lx}:/bin-ro/sing-box:ro
+      - {lx_mount}
       - {work}:/work:ro
     command:
       - bash
       - -c
-      - cp /bin-ro/sing-box /tmp/sing-box && chmod +x /tmp/sing-box && /tmp/sing-box run -c /work/server.json
+      - {stage} && /tmp/sing-box run -c /work/server.json
     depends_on: [iperf, handshake]
 networks:
   invmatrix_net:

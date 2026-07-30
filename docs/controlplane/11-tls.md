@@ -1,34 +1,31 @@
-# 11 — TLS profiles (controlplane)
+# 11 — TLS + cert-manager (controlplane)
 
 ## Role
 
-One **active TLS profile** for all TLS-enabled inbounds materialized by controlplane.
-Non-TLS presets (e.g. `shadowsocks-tcp`, plain `vless-tcp`) are unchanged.
-Reality presets must not use `certificate_provider` (sing-box incompatibility).
+- **Self-signed** is always the default TLS material for inbounds without ACME SNI and for management HTTPS safety PEMs.
+- **Cert-manager** is a separate ACME pool (`domains[]` + provider settings). Individual TLS inbounds (preset or demux slot) opt in via optional `bindings[].params.sni`.
+- Reality never uses cert-manager (`params.sni` is rejected for Reality presets).
 
-## Who issues certificates
+## Model
 
-| Mode | Issuer | Why |
-|------|--------|-----|
-| `self_signed` | Controlplane (PEM on disk) | sing-box has **no** self-signed `certificate_provider` |
-| `acme_domain` / `acme_ip` | sing-box ACME (`certificate_providers`, tag `with_acme`) | certmagic renewals inside the edge process |
+```
+SelfSigned PEM  ──(no params.sni)──► TLS inbound
+CertManager ACME ──(params.sni ∈ domains)──► certificate_provider: cp-tls
+```
 
-Do **not** use server `tls.insecure` ephemeral keypairs as the default server identity.
+### Self-signed (`/v1/controlplane/tls`)
 
-## Modes
-
-### `self_signed` (default)
-
-Declarative JSON → ECDSA/RSA key + self-signed cert written to:
+Declarative JSON → ECDSA/RSA key + self-signed cert:
 
 `data_dir/controlplane/tls/server.crt` + `server.key`
 
-Inbound TLS: `certificate_path` / `key_path`.  
-Subscription outbounds: `tls.insecure: true`.
+Inbound TLS without `params.sni`: `certificate_path` / `key_path`.  
+Demux TLS slots without ACME SNI: per-`demux_sni` PEM under `controlplane/tls/slots/`.  
+Subscription outbounds: `tls.insecure: true` when not using cert-manager SNI.
 
-### `acme_domain`
+### Cert-manager (`/v1/controlplane/cert-manager`)
 
-Emitted config:
+When `domains` is non-empty, materialize emits:
 
 ```json
 {
@@ -39,56 +36,57 @@ Emitted config:
     "email": "admin@example.com",
     "provider": "letsencrypt",
     "data_directory": "{data_dir}/controlplane/acme"
-  }],
-  "inbounds": [{
-    "tls": {
-      "enabled": true,
-      "server_name": "vpn.example.com",
-      "certificate_provider": "cp-tls"
-    }
   }]
 }
 ```
 
-Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge`.  
-Outbounds: verify enabled (no `insecure`), SNI = domain.
+Inbound with `params.sni` matching a domain:
 
-**Management API + `GET /v1/sub/{token}`** use the **same** profile material over HTTPS (no nginx required):
+```json
+"tls": {
+  "enabled": true,
+  "server_name": "vpn.example.com",
+  "certificate_provider": "cp-tls"
+}
+```
 
-| Mode | Management cert source |
-|------|------------------------|
-| `self_signed` | `{data_dir}/controlplane/tls/server.{crt,key}` |
-| `acme_*` + ready | certmagic PEMs under `controlplane/acme/certificates/` |
-| `acme_*` while obtaining | interim self_signed PEMs (always kept as safety net) |
-| ACME obtain/renewal emergency | profile mode forced to `self_signed` (persisted) + rematerialize |
+For demux, setting `params.sni` also sets `demux_sni = sni` so ClientHello matches the leaf.
 
-`subscription_url` scheme is always `https://` on CP builds. Clients (panel) should use `agent_tls_insecure` for self_signed / interim certs.
+Constraints:
 
-When host `:80` is free, leave challenges at defaults (HTTP-01 + TLS-ALPN).  
-If host `:80` is taken, either:
+- Domains must not mix DNS names and IPs.
+- IP mode: exactly one IP, provider `letsencrypt` only, no `dns01_challenge`.
+- Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge`.
 
-- `disable_http_challenge: true` and publish agent `:443` for TLS-ALPN, or
-- set `alternative_http_port` (e.g. `9080`) and forward public `80 → alternative_http_port`.
+### Management HTTPS
 
-Same for TLS-ALPN via `alternative_tls_port` when public `:443` cannot bind inside the agent.
+| Situation | Cert source |
+|-----------|-------------|
+| Default / no ACME PEMs | `{data_dir}/controlplane/tls/server.{crt,key}` |
+| Cert-manager domain with obtained PEM | certmagic under `controlplane/acme/certificates/` |
+| ACME still obtaining | interim self_signed PEMs |
 
-Important: when using `alternative_http_port`, do **not** also publish host `:80` to an idle container port — LE will hit empty `:80` (`connection refused`). Prefer **host network** deploy.
+`subscription_url` scheme is always `https://` on CP builds. Use `agent_tls_insecure` for self_signed / interim certs.
 
-### `acme_ip`
+## Optional `params.sni`
 
-Same as domain, but `domain: ["<public-ip>"]`, provider **must** be `letsencrypt` (shortlived profile). DNS-01 rejected. Challenges must reach the edge (TLS-ALPN on :443 works when :80 is busy; HTTP-01 works when :80 is free).
+- Name: `sni` (`domain.BindingParamSNI`).
+- Allowed only on TLS / `tls_custom` non-Reality presets.
+- Must be in cert-manager `domains` or validate returns `cp_invalid_bindings`.
+- Not required in preset `param_fields` (optional knob, like `demux_sni`).
 
 ## API
 
-See [05-api](05-api.md): `GET/PUT /v1/controlplane/tls`, `POST /v1/controlplane/tls/regenerate`.
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET/PUT | `/v1/controlplane/tls` | Self-signed knobs + `material_status` (no modes / ACME) |
+| POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM |
+| GET/PUT | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status |
 
-`material_status.ready` — self_signed PEM present, or ACME PEMs found under `controlplane/acme/certificates/` for every domain (certmagic store). Poll after `PUT` until `ready=true` before advertising subscriptions; handshakes may still race for a second while the provider loads the cert into memory.
-
-## Boot
-
-Missing `tls_profile.json` → default `self_signed` derived from `controlplane.public_host` (DNS and/or IP SANs).
+Legacy: old `tls_profile.json` with `mode: acme_*` migrates ACME into `cert_manager.json` on boot and rewrites TLS as self-signed.
 
 ## Related
 
 - [ADR 0006](adr/0006-tls-profiles.md)
+- [05-api](05-api.md)
 - sing-box docs: `certificate_providers` / ACME
