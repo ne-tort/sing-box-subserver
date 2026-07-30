@@ -1,0 +1,16 @@
+node_id: vps-163-cp-1
+token: vps-cp-token-dev-only
+listen: 0.0.0.0:8080
+data_dir: /var/lib/subserver
+insecure_public_bind: true
+probe_ms: 100
+log:
+  level: info
+controlplane:
+  public_host: wiki.ai-qwerty.ru
+  public_port: 8080
+  expiry_tick_sec: 60
+pull:
+  enabled: false
+heartbeat:
+  enabled: false
