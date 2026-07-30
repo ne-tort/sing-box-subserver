@@ -35,13 +35,23 @@ func etagMatch(header, etag string) bool {
 	if header == "" {
 		return false
 	}
+	want := normalizeEtag(etag)
 	// Allow weak validators and comma-separated lists.
 	for _, part := range strings.Split(header, ",") {
 		p := strings.TrimSpace(part)
-		p = strings.TrimPrefix(p, "W/")
-		if p == etag || p == "*" {
+		if p == "*" {
+			return true
+		}
+		if normalizeEtag(p) == want {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeEtag(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "W/")
+	s = strings.TrimSpace(s)
+	return strings.Trim(s, `"`)
 }

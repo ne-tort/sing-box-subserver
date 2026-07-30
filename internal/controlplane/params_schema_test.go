@@ -83,4 +83,13 @@ func TestOkJSONETag304(t *testing.T) {
 	if rec2.Body.Len() != 0 {
 		t.Fatalf("304 must have empty body, got %q", rec2.Body.String())
 	}
+
+	// Clients / shells often strip quotes from If-None-Match.
+	rec3 := httptest.NewRecorder()
+	req3 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req3.Header.Set("If-None-Match", strings.Trim(etag, `"`))
+	okJSONETag(rec3, req3, data)
+	if rec3.Code != http.StatusNotModified {
+		t.Fatalf("unquoted If-None-Match: want 304, got %d", rec3.Code)
+	}
 }
