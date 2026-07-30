@@ -14,20 +14,25 @@ or with panel web TLS.
 
 ## Decision
 
-1. **Provisioning plane (SSH)** is owned by **s-ui**, not by the agent. One-shot (and rare
-   image upgrade) only.
+1. **Provisioning plane (SSH)** is owned by the **panel / VPN client**, not by the agent.
+   One-shot (and rare image upgrade) only. Prefer **prebuilt image pull**
+   (`deploy/install-edge-image.sh`, `SUBSERVER_IMAGE`) over remote `git clone` + build.
 2. **Control plane** after install is **HTTP Bearer** to the agent. No SSH for routine apply,
    token rotate, box stop/start.
 3. **Dataplane certificates** on the edge are owned by **sing-box ACME / TLS profiles**
-   rendered into per-node desired-config (reuse s-ui `tlsprofile` materialize). The agent
-   does **not** grow an ACME CRUD surface in v1.
+   materialised into server JSON. As of the embedded `with_controlplane` module, operators
+   configure ACME via **`/v1/controlplane/cert-manager`** (and self-signed via `/tls`);
+   inbounds opt in with `bindings[].params.sni`. This **supersedes** the earlier “no ACME
+   CRUD in agent v1” clause from the first draft of this ADR.
 4. **Management listen** defaults to loopback or firewall-restricted bind; optional static
-   `tls.cert/key` on the agent. No ACME for management API in v1.
+   `tls.cert/key` on the agent. No ACME for **management** API in v1 (self-signed or
+   operator-supplied files only).
 
 ## Consequences
 
-- New panel entities: `SshHost`, `InstallJob`; link to existing `EdgeNode`.
-- Compose template with `network_mode: host`, `restart: unless-stopped`, pinned image.
+- Panel / client entities: SSH host, install job, node inventory (s-ui or Flutter module).
+- Compose template with `network_mode: host`, `restart: unless-stopped`, pinned **CP** image
+  (`:controlplane` / `tags.server.controlplane`).
 - Credential bootstrap uses existing agent auth API (`POST /v1/auth/tokens`, bootstrap disable).
 - Edge LE/HTTP-01 must terminate on the **node** IP; panel SSH must not own ongoing renewal.
 

@@ -1,5 +1,12 @@
 # Canonical edge deploy (Linux). Host network so inbound ports bind on the host
-# without per-port publish. Used by deploy/install-edge.sh and panel SSH bootstrap.
+# without per-port publish. Used by deploy/install-edge.sh, install-edge-image.sh,
+# and panel / VPN-client SSH bootstrap.
+#
+# Image contract for controlplane clients:
+#   ghcr.io/ne-tort/sing-box-subserver:controlplane
+#   (= Dockerfile ARG TAGS_FILE=build/tags.server.controlplane)
+# Do not point clients at an ambiguous :latest unless that tag is guaranteed CP-built.
+# Optional mirror: docker.io/<org>/sing-box-subserver:controlplane
 #
 # Usage:
 #   cp deploy/docker-compose.yml /opt/subserver/docker-compose.yml
@@ -7,7 +14,7 @@
 #   docker compose -f /opt/subserver/docker-compose.yml up -d
 services:
   subserver:
-    image: ghcr.io/ne-tort/sing-box-subserver:latest
+    image: ghcr.io/ne-tort/sing-box-subserver:controlplane
     container_name: subserver
     network_mode: host
     restart: unless-stopped

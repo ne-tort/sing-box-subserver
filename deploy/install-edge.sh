@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Edge install via Docker Compose (host network).
+#
+# Preferred for panels / VPN clients: set SUBSERVER_IMAGE (or use install-edge-image.sh)
+# so the host only pulls a prebuilt image — no git clone / docker build.
+# When SUBSERVER_IMAGE is empty, this script falls back to cloning the repo and building
+# (dev / lab only).
+#
+# Required: SUBSERVER_NODE_ID, SUBSERVER_TOKEN
 set -euo pipefail
 
 REMOTE_DIR="${SUBSERVER_REMOTE_DIR:-/opt/subserver}"
@@ -12,6 +20,8 @@ CONTROLLER_URL="${SUBSERVER_CONTROLLER_URL:-}"
 CONTROLLER_URL="${CONTROLLER_URL%/}"
 RESET_MODE="${SUBSERVER_RESET_MODE:-fresh}" # fresh|inplace
 PRESERVE_DATA="${SUBSERVER_PRESERVE_DATA:-0}" # 1 keeps data_dir contents
+PUBLIC_HOST="${SUBSERVER_PUBLIC_HOST:-}"
+PUBLIC_PORT="${SUBSERVER_PUBLIC_PORT:-8080}"
 
 log() { echo "[subserver-install] $*"; }
 
@@ -146,6 +156,14 @@ heartbeat:
   url: "$HB_URL"
   interval_sec: $HB_INTERVAL
 EOF
+    fi
+    if [[ -n "$PUBLIC_HOST" ]]; then
+      cat <<EOF
+controlplane:
+  public_host: "$PUBLIC_HOST"
+  public_port: $PUBLIC_PORT
+EOF
+      log "controlplane.public_host=$PUBLIC_HOST public_port=$PUBLIC_PORT"
     fi
     echo "log:"
     echo "  level: info"

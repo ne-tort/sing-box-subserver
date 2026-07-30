@@ -75,15 +75,17 @@ Payload: status snapshot + `inbounds_count` (not Clash online users).
 
 ## Bootstrap via SSH
 
-One-shot **panel-owned** provisioning (not agent self-update). Design:
-[ADR 0007](adr/0007-panel-owned-ssh-bootstrap.md), mother doc `docs/EDGE_SSH_BOOTSTRAP.md`.
+One-shot **panel / VPN-client-owned** provisioning (not agent self-update). Design:
+[ADR 0007](adr/0007-panel-owned-ssh-bootstrap.md).
 
-Operator checklist (manual until panel InstallJob exists):
+Operator checklist (manual until InstallJob exists):
 
-1. Install binary + systemd unit (or Compose service with `network_mode: host`, `restart: unless-stopped`).
-2. Write agent config (token, node_id, pull URL).
-3. Open management port only to panel IP **or** terminate TLS / SSH tunnel / WG management net.
-4. Panel registers node inventory row; prefer `POST /v1/auth/tokens` then bootstrap disable.
+1. Prefer **image pull**: `deploy/install-edge-image.sh` with `SUBSERVER_NODE_ID` +
+   `SUBSERVER_TOKEN` + `SUBSERVER_PUBLIC_HOST` (see [`deploy/README.md`](../deploy/README.md)).
+   Avoid remote source build for production.
+2. Ensure `controlplane.public_host` is a client-reachable host/IP.
+3. Open management port only to panel/client IP **or** terminate TLS / SSH tunnel / WG management net.
+4. Register inventory; prefer `POST /v1/auth/tokens` then bootstrap disable.
 
 Ongoing ops: API only.
 

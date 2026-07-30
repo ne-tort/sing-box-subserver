@@ -40,5 +40,13 @@ data_dir: "/var/lib/subserver"
 #   cert: "/etc/subserver/tls.crt"
 #   key: "/etc/subserver/tls.key"
 
+# Embedded controlplane (requires binary built with with_controlplane).
+# public_host MUST be a hostname/IP reachable by VPN clients — not 127.0.0.1 —
+# or subscription_url will be useless on phones.
+# controlplane:
+#   public_host: "vpn.example.com"
+#   public_port: 8080
+#   expiry_tick_sec: 60
+
 log:
   level: info

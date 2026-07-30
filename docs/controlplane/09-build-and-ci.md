@@ -69,3 +69,33 @@ App wiring: `if svc != nil { api.Controlplane = svc; go svc.Run(ctx) }`.
 ## Size
 
 Expect modest binary growth (templates embed). Log size in CP build job; no hard gate in docs v1.
+
+## Published container images (client / panel contract)
+
+VPN-client and panel SSH bootstrap **must not** build from source on the VPS.
+They pull a prebuilt image:
+
+| Ref | Tags file | Audience |
+|-----|-----------|----------|
+| `ghcr.io/ne-tort/sing-box-subserver:controlplane` | `build/tags.server.controlplane` | **Canonical** for CP clients |
+| `ghcr.io/ne-tort/sing-box-subserver:<semver>-controlplane` | same | Pinned releases |
+| `docker.io/<org>/sing-box-subserver:controlplane` | same | Optional mirror |
+| `:latest` | **ambiguous** — may be `tags.server` without CP | Do **not** use as client default |
+
+Dockerfile:
+
+```bash
+docker build -t ghcr.io/ne-tort/sing-box-subserver:controlplane \
+  --build-arg TAGS_FILE=build/tags.server.controlplane .
+```
+
+CI **should** publish `:controlplane` (and versioned `-controlplane` tags) on main/release.
+Until the publish job exists, local/lab builds must tag explicitly — see
+[`deploy/install-edge-image.sh`](../../deploy/install-edge-image.sh) and
+[`deploy/docker-compose.yml`](../../deploy/docker-compose.yml).
+
+Compose / install helpers:
+
+- Image-first install: `deploy/install-edge-image.sh` (sets `SUBSERVER_IMAGE`).
+- Generic install: `deploy/install-edge.sh` — set `SUBSERVER_IMAGE` for production; empty image = clone+build (dev only).
+
