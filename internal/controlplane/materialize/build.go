@@ -439,7 +439,7 @@ func syncDemuxSNIWithReality(demux map[string]any, set domain.InboundSet, member
 	portToSNI := map[uint16]string{}
 	for _, b := range set.EffectiveBindings() {
 		p, err := presets.Get(b.Preset)
-		if err != nil || !presetHasTrait(p, "reality") {
+		if err != nil || !domain.BindingUsesReality(p, b.Params) {
 			continue
 		}
 		rk := set.Name + "/" + p.Name
@@ -1263,42 +1263,6 @@ func cloneMap(m map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
-func applyTuicZeroRTT(m map[string]any, preset string, params map[string]string) {
-	if preset != "tuic_custom" {
-		return
-	}
-	if strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true") {
-		m["zero_rtt_handshake"] = true
-	} else {
-		delete(m, "zero_rtt_handshake")
-	}
-}
-
-func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[string]string) {
-	applyTuicZeroRTT(ib, preset, params)
-	applyNaiveNetworkKnobs(ib, preset, params)
-}
-
-func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map[string]string) {
-	applyTuicZeroRTT(ob, preset, params)
-	applyNaiveNetworkKnobs(ob, preset, params)
-}
-
-func applyNaiveNetworkKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "naive_custom" {
-		return
-	}
-	if !strings.EqualFold(strings.TrimSpace(params["network"]), "udp") {
-		return
-	}
-	m["network"] = "udp"
-	if tls, ok := m["tls"].(map[string]any); ok {
-		tls["alpn"] = []any{"h3"}
-	}
-	m["quic_congestion_control"] = "bbr"
-	m["quic"] = true
-}
-
 func substituteMap(m map[string]any, vars map[string]string) (map[string]any, error) {
 	raw, err := json.Marshal(m)
 	if err != nil {
@@ -1482,13 +1446,19 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					}
 					domain.ApplyOutboundOverrides(ob, overrides)
 
-					if presetHasTrait(p, "reality") {
+					if domain.BindingUsesReality(p, b.Params) {
 						rk := set.Name + "/" + p.Name
 						assignment, ok := realityAssignments[rk]
 						if !ok {
 							return fmt.Errorf("missing reality assignment for %s", rk)
 						}
 						attachOutboundReality(ob, assignment)
+					} else if mode, ok := domain.BindingTLSMode(p, b.Params); ok {
+						if mode == "none" {
+							delete(ob, "tls")
+						} else {
+							attachSubscriptionTLS(ob, serverName, b, cm)
+						}
 					} else if presetNeedsTLS(p) {
 						attachSubscriptionTLS(ob, serverName, b, cm)
 					}
@@ -1591,13 +1561,19 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					}
 				}
 				domain.ApplyOutboundOverrides(ob, cp.OutboundOverrides)
-				if presetHasTrait(p, "reality") {
+				if domain.BindingUsesReality(p, b.Params) {
 					rk := set.Name + "/" + p.Name
 					assignment, ok := realityAssignments[rk]
 					if !ok {
 						return nil, fmt.Errorf("missing reality assignment for %s", rk)
 					}
 					attachOutboundReality(ob, assignment)
+				} else if mode, ok := domain.BindingTLSMode(p, b.Params); ok {
+					if mode == "none" {
+						delete(ob, "tls")
+					} else {
+						attachSubscriptionTLS(ob, serverName, b, cm)
+					}
 				} else if presetNeedsTLS(p) {
 					attachSubscriptionTLS(ob, serverName, b, cm)
 				}

@@ -320,10 +320,8 @@ func hasRealityPreset(sets []domain.InboundSet) bool {
 			if err != nil {
 				continue
 			}
-			for _, t := range p.Traits {
-				if t == "reality" {
-					return true
-				}
+			if domain.BindingUsesReality(p, b.Params) {
+				return true
 			}
 		}
 	}
@@ -434,7 +432,7 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 	for _, set := range sets {
 		for _, b := range set.EffectiveBindings() {
 			p, err := presets.Get(b.Preset)
-			if err != nil || !presetHasTrait(p, "reality") {
+			if err != nil || !domain.BindingUsesReality(p, b.Params) {
 				continue
 			}
 			key := realityInboundKey(set.Name, p.Name)

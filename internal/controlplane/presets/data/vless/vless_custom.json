@@ -16,7 +16,7 @@
       "description": "Lab constructor: pick transport, TLS mode, flow, and transport-specific params."
     }
   },
-  "traits": ["tcp", "udp", "tls", "reality", "custom"],
+  "traits": ["tcp", "udp", "tls", "custom"],
   "demux_hints": {
     "network": ["tcp", "udp"],
     "looks_like": "tls_clienthello",

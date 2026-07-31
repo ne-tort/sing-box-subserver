@@ -942,10 +942,10 @@ func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet, cm domain.CertMan
 				continue
 			}
 			// Reality uses handshake assignment, not PEM slots.
-			if presetHasTrait(p, "reality") {
+			if domain.BindingUsesReality(p, b.Params) {
 				continue
 			}
-			needsPEM := presetHasTrait(p, "tls") || presetHasTrait(p, "tls_custom")
+			needsPEM := domain.BindingNeedsPEMTLS(p, b.Params) || presetHasTrait(p, "tls_custom")
 			if !needsPEM {
 				continue
 			}
@@ -2121,10 +2121,10 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 	if sni == "" {
 		return nil
 	}
-	if presetHasTrait(p, "reality") {
+	if domain.BindingUsesReality(p, b.Params) {
 		return fmt.Errorf("cp_invalid_bindings: params.sni not allowed for Reality preset %q", p.Name)
 	}
-	needsTLS := presetHasTrait(p, "tls") || presetHasTrait(p, "tls_custom")
+	needsTLS := domain.BindingNeedsPEMTLS(p, b.Params)
 	if !needsTLS {
 		return fmt.Errorf("cp_invalid_bindings: params.sni only for TLS presets, got %q", p.Name)
 	}
