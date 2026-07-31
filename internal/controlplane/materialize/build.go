@@ -326,7 +326,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		} else if p.Protocol == "shadowsocks" && !shadowsocksNeedsServerPassword(ib) {
 			delete(ib, "password")
 		}
-		if presetHasTrait(p, "reality") {
+		if domain.BindingUsesReality(p, b.Params) {
 			rk := set.Name + "/" + p.Name
 			assignment, ok := in.RealityAssignments[rk]
 			if !ok {
@@ -342,6 +342,20 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			slotIn.TLSCertPath, slotIn.TLSKeyPath = certPath, keyPath
 			if err := attachTrustTunnelTLS(ib, slotIn, effectiveServer); err != nil {
 				return nil, fmt.Errorf("set %q preset %q trusttunnel tls: %w", set.Name, pn, err)
+			}
+		} else if mode, ok := domain.BindingTLSMode(p, b.Params); ok {
+			if mode == "none" {
+				delete(ib, "tls")
+			} else {
+				attachInboundTLS(ib, in, effectiveServer, useCertManager)
+				if !useCertManager {
+					if m, ok := in.SlotTLS[effectiveServer]; ok && m.CertPath != "" {
+						applySlotTLSPaths(ib, m)
+					}
+				}
+				if alpn := strings.TrimSpace(b.Params["demux_alpn"]); alpn != "" {
+					applyInboundALPN(ib, strings.Split(alpn, ","))
+				}
 			}
 		} else if presetNeedsTLS(p) {
 			attachInboundTLS(ib, in, effectiveServer, useCertManager)

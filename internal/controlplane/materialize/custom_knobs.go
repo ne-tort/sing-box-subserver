@@ -3,10 +3,9 @@
 package materialize
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
 func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[string]string) {
@@ -17,7 +16,7 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applyShadowsocksCustomKnobs(ib, preset, params)
 	applyHysteria1CustomKnobs(ib, preset, params)
 	applySocksCustomKnobs(ib, preset, params, true)
-	applyHTTPMixedCustomKnobs(ib, preset, params, true)
+	applyHTTPMixedCustomKnobs(ib, preset, params)
 	applyTrustTunnelCustomKnobs(ib, preset, params)
 }
 
@@ -29,7 +28,7 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applyShadowsocksCustomKnobs(ob, preset, params)
 	applyHysteria1CustomKnobs(ob, preset, params)
 	applySocksCustomKnobs(ob, preset, params, false)
-	applyHTTPMixedCustomKnobs(ob, preset, params, false)
+	applyHTTPMixedCustomKnobs(ob, preset, params)
 	applyTrustTunnelCustomKnobs(ob, preset, params)
 	stripUTLSForQUICTransport(ob)
 }
@@ -85,12 +84,11 @@ func applyHy2CustomKnobs(m map[string]any, preset string, params map[string]stri
 	if v, ok := parseUintParam(params["down_mbps"]); ok {
 		m["down_mbps"] = v
 	}
-	if _, isIn := m["ignore_client_bandwidth"]; isIn || params["ignore_client_bandwidth"] != "" {
+	if _, present := m["ignore_client_bandwidth"]; present || strings.TrimSpace(params["ignore_client_bandwidth"]) != "" {
 		m["ignore_client_bandwidth"] = strings.EqualFold(strings.TrimSpace(params["ignore_client_bandwidth"]), "true")
 	}
 
-	// Masquerade is inbound-only; outbound templates omit it.
-	if _, has := m["masquerade"]; !has && params["masquerade_mode"] == "" {
+	if _, hasMasq := m["masquerade"]; !hasMasq && strings.TrimSpace(params["masquerade_mode"]) == "" {
 		return
 	}
 	mode := strings.ToLower(strings.TrimSpace(params["masquerade_mode"]))
@@ -101,8 +99,10 @@ func applyHy2CustomKnobs(m map[string]any, preset string, params map[string]stri
 	case "none":
 		delete(m, "masquerade")
 	case "file":
-		dir := strings.TrimSpace(params["masquerade_dir"])
-		m["masquerade"] = map[string]any{"type": "file", "directory": dir}
+		m["masquerade"] = map[string]any{
+			"type":      "file",
+			"directory": strings.TrimSpace(params["masquerade_dir"]),
+		}
 	case "proxy":
 		url := strings.TrimSpace(params["masquerade_url"])
 		if url == "" {
@@ -128,7 +128,7 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 		return
 	}
 	cleanupV2RayTransport(m, params)
-	if flow := strings.TrimSpace(params["flow"]); flow == "" {
+	if strings.TrimSpace(params["flow"]) == "" {
 		delete(m, "flow")
 	}
 	if alpn := strings.TrimSpace(params["alpn"]); alpn != "" {
@@ -136,7 +136,7 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 			tls["alpn"] = splitCSV(alpn)
 		}
 	}
-	if enc := strings.TrimSpace(params["packet_encoding"]); enc == "" {
+	if strings.TrimSpace(params["packet_encoding"]) == "" {
 		delete(m, "packet_encoding")
 	}
 }
@@ -148,13 +148,14 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 	}
 	typ := strings.ToLower(strings.TrimSpace(params["transport"]))
 	if typ == "" {
-		typ = strings.ToLower(strings.TrimSpace(asString(tr["type"])))
+		typ = strings.ToLower(strings.TrimSpace(fmt.Sprint(tr["type"])))
+	}
+	if typ == "" || typ == "tcp" || typ == "<nil>" {
+		delete(m, "transport")
+		return
 	}
 	tr["type"] = typ
 	switch typ {
-	case "tcp", "":
-		delete(m, "transport")
-		return
 	case "ws", "httpupgrade":
 		delete(tr, "service_name")
 		delete(tr, "password")
@@ -182,19 +183,12 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 		delete(tr, "headers")
 		delete(tr, "service_name")
 	}
-	// Drop empty host/path left by unused optional params.
-	if s := strings.TrimSpace(asString(tr["host"])); s == "" {
-		delete(tr, "host")
-	}
-	if s := strings.TrimSpace(asString(tr["path"])); s == "" {
-		delete(tr, "path")
-	}
-	if s := strings.TrimSpace(asString(tr["service_name"])); s == "" {
-		delete(tr, "service_name")
-	}
+	pruneEmptyStringKey(tr, "host")
+	pruneEmptyStringKey(tr, "path")
+	pruneEmptyStringKey(tr, "service_name")
 	if headers, ok := tr["headers"].(map[string]any); ok {
 		if host, ok := headers["Host"].([]any); ok {
-			if len(host) == 0 || strings.TrimSpace(asString(host[0])) == "" {
+			if len(host) == 0 || strings.TrimSpace(fmt.Sprint(host[0])) == "" || fmt.Sprint(host[0]) == "<nil>" {
 				delete(headers, "Host")
 			}
 		}
@@ -239,10 +233,7 @@ func applyHysteria1CustomKnobs(m map[string]any, preset string, params map[strin
 }
 
 func applySocksCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
-	if preset != "socks_custom" {
-		return
-	}
-	if inbound {
+	if preset != "socks_custom" || inbound {
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(params["udp_over_tcp"]), "true") {
@@ -252,36 +243,27 @@ func applySocksCustomKnobs(m map[string]any, preset string, params map[string]st
 	}
 }
 
-func applyHTTPMixedCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
+func applyHTTPMixedCustomKnobs(m map[string]any, preset string, params map[string]string) {
 	switch preset {
 	case "http_custom", "mixed_custom":
 	default:
 		return
 	}
-	mode, ok := domain.BindingTLSMode(domain.ProtocolPreset{
-		CustomPreset: true,
-		ParamMeta: map[string]domain.ParamFieldMeta{
-			"tls_mode": {Default: "none"},
-		},
-	}, params)
-	if !ok {
-		mode = strings.ToLower(strings.TrimSpace(params["tls_mode"]))
-		if mode == "" {
-			mode = "none"
-		}
+	mode := strings.ToLower(strings.TrimSpace(params["tls_mode"]))
+	if mode == "" {
+		mode = "none"
 	}
 	if mode == "none" {
 		delete(m, "tls")
 		return
 	}
-	// TLS block kept; materialize attach path fills certs when BindingNeedsPEMTLS.
-	if !inbound {
-		if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
-			tls, _ := m["tls"].(map[string]any)
-			if tls == nil {
-				tls = map[string]any{"enabled": true}
-				m["tls"] = tls
-			}
+	tls, _ := m["tls"].(map[string]any)
+	if tls == nil {
+		tls = map[string]any{"enabled": true, "alpn": []any{"h2", "http/1.1"}}
+		m["tls"] = tls
+	}
+	if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
+		if _, isIn := m["listen"]; !isIn {
 			tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
 		}
 	}
@@ -298,10 +280,10 @@ func applyTrustTunnelCustomKnobs(m map[string]any, preset string, params map[str
 	if v := strings.TrimSpace(params["mode"]); v != "" {
 		tr["upstream_protocol"] = v
 	}
-	if params["anti_dpi"] != "" {
+	if strings.TrimSpace(params["anti_dpi"]) != "" {
 		tr["anti_dpi"] = strings.EqualFold(strings.TrimSpace(params["anti_dpi"]), "true")
 	}
-	if params["enable_protocol_fallback"] != "" {
+	if strings.TrimSpace(params["enable_protocol_fallback"]) != "" {
 		tr["enable_protocol_fallback"] = strings.EqualFold(strings.TrimSpace(params["enable_protocol_fallback"]), "true")
 	}
 }
@@ -330,47 +312,8 @@ func splitCSV(s string) []any {
 	return out
 }
 
-func asString(v any) string {
-	if v == nil {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return strings.TrimSpace(strings.Trim(strings.ReplaceAll(strings.ReplaceAll(stringify(v), "\"", ""), "[", ""), "]"))
-}
-
-func stringify(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	default:
-		return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(sprintfAny(t), "\n", ""), "\t", ""))
-	}
-}
-
-func sprintfAny(v any) string {
-	return strings.TrimSpace(
-		strings.ReplaceAll(
-			strings.ReplaceAll(
-				func() string {
-					b := make([]byte, 0, 32)
-					return string(append(b, []byte(toRaw(v))...))
-				}(),
-				" ", ""),
-			"\"", ""),
-	)
-}
-
-func toRaw(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case float64:
-		return strconv.FormatFloat(t, 'f', -1, 64)
-	case int:
-		return strconv.Itoa(t)
-	default:
-		return ""
+func pruneEmptyStringKey(m map[string]any, key string) {
+	if strings.TrimSpace(fmt.Sprint(m[key])) == "" || fmt.Sprint(m[key]) == "<nil>" {
+		delete(m, key)
 	}
 }
