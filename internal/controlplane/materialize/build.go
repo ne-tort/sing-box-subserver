@@ -249,7 +249,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		acmeSNI := strings.TrimSpace(b.Params[domain.BindingParamSNI])
 		effectiveServer := serverName
 		useCertManager := false
-		if !presetHasTrait(p, "reality") {
+		if !domain.BindingUsesReality(p, b.Params) {
 			if acmeSNI != "" && in.CertManager.HasDomain(acmeSNI) {
 				effectiveServer = strings.ToLower(acmeSNI)
 				useCertManager = true
@@ -408,7 +408,7 @@ func syncDemuxSNIFromBindings(demux map[string]any, set domain.InboundSet, membe
 	portToSNI := map[uint16]string{}
 	for _, b := range set.EffectiveBindings() {
 		p, err := presets.Get(b.Preset)
-		if err != nil || presetHasTrait(p, "reality") {
+		if err != nil || domain.BindingUsesReality(p, b.Params) {
 			continue
 		}
 		sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
