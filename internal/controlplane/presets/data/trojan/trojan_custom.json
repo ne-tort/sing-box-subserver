@@ -2,34 +2,27 @@
   "schema_version": 1,
   "tag": "trojan_custom",
   "protocol": "trojan",
-  "aliases": [
-    "trojan-custom"
-  ],
-  "short_name": "Trojan TLS custom",
+  "aliases": ["trojan-custom", "trojan-constructor"],
+  "short_name": "Trojan custom",
   "status": "lab",
+  "custom_preset": true,
   "i18n": {
     "ru": {
-      "title": "Trojan TLS custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе trojan_tls.json."
+      "title": "Trojan конструктор",
+      "description": "Лабораторный Trojan: transport + TLS/Reality/plain, path/host/service_name и uTLS fingerprint."
     },
     "en": {
-      "title": "Trojan TLS custom constructor",
-      "description": "Minimal lab constructor based on trojan_tls.json."
+      "title": "Trojan constructor",
+      "description": "Lab Trojan: transport, TLS mode, path/host/service_name, uTLS fingerprint."
     }
   },
-  "traits": [
-    "tcp",
-    "tls",
-    "custom"
-  ],
+  "traits": ["tcp", "udp", "tls", "custom"],
   "demux_hints": {
-    "network": [
-      "tcp"
-    ],
+    "network": ["tcp", "udp"],
     "looks_like": "tls_clienthello",
-    "alpn": [],
+    "alpn": ["h2", "http/1.1", "h3"],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "Depends on transport/tls_mode",
     "compatible_with_demux": true
   },
   "scores": {
@@ -38,9 +31,113 @@
     "mobile": 6,
     "setup": 3
   },
-  "cred_fields": [
-    "password"
+  "cred_fields": ["password"],
+  "param_fields": ["transport", "tls_mode"],
+  "optional_param_fields": [
+    "fingerprint",
+    "transport_path",
+    "transport_host",
+    "service_name",
+    "alpn"
   ],
+  "param_meta": {
+    "transport": {
+      "type": "enum",
+      "widget": "select",
+      "enum": ["tcp", "ws", "grpc", "http", "httpupgrade", "quic"],
+      "default": "tcp",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {"en": "Transport", "ru": "Транспорт"},
+      "description": {
+        "en": "Trojan underlying transport (sing-box transport.type).",
+        "ru": "Транспорт Trojan (transport.type)."
+      }
+    },
+    "tls_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": ["none", "tls", "reality"],
+      "default": "tls",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "title": {"en": "TLS mode", "ru": "Режим TLS"},
+      "description": {
+        "en": "Plain TCP, TLS profile, or Reality assignment.",
+        "ru": "Plain TCP, TLS-профиль CP или Reality."
+      }
+    },
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "visible_when": [{"key": "tls_mode", "equals": "tls"}],
+      "title": {"en": "uTLS fingerprint", "ru": "uTLS fingerprint"},
+      "description": {
+        "en": "Client uTLS fingerprint (ignored for QUIC transport).",
+        "ru": "uTLS fingerprint клиента (не для QUIC)."
+      }
+    },
+    "transport_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/trojan",
+      "ui_group": "transport",
+      "ui_order": 30,
+      "visible_when": [{"key": "transport", "in": ["ws", "http", "httpupgrade"]}],
+      "title": {"en": "Path", "ru": "Path"},
+      "description": {
+        "en": "HTTP/WebSocket path after TLS.",
+        "ru": "HTTP/WebSocket path после TLS."
+      }
+    },
+    "transport_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 31,
+      "visible_when": [{"key": "transport", "in": ["ws", "http", "httpupgrade"]}],
+      "title": {"en": "Host header", "ru": "Host header"},
+      "description": {
+        "en": "Host / :authority for WS/HTTP transports.",
+        "ru": "Host / :authority для WS/HTTP."
+      }
+    },
+    "service_name": {
+      "type": "string",
+      "widget": "text",
+      "default": "TrojanService",
+      "ui_group": "transport",
+      "ui_order": 32,
+      "visible_when": [{"key": "transport", "equals": "grpc"}],
+      "title": {"en": "gRPC service name", "ru": "gRPC service name"},
+      "description": {
+        "en": "gRPC Gun service_name.",
+        "ru": "gRPC Gun service_name."
+      }
+    },
+    "alpn": {
+      "type": "string",
+      "widget": "text",
+      "default": "h2,http/1.1",
+      "ui_group": "tls",
+      "ui_order": 21,
+      "visible_when": [{"key": "tls_mode", "in": ["tls", "reality"]}],
+      "title": {"en": "ALPN list", "ru": "Список ALPN"},
+      "description": {
+        "en": "Comma-separated ALPN (h3 for QUIC transport).",
+        "ru": "ALPN через запятую (h3 для QUIC)."
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true,
+    "udp": true,
+    "quic": true
+  },
   "inbound_template": {
     "type": "trojan",
     "tag": "{{tag}}",
@@ -50,10 +147,16 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ]
+      "alpn": ["h2", "http/1.1"]
+    },
+    "transport": {
+      "type": "{{param.transport}}",
+      "path": "{{param.transport_path}}",
+      "host": "{{param.transport_host}}",
+      "service_name": "{{param.service_name}}",
+      "headers": {
+        "Host": ["{{param.transport_host}}"]
+      }
     }
   },
   "outbound_template": {
@@ -65,38 +168,24 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ],
+      "alpn": ["h2", "http/1.1"],
       "utls": {
         "enabled": true,
         "fingerprint": "{{param.fingerprint}}"
       }
-    }
-  },
-  "requirements": {
-    "tls_profile": true
-  },
-  "custom_preset": true,
-  "optional_param_fields": [
-    "fingerprint"
-  ],
-  "param_meta": {
-    "fingerprint": {
-      "type": "string",
-      "widget": "text",
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 21,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Client uTLS fingerprint on outbound.",
-        "ru": "uTLS fingerprint клиента на outbound."
+    },
+    "transport": {
+      "type": "{{param.transport}}",
+      "path": "{{param.transport_path}}",
+      "host": "{{param.transport_host}}",
+      "service_name": "{{param.service_name}}",
+      "headers": {
+        "Host": ["{{param.transport_host}}"]
       }
     }
+  },
+  "client_notes": {
+    "constructor": "tls_mode=none strips tls; reality uses CP assignment",
+    "demux": "compatible_with_demux when tls/reality front; QUIC needs UDP demux slot"
   }
 }
