@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tag": "http_custom",
+  "protocol": "http",
+  "aliases": [
+    "http-custom"
+  ],
+  "short_name": "HTTP custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "HTTP custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе http.json."
+    },
+    "en": {
+      "title": "HTTP constructor",
+      "description": "Lab HTTP CONNECT constructor. Utility only."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP CONNECT/methods",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "http",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "set_system_proxy": false
+  },
+  "outbound_template": {
+    "type": "http",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [],
+  "param_meta": {}
+}

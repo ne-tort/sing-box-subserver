@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess HTTP/2 TLS",
       "description": "VMess + TLS + HTTP transport (host/path/headers)."
+    },
+    "en": {
+      "title": "VMess HTTP TLS",
+      "description": "VMess + TLS + HTTP/2 transport. Post-TLS H2 shape."
     }
   },
   "traits": [
@@ -117,5 +121,40 @@
   "client_notes": {
     "params": "optional bindings[].params overrides: http_host, http_path",
     "http_path_default": "/vmess-h2"
+  },
+  "optional_param_fields": [
+    "http_host",
+    "http_path"
+  ],
+  "param_meta": {
+    "http_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 33,
+      "title": {
+        "en": "HTTP Host",
+        "ru": "HTTP Host"
+      },
+      "description": {
+        "en": "Host header for HTTP transport.",
+        "ru": "Host header для HTTP transport."
+      }
+    },
+    "http_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/vmess-h2",
+      "ui_group": "transport",
+      "ui_order": 32,
+      "title": {
+        "en": "HTTP path",
+        "ru": "HTTP path"
+      },
+      "description": {
+        "en": "HTTP/2 transport path.",
+        "ru": "Path HTTP/2 transport."
+      }
+    }
   }
 }

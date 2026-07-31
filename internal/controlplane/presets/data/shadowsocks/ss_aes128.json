@@ -11,6 +11,10 @@
     "ru": {
       "title": "SS AES-128-GCM",
       "description": "Shadowsocks AES-128-GCM multi-user, TCP, без TLS."
+    },
+    "en": {
+      "title": "SS AES-128-GCM",
+      "description": "Shadowsocks AEAD AES-128-GCM. Fast; easy DPI class without TLS wrappers."
     }
   },
   "traits": [

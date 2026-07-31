@@ -26,6 +26,15 @@ func TestParamsSchemaCarrierRoomRequired(t *testing.T) {
 	if req, _ := room["required"].(bool); !req {
 		t.Fatalf("room.required want true, got %#v", room["required"])
 	}
+	if title, _ := room["title"].(string); title == "" {
+		t.Fatalf("room.title missing: %#v", room)
+	}
+	if _, ok := room["help"]; !ok {
+		t.Fatalf("room.help missing: %#v", room)
+	}
+	if _, ok := room["required_guide"]; !ok {
+		t.Fatalf("room.required_guide missing: %#v", room)
+	}
 	opt := presetOptionalParamsDetail(pp)
 	if _, exists := opt["room"]; exists {
 		t.Fatalf("room must not appear in optional_params: %#v", opt)
@@ -46,18 +55,96 @@ func TestParamsSchemaVlessNoRequiredExtras(t *testing.T) {
 	}
 	schema := buildParamsSchema(pp, false)
 	for k, v := range schema {
-		m := v.(map[string]any)
+		if strings.HasPrefix(k, "_") {
+			continue
+		}
+		m, ok := v.(map[string]any)
+		if !ok {
+			t.Fatalf("%s: expected map, got %T", k, v)
+		}
 		if req, _ := m["required"].(bool); req {
 			t.Fatalf("%s unexpectedly required", k)
 		}
+	}
+	if ver, ok := schema["_schema_version"].(int); !ok || ver != 2 {
+		t.Fatalf("_schema_version want 2, got %#v", schema["_schema_version"])
+	}
+	if _, ok := schema["sni"]; ok {
+		t.Fatal("reality preset must not expose ACME sni in list schema")
+	}
+}
+
+func TestParamsSchemaTlsListExposesSNI(t *testing.T) {
+	inv, err := presets.GetInvariant("vless_tls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pp := inv.ToProtocolPreset("en")
+	schema := buildParamsSchema(pp, false)
+	sni, ok := schema["sni"].(map[string]any)
+	if !ok {
+		t.Fatalf("sni missing from list schema: %#v", schema)
+	}
+	if req, _ := sni["required"].(bool); req {
+		t.Fatal("sni must be optional")
 	}
 }
 
 func TestParamFieldDescriptionRoom(t *testing.T) {
 	pp := domain.ProtocolPreset{Name: "carrier_jitsi_shared", Protocol: "carrier"}
-	d := paramFieldDescription("room", pp)
+	d := paramFieldDescription("room", pp, "en")
 	if !strings.Contains(strings.ToLower(d), "required") && !strings.Contains(strings.ToLower(d), "room") {
 		t.Fatalf("weak description: %q", d)
+	}
+}
+
+func TestAllRequiredParamFieldsHaveGuides(t *testing.T) {
+	tags := []string{
+		"carrier_jitsi_shared",
+		"carrier_jitsi_users",
+		"carrier_jitsi_sei_shared",
+		"carrier_jitsi_sei_users",
+		"carrier_telemost_shared",
+		"carrier_telemost_users",
+		"carrier_wbstream_shared",
+		"carrier_wbstream_users",
+		"cloudflared_token",
+		"hy2_masquerade_file",
+		"hy2_realm",
+	}
+	for _, tag := range tags {
+		inv, err := presets.GetInvariant(tag)
+		if err != nil {
+			t.Fatalf("%s: %v", tag, err)
+		}
+		pp := inv.ToProtocolPreset("ru")
+		if len(pp.ParamFields) == 0 {
+			t.Fatalf("%s: expected param_fields", tag)
+		}
+		schema := buildParamsSchemaLang(pp, true, "ru")
+		for _, field := range pp.ParamFields {
+			m, ok := schema[field].(map[string]any)
+			if !ok {
+				t.Fatalf("%s: schema missing %s", tag, field)
+			}
+			if req, _ := m["required"].(bool); !req {
+				t.Fatalf("%s.%s: want required", tag, field)
+			}
+			if _, ok := m["help"]; !ok {
+				t.Fatalf("%s.%s: help missing", tag, field)
+			}
+			guide, ok := m["required_guide"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s.%s: required_guide missing", tag, field)
+			}
+			steps, _ := guide["steps"].([]any)
+			if len(steps) == 0 {
+				t.Fatalf("%s.%s: required_guide.steps empty", tag, field)
+			}
+			if len(pp.ParamMeta) == 0 || pp.ParamMeta[field].RequiredGuide == nil {
+				t.Fatalf("%s.%s: preset JSON param_meta.required_guide missing", tag, field)
+			}
+		}
 	}
 }
 

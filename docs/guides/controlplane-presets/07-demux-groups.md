@@ -35,6 +35,17 @@ Demux-группа занимает **один** публичный порт (tc
 
 Несколько Reality в одном наборе получают **разные** SNI из валидированного пула.
 
+## Full-stack модель (:443)
+
+Целевой «осознанный» набор — группа **`dg_443_fullstack`**:
+
+1. TCP Reality (`vless_reality` family) — SNI pool  
+2. N× TCP TLS с разными `*.local` / pool SNI + ALPN (`vless_grpc_tls` h2, `anytls` http/1.1, …)  
+3. QUIC catch-all (`hy2` / substitutes)  
+4. TCP plain (`mieru_tcp` / sudoku) — `always_plain`
+
+См. также dense/broad группы (`dg_443_dense8`, `dg_443_broad7`) для большего числа слотов.
+
 ## Docker matrix
 
 ```bash

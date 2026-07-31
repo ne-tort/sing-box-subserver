@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "tag": "ssh_custom",
+  "protocol": "ssh",
+  "aliases": [
+    "ssh-custom"
+  ],
+  "short_name": "SSH pass custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH pass custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе ssh_password.json."
+    },
+    "en": {
+      "title": "SSH constructor",
+      "description": "Lab SSH with server_version banner override."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "ssh_banner",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SSH-2.0 banner",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "server_version": "{{param.server_version}}"
+  },
+  "outbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "user": "{{user.username}}",
+    "password": "{{user.password}}",
+    "client_version": "{{param.server_version}}"
+  },
+  "requirements": {
+    "build_tag": "with_ssh"
+  },
+  "client_notes": {
+    "users": "inbound SSHUser.user ← creds.username",
+    "params": "optional bindings[].params overrides: server_version"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "server_version"
+  ],
+  "param_meta": {
+    "server_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 43,
+      "title": {
+        "en": "SSH banner",
+        "ru": "SSH banner"
+      },
+      "description": {
+        "en": "SSH version string shown to clients.",
+        "ru": "Строка версии SSH для клиентов."
+      }
+    }
+  }
+}

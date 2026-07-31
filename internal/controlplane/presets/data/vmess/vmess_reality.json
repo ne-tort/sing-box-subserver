@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess Reality",
       "description": "VMess + Reality (хуже VLESS Reality по DPI, но тот же handshake)."
+    },
+    "en": {
+      "title": "VMess Reality",
+      "description": "VMess + Reality. Same Reality fingerprint idea; VMess AEAD framing inside."
     }
   },
   "traits": [

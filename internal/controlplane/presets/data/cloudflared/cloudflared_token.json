@@ -12,6 +12,10 @@
     "ru": {
       "title": "Cloudflared token",
       "description": "Cloudflare Tunnel: params.token; HA + http2 + post_quantum; без listen/users."
+    },
+    "en": {
+      "title": "Cloudflared token",
+      "description": "Cloudflare Tunnel inbound via token. Bypasses IP blocks; control and trust shift to Cloudflare."
     }
   },
   "traits": [
@@ -58,5 +62,67 @@
   "client_notes": {
     "token": "Cloudflare tunnel token (ops) в bindings[].params.token",
     "subscription": "inbound_only — RenderSubscription пропускает"
+  },
+  "param_meta": {
+    "token": {
+      "title": {
+        "en": "Tunnel token",
+        "ru": "Токен туннеля"
+      },
+      "description": {
+        "en": "Cloudflare Tunnel token from Zero Trust.",
+        "ru": "Токен Cloudflare Tunnel из Zero Trust."
+      },
+      "help": {
+        "summary": {
+          "en": "Paste the tunnel token from Cloudflare.",
+          "ru": "Вставьте токен туннеля из Cloudflare."
+        },
+        "input_hint": {
+          "en": "Create a tunnel and copy the token string.",
+          "ru": "Создайте туннель и скопируйте строку токена."
+        },
+        "format": "eyJhIjoi…"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to get a tunnel token",
+          "ru": "Как получить токен туннеля"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Open Cloudflare Zero Trust",
+              "ru": "Откройте Cloudflare Zero Trust"
+            },
+            "url": "https://one.dash.cloudflare.com"
+          },
+          {
+            "text": {
+              "en": "Go to Networks → Tunnels",
+              "ru": "Перейдите в Networks → Tunnels"
+            }
+          },
+          {
+            "text": {
+              "en": "Create a Cloudflare Tunnel",
+              "ru": "Создайте Cloudflare Tunnel"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the tunnel token",
+              "ru": "Скопируйте токен туннеля"
+            }
+          },
+          {
+            "text": {
+              "en": "Paste it into «Tunnel token»",
+              "ru": "Вставьте его в «Токен туннеля»"
+            }
+          }
+        ]
+      }
+    }
   }
 }

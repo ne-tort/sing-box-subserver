@@ -9,6 +9,10 @@
     "ru": {
       "title": "SS 2022 AES-128",
       "description": "Shadowsocks 2022-blake3-aes-128-gcm multi-user; inbound server password (peer) + per-user password (оба base64 16B)."
+    },
+    "en": {
+      "title": "SS 2022 AES-128",
+      "description": "Shadowsocks 2022 AES-128. Newer AEAD framing; still no TLS camouflage."
     }
   },
   "traits": [

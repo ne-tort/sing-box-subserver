@@ -11,6 +11,10 @@
     "ru": {
       "title": "Naive QUIC",
       "description": "NaiveProxy UDP/QUIC + TLS (выглядит как HTTP/3)."
+    },
+    "en": {
+      "title": "NaiveProxy QUIC",
+      "description": "NaiveProxy over QUIC. Looks like normal H3; good UDP camouflage when TLS path is hot."
     }
   },
   "traits": [

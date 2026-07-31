@@ -11,6 +11,10 @@
     "ru": {
       "title": "SSH + UDP-over-TCP",
       "description": "SSH password auth; outbound udp_over_tcp (with_ssh)."
+    },
+    "en": {
+      "title": "SSH UoT",
+      "description": "SSH with UDP-over-TCP helper path."
     }
   },
   "traits": [
@@ -63,5 +67,25 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: server_version"
+  },
+  "optional_param_fields": [
+    "server_version"
+  ],
+  "param_meta": {
+    "server_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 43,
+      "title": {
+        "en": "SSH banner",
+        "ru": "SSH banner"
+      },
+      "description": {
+        "en": "SSH version string shown to clients.",
+        "ru": "Строка версии SSH для клиентов."
+      }
+    }
   }
 }

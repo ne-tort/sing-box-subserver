@@ -9,6 +9,10 @@
     "ru": {
       "title": "SS AES-128 + multiplex",
       "description": "AES-128-GCM с multiplex (smux) — меньше handshake, другой TCP pattern для DPI."
+    },
+    "en": {
+      "title": "SS AES-128 + mux",
+      "description": "SS AES-128 with multiplex. Fewer handshakes; still plaintext SS to DPI."
     }
   },
   "traits": [

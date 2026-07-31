@@ -11,6 +11,10 @@
     "ru": {
       "title": "Carrier VK users",
       "description": "VK WRAP self-host + auth=users; outbound password=user.secret, WRAP=peer/wrap_password."
+    },
+    "en": {
+      "title": "Carrier VK users",
+      "description": "VK underlay with per-user credentials."
     }
   },
   "traits": [
@@ -94,5 +98,39 @@
   "client_notes": {},
   "peer_secret_fields": {
     "password": "password"
+  },
+  "optional_param_fields": [
+    "vk_hash",
+    "wrap_password"
+  ],
+  "param_meta": {
+    "vk_hash": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 61,
+      "title": {
+        "en": "VK hash",
+        "ru": "VK hash"
+      },
+      "description": {
+        "en": "VK Carrier session hash parameter.",
+        "ru": "Параметр hash для Carrier VK."
+      }
+    },
+    "wrap_password": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 62,
+      "title": {
+        "en": "Wrap password",
+        "ru": "Wrap password"
+      },
+      "description": {
+        "en": "Carrier wrap password when required by profile.",
+        "ru": "Wrap password для Carrier при необходимости профиля."
+      }
+    }
   }
 }

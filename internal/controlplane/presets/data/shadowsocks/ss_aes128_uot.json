@@ -11,6 +11,10 @@
     "ru": {
       "title": "SS AES-128 + UoT",
       "description": "AES-128-GCM; outbound udp_over_tcp."
+    },
+    "en": {
+      "title": "SS AES-128 UoT",
+      "description": "SS AES-128 UDP-over-TCP. When UDP SS is filtered."
     }
   },
   "traits": [

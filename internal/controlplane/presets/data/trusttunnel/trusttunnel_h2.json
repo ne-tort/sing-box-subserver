@@ -12,6 +12,10 @@
     "ru": {
       "title": "TrustTunnel HTTP/2",
       "description": "TrustTunnel: anti_dpi, H2 transport, auth users; TLS через CP (custom tls block)."
+    },
+    "en": {
+      "title": "TrustTunnel H2",
+      "description": "TrustTunnel over HTTP/2 TLS. TCP demux TLS substitute; anti-DPI oriented."
     }
   },
   "traits": [

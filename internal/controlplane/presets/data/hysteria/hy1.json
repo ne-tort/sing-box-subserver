@@ -12,6 +12,10 @@
     "ru": {
       "title": "Hysteria v1",
       "description": "Hysteria1 UDP/QUIC + TLS; users.auth_str (не password)."
+    },
+    "en": {
+      "title": "Hysteria1",
+      "description": "Legacy Hysteria v1 QUIC. Prefer Hysteria2 unless clients require hy1."
     }
   },
   "traits": [

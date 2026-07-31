@@ -11,6 +11,10 @@
     "ru": {
       "title": "Hysteria v1 + obfs",
       "description": "Hysteria1 + peer obfs string (симметрично на in/out)."
+    },
+    "en": {
+      "title": "Hysteria1 obfs",
+      "description": "Hy1 with obfuscation. Still legacy; migrate to Hy2 salamander/gecko when possible."
     }
   },
   "traits": [

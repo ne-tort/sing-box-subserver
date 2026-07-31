@@ -12,6 +12,10 @@
     "ru": {
       "title": "ShadowTLS v3",
       "description": "ShadowTLS v3: handshake к внешнему HTTPS (google.com), strict_mode; DPI видит обычный TLS ClientHello к handshake server."
+    },
+    "en": {
+      "title": "ShadowTLS v3",
+      "description": "ShadowTLS v3: TLS-mimic handshake + password. Set handshake_server to a plausible SNI target."
     }
   },
   "traits": [
@@ -75,5 +79,25 @@
     "handshake": "SNI/handshake server должен быть доступен с edge; outbound tls.server_name обычно совпадает",
     "detour": "часто ставят SS/VLESS за ShadowTLS — в CP пока standalone proxy",
     "params": "optional bindings[].params overrides: handshake_server"
+  },
+  "optional_param_fields": [
+    "handshake_server"
+  ],
+  "param_meta": {
+    "handshake_server": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.apple.com",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "title": {
+        "en": "Handshake server",
+        "ru": "Handshake server"
+      },
+      "description": {
+        "en": "ShadowTLS v3 handshake mimic target (SNI).",
+        "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    }
   }
 }

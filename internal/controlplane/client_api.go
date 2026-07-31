@@ -68,6 +68,8 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"sets_secrets_query":   "?secrets=1 on GET /sets to include peer_secrets",
 			"ready_context":        "ready.context=idle|install_ready|degraded",
 			"params_schema":        true,
+			"params_schema_v2":     true,
+			"catalog_lang":         "query lang | X-Lang | Accept-Language → catalog locale (ar/en/es/fa/fr/id/pt-BR/ru/tr/zh-CN/zh-TW); missing keys fall back to en",
 			"catalog_etag":         true,
 		},
 		"install_modes": []map[string]any{
@@ -191,6 +193,15 @@ func (s *Service) handlePortsAvailability(w http.ResponseWriter, r *http.Request
 	}
 	if hub, err := s.store.LoadWgHub(); err == nil && hub.ListenPort == port {
 		occupied["udp"] = append(occupied["udp"], "wg-hub")
+	}
+	// Host listeners (other processes / leftover services) — only when not already
+	// claimed by our inbound sets (those appear in /proc as well).
+	hostTCP, hostUDP := hostListenPorts()
+	if _, ok := hostTCP[int(port)]; ok && len(occupied["tcp"]) == 0 {
+		occupied["tcp"] = append(occupied["tcp"], "host")
+	}
+	if _, ok := hostUDP[int(port)]; ok && len(occupied["udp"]) == 0 {
+		occupied["udp"] = append(occupied["udp"], "host")
 	}
 	free := make([]string, 0, 2)
 	for _, netw := range []string{"tcp", "udp"} {

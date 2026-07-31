@@ -11,6 +11,10 @@
     "ru": {
       "title": "TrustTunnel HTTP/3",
       "description": "TrustTunnel: upstream_protocol http3 (QUIC/UDP only)."
+    },
+    "en": {
+      "title": "TrustTunnel H3",
+      "description": "TrustTunnel over HTTP/3 QUIC. UDP demux substitute next to Hy2/TUIC."
     }
   },
   "traits": [

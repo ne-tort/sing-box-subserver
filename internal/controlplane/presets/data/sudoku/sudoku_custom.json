@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_custom",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-custom"
+  ],
+  "short_name": "Sudoku AES custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku AES custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе sudoku_aes.json."
+    },
+    "en": {
+      "title": "Sudoku constructor",
+      "description": "Lab Sudoku. Prefer sudoku_pad for demux plain slots."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku AES stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "peer_secret_fields": {
+    "key": "password"
+  },
+  "inbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "aes-128-gcm",
+    "padding_min": 3,
+    "padding_max": 12,
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "handshake_timeout": 5,
+    "fallback": "{{param.fallback}}",
+    "suspicious_action": "fallback",
+    "multiplex": "off"
+  },
+  "outbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "aes-128-gcm",
+    "padding_min": 3,
+    "padding_max": 12,
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "multiplex": "off"
+  },
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fallback"
+  ],
+  "param_meta": {
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "http://127.0.0.1:80",
+      "ui_group": "core",
+      "ui_order": 40,
+      "title": {
+        "en": "Fallback URL",
+        "ru": "Fallback URL"
+      },
+      "description": {
+        "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
+        "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      }
+    }
+  }
+}

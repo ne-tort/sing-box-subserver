@@ -11,6 +11,10 @@
     "ru": {
       "title": "Sudoku HTTPMask",
       "description": "Sudoku + httpmask legacy (DPI: HTTP-like framing поверх TCP)."
+    },
+    "en": {
+      "title": "Sudoku HTTP mask",
+      "description": "Sudoku with HTTP-looking mask. Still not TLS — first-bytes differ from Reality/Hy2."
     }
   },
   "traits": [
@@ -84,5 +88,25 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: fallback"
+  },
+  "optional_param_fields": [
+    "fallback"
+  ],
+  "param_meta": {
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "http://127.0.0.1:80",
+      "ui_group": "core",
+      "ui_order": 40,
+      "title": {
+        "en": "Fallback URL",
+        "ru": "Fallback URL"
+      },
+      "description": {
+        "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
+        "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      }
+    }
   }
 }

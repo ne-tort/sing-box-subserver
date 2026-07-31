@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+	cpi18n "github.com/ne-tort/sing-box-subserver/internal/controlplane/presets/i18n"
 )
 
 //go:embed data/index.json data/*/protocol.json data/*/*.json
@@ -79,7 +80,9 @@ func loadCatalog(fsys fs.FS) error {
 		}
 		ru, ok := meta.I18n["ru"]
 		if !ok || (ru.Title == "" && ru.Description == "") {
-			return fmt.Errorf("protocol %s: i18n.ru required", ptag)
+			if cpi18n.Protocol(ptag, "title", "ru") == "" && cpi18n.Protocol(ptag, "title", "en") == "" {
+				return fmt.Errorf("protocol %s: i18n.ru required (or locale protocol.%s.title)", ptag, ptag)
+			}
 		}
 
 		entries, err := fs.ReadDir(fsys, path.Join("data", ptag))
@@ -112,7 +115,11 @@ func loadCatalog(fsys fs.FS) error {
 			}
 			iru, ok := inv.I18n["ru"]
 			if !ok || (iru.Title == "" && iru.Description == "") {
-				return fmt.Errorf("%s: i18n.ru required", tag)
+				// Locale files may supply texts; allow empty inline i18n when locales exist.
+				if cpi18n.Preset(tag, "title", "ru") == "" && cpi18n.Preset(tag, "title", "en") == "" &&
+					cpi18n.Preset(tag, "description", "ru") == "" && cpi18n.Preset(tag, "description", "en") == "" {
+					return fmt.Errorf("%s: i18n.ru required (or locale preset.%s.title)", tag, tag)
+				}
 			}
 			st := inv.Status
 			if st == "" {

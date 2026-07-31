@@ -55,7 +55,7 @@ var VLESSUserVariantSpecs = []UserVariantSpec{
 		CredentialField:            "uuid",
 		FlowValue:                  "",
 		RequiresUserSymmetricEntry: true,
-		SubscriptionDefault:        true,
+		SubscriptionDefault:        false,
 		QueryTags:                  []string{"variant:flow-none", "flow:none", "tag:flow-none"},
 	},
 	{
@@ -73,8 +73,8 @@ var VLESSUserVariantSpecs = []UserVariantSpec{
 		ProtocolFamily:             "vless",
 		Scope:                      FieldScopeUserSymmetric,
 		CredentialField:            "uuid_udp",
-		// lx branch supports this VLESS flow mode; not a subscription default
-		// (official sagernet sing-box rejects xtls-rprx-vision-udp443).
+		// Xray-compatible Vision that does not intercept UDP/443 (QUIC).
+		// Accepted by client/server via vendor/sing-vmess (lx + hiddify-core).
 		FlowValue:                  "xtls-rprx-vision-udp443",
 		RequiresUserSymmetricEntry: true,
 		SubscriptionDefault:        false,
@@ -165,16 +165,45 @@ var TUICClientProfileSpecs = []ClientProfileSpec{
 	},
 }
 
-// UserVariantsForProtocol returns enabled user variants for a binding.
-// When binding.EnabledUserVariants is empty, presetDefaults (from the invariant)
-// are used; if those are also empty, the full protocol catalog is used.
-// Unknown enabled names fall back to the full catalog.
-func UserVariantsForProtocol(protocol string, b SetBinding, presetDefaults []string) []UserVariantSpec {
-	var catalog []UserVariantSpec
+// UserVariantCatalog returns the full user-variant catalog for a protocol.
+func UserVariantCatalog(protocol string) []UserVariantSpec {
 	switch protocol {
 	case "vless":
-		catalog = VLESSUserVariantSpecs
+		out := make([]UserVariantSpec, len(VLESSUserVariantSpecs))
+		copy(out, VLESSUserVariantSpecs)
+		return out
 	default:
+		return nil
+	}
+}
+
+// ClientProfileCatalog returns the full client-profile catalog for a protocol.
+func ClientProfileCatalog(protocol string) []ClientProfileSpec {
+	switch protocol {
+	case "vless":
+		out := make([]ClientProfileSpec, len(VLESSClientProfileSpecs))
+		copy(out, VLESSClientProfileSpecs)
+		return out
+	case "vmess":
+		out := make([]ClientProfileSpec, len(VMessClientProfileSpecs))
+		copy(out, VMessClientProfileSpecs)
+		return out
+	case "tuic":
+		out := make([]ClientProfileSpec, len(TUICClientProfileSpecs))
+		copy(out, TUICClientProfileSpecs)
+		return out
+	default:
+		return nil
+	}
+}
+
+// UserVariantsForProtocol returns enabled user variants for a binding.
+// When binding.EnabledUserVariants is empty, presetDefaults (from the invariant)
+// are used; if those are also empty, SubscriptionDefault entries are used.
+// Unknown enabled names fall back to SubscriptionDefault entries.
+func UserVariantsForProtocol(protocol string, b SetBinding, presetDefaults []string) []UserVariantSpec {
+	catalog := UserVariantCatalog(protocol)
+	if len(catalog) == 0 {
 		return nil
 	}
 	enabled := b.EnabledUserVariants
@@ -188,15 +217,8 @@ func UserVariantsForProtocol(protocol string, b SetBinding, presetDefaults []str
 // Empty enabled + empty presetDefaults → SubscriptionDefault entries only.
 // Empty enabled + presetDefaults → those names. Explicit enabled wins.
 func ClientProfilesForProtocol(protocol string, b SetBinding, presetDefaults []string) []ClientProfileSpec {
-	var catalog []ClientProfileSpec
-	switch protocol {
-	case "vless":
-		catalog = VLESSClientProfileSpecs
-	case "vmess":
-		catalog = VMessClientProfileSpecs
-	case "tuic":
-		catalog = TUICClientProfileSpecs
-	default:
+	catalog := ClientProfileCatalog(protocol)
+	if len(catalog) == 0 {
 		return nil
 	}
 	enabled := b.EnabledClientProfiles

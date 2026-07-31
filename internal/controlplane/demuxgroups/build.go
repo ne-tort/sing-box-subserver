@@ -26,6 +26,13 @@ type InstallRequest struct {
 	// SlotSNI optionally overrides demux_sni (and params.sni for ACME) per slot.
 	// Empty → auto pool + per-slot self-signed as before.
 	SlotSNI map[string]string `json:"slot_sni,omitempty"` // slot_id → sni
+	// SlotParams merges extra bindings[].params per slot (e.g. carrier room).
+	// Keys already set by demux (demux_sni / sni / demux_alpn) win over SlotParams.
+	SlotParams map[string]map[string]string `json:"slot_params,omitempty"` // slot_id → params
+	// SlotUserVariants / SlotClientProfiles control which client subscription
+	// variants/profiles are materialized for each slot binding (no query tags).
+	SlotUserVariants   map[string][]string `json:"slot_user_variants,omitempty"`
+	SlotClientProfiles map[string][]string `json:"slot_client_profiles,omitempty"`
 	// AllowLab permits demux_compat=demux_lab presets (TrustTunnel, ShadowQUIC, transport Reality).
 	// Default false → only demux_compat=full.
 	AllowLab    bool   `json:"allow_lab,omitempty"`
@@ -442,6 +449,16 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		}
 		presetList = append(presetList, pn)
 		params := map[string]string{}
+		if extra := req.SlotParams[slot.ID]; len(extra) > 0 {
+			for k, v := range extra {
+				k = strings.TrimSpace(k)
+				v = strings.TrimSpace(v)
+				if k == "" || v == "" {
+					continue
+				}
+				params[k] = v
+			}
+		}
 		if sni := snis[slot.ID]; sni != "" {
 			params["demux_sni"] = sni
 			// Explicit slot_sni also sets params.sni for cert-manager (TLS only; never Reality).
@@ -464,8 +481,10 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 			params["demux_alpn"] = strings.Join(slot.PreferredALPN, ",")
 		}
 		bindings = append(bindings, domain.SetBinding{
-			Preset: pn,
-			Params: params,
+			Preset:                pn,
+			Params:                params,
+			EnabledUserVariants:   append([]string{}, req.SlotUserVariants[slot.ID]...),
+			EnabledClientProfiles: append([]string{}, req.SlotClientProfiles[slot.ID]...),
 		})
 	}
 

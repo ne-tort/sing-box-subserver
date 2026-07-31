@@ -12,6 +12,10 @@
     "ru": {
       "title": "Carrier VK shared",
       "description": "Self-host VK WRAP/DTLS (не vk.ru/call). server/port ← set; опц. params.vk_hash."
+    },
+    "en": {
+      "title": "Carrier VK shared",
+      "description": "VK calls underlay, shared auth. Needs VK-specific room/hash params from the provider flow."
     }
   },
   "traits": [
@@ -95,5 +99,39 @@
   },
   "peer_secret_fields": {
     "password": "password"
+  },
+  "optional_param_fields": [
+    "vk_hash",
+    "wrap_password"
+  ],
+  "param_meta": {
+    "vk_hash": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 61,
+      "title": {
+        "en": "VK hash",
+        "ru": "VK hash"
+      },
+      "description": {
+        "en": "VK Carrier session hash parameter.",
+        "ru": "Параметр hash для Carrier VK."
+      }
+    },
+    "wrap_password": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 62,
+      "title": {
+        "en": "Wrap password",
+        "ru": "Wrap password"
+      },
+      "description": {
+        "en": "Carrier wrap password when required by profile.",
+        "ru": "Wrap password для Carrier при необходимости профиля."
+      }
+    }
   }
 }

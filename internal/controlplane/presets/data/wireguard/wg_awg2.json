@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "wg_awg2",
   "protocol": "wireguard",
-  "aliases": ["awg2", "amnezia-wg2"],
+  "aliases": [
+    "awg2",
+    "amnezia-wg2"
+  ],
   "short_name": "AWG2",
   "status": "stable",
   "i18n": {
@@ -11,19 +14,38 @@
       "description": "AWG2 (jc/s/h) + всегда masquerade id/ip/ib. CPS i1–i5 не хранятся."
     }
   },
-  "traits": ["udp", "endpoint", "wireguard", "awg", "masquerade"],
+  "traits": [
+    "udp",
+    "endpoint",
+    "wireguard",
+    "awg",
+    "masquerade"
+  ],
   "demux_hints": {
-    "network": ["udp"],
+    "network": [
+      "udp"
+    ],
     "looks_like": "raw_udp",
     "compatible_with_demux": false
   },
-  "scores": { "dpi": 8, "speed": 9, "mobile": 7, "setup": 5 },
-  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "scores": {
+    "dpi": 8,
+    "speed": 9,
+    "mobile": 7,
+    "setup": 5
+  },
+  "cred_fields": [
+    "private_key",
+    "public_key",
+    "wg_host_index"
+  ],
   "cred_generators": {
     "private_key": "curve25519",
     "wg_host_index": "wg_host_index"
   },
-  "requirements": { "build_tag": "with_awg" },
+  "requirements": {
+    "build_tag": "with_awg"
+  },
   "endpoint_template": {
     "type": "wireguard",
     "tag": "cp-wg",
@@ -51,5 +73,25 @@
   },
   "client_notes": {
     "masquerade": "всегда; параметры генерируются на хабе"
+  },
+  "optional_param_fields": [
+    "mtu"
+  ],
+  "param_meta": {
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "WireGuard MTU override.",
+        "ru": "Переопределение MTU WireGuard."
+      },
+      "default": "1280"
+    }
   }
 }

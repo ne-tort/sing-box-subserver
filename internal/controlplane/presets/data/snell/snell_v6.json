@@ -11,6 +11,10 @@
     "ru": {
       "title": "Snell v6",
       "description": "Snell v6: PSK + userkey + mode shaping."
+    },
+    "en": {
+      "title": "Snell v6",
+      "description": "Snell v6 PSK. Prefer over v5 when clients support it."
     }
   },
   "traits": [

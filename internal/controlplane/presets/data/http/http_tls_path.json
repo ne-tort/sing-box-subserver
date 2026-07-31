@@ -11,6 +11,10 @@
     "ru": {
       "title": "HTTP TLS + path/headers",
       "description": "HTTP CONNECT+TLS; outbound path/headers для камуфляжа."
+    },
+    "en": {
+      "title": "HTTP CONNECT TLS path",
+      "description": "HTTP CONNECT over TLS with path routing. For fronts that split by URL path."
     }
   },
   "traits": [

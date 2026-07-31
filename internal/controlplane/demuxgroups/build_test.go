@@ -96,6 +96,28 @@ func TestBuildInstallSlotSNIOverride(t *testing.T) {
 	}
 }
 
+func TestBuildInstallSlotParams(t *testing.T) {
+	res, err := BuildInstall(InstallRequest{
+		GroupTag: "dg_443_dual",
+		SetName:  "test-slot-params",
+		SlotParams: map[string]map[string]string{
+			"tcp": {"custom_note": "hello"},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range res.Set.Bindings {
+		if b.Params["custom_note"] == "hello" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected slot_params merged into bindings, got %#v", res.Set.Bindings)
+	}
+}
+
 func TestSlotRejectUnknownPreset(t *testing.T) {
 	_, err := BuildInstall(InstallRequest{
 		GroupTag:   "dg_443_dual",

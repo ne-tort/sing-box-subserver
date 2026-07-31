@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "tag": "anytls_custom",
+  "protocol": "anytls",
+  "aliases": [
+    "anytls-custom"
+  ],
+  "short_name": "AnyTLS custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "AnyTLS custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе anytls.json."
+    },
+    "en": {
+      "title": "AnyTLS constructor",
+      "description": "Lab AnyTLS with optional uTLS fingerprint. Stock anytls is enough for demux TLS slots."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "padding_scheme": [
+      "stop=8",
+      "0=30-30",
+      "1=100-400",
+      "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000",
+      "3=9-9,500-1000",
+      "4=500-1000",
+      "5=500-1000",
+      "6=500-1000",
+      "7=500-1000"
+    ]
+  },
+  "outbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
+    "idle": "outbound idle_* — отдельный инвариант anytls_idle"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fingerprint"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 21,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Client uTLS fingerprint on outbound.",
+        "ru": "uTLS fingerprint клиента на outbound."
+      }
+    }
+  }
+}

@@ -11,6 +11,10 @@
     "ru": {
       "title": "Carrier peer users",
       "description": "Self-host peer + auth=users (device_id/secret ACL)."
+    },
+    "en": {
+      "title": "Carrier peer users",
+      "description": "Peer underlay with per-user credentials."
     }
   },
   "traits": [

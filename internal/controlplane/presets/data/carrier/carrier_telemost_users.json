@@ -11,6 +11,10 @@
     "ru": {
       "title": "Carrier Telemost users",
       "description": "Telemost + auth=users; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Telemost users",
+      "description": "Telemost underlay with per-user credentials."
     }
   },
   "traits": [
@@ -91,5 +95,55 @@
   },
   "param_fields": [
     "room"
-  ]
+  ],
+  "param_meta": {
+    "room": {
+      "title": {
+        "en": "Room URL",
+        "ru": "URL комнаты"
+      },
+      "description": {
+        "en": "Yandex Telemost room link used by the Carrier transport.",
+        "ru": "Ссылка на комнату Яндекс Телемост для Carrier."
+      },
+      "help": {
+        "summary": {
+          "en": "Paste the full Telemost room URL.",
+          "ru": "Вставьте полный URL комнаты Телемост."
+        },
+        "input_hint": {
+          "en": "Create a room in Telemost and copy the link.",
+          "ru": "Создайте комнату в Телемосте и скопируйте ссылку."
+        },
+        "format": "https://telemost.yandex.ru/j/…"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to get a Telemost room URL",
+          "ru": "Как получить URL комнаты Телемост"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Open Yandex Telemost",
+              "ru": "Откройте Яндекс Телемост"
+            },
+            "url": "https://telemost.yandex.ru"
+          },
+          {
+            "text": {
+              "en": "Create a video-call room",
+              "ru": "Создайте комнату видеозвонка"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the room link and paste it into «Room URL»",
+              "ru": "Скопируйте ссылку комнаты и вставьте в «URL комнаты»"
+            }
+          }
+        ]
+      }
+    }
+  }
 }

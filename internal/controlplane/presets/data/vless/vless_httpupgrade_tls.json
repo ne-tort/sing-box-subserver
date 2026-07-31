@@ -106,5 +106,40 @@
     "packet_encoding": "по умолчанию xudp; профили pkt-none / pkt-packetaddr через enabled_client_profiles",
     "params": "optional bindings[].params overrides: hu_host, hu_path",
     "hu_path_default": "/vless-hu"
+  },
+  "optional_param_fields": [
+    "hu_path",
+    "hu_host"
+  ],
+  "param_meta": {
+    "hu_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/",
+      "ui_group": "transport",
+      "ui_order": 30,
+      "title": {
+        "en": "HTTPUpgrade path",
+        "ru": "HTTPUpgrade path"
+      },
+      "description": {
+        "en": "Path for HTTPUpgrade transport.",
+        "ru": "Path для HTTPUpgrade."
+      }
+    },
+    "hu_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 31,
+      "title": {
+        "en": "HTTPUpgrade host",
+        "ru": "HTTPUpgrade host"
+      },
+      "description": {
+        "en": "Host for HTTPUpgrade transport.",
+        "ru": "Host для HTTPUpgrade."
+      }
+    }
   }
 }

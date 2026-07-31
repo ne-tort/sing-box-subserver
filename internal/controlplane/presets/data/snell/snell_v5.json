@@ -12,6 +12,10 @@
     "ru": {
       "title": "Snell v5",
       "description": "Snell v5: peer PSK + users.userkey; HTTP obfs_mode."
+    },
+    "en": {
+      "title": "Snell v5",
+      "description": "Snell v5 PSK. Plain TCP/UDP demux candidate; weak without TLS."
     }
   },
   "traits": [
@@ -65,5 +69,25 @@
     "psk": "peer_symmetric",
     "userkey": "user_symmetric",
     "params": "optional bindings[].params overrides: obfs_host"
+  },
+  "optional_param_fields": [
+    "obfs_host"
+  ],
+  "param_meta": {
+    "obfs_host": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.bing.com",
+      "ui_group": "obfs",
+      "ui_order": 41,
+      "title": {
+        "en": "Obfs Host",
+        "ru": "Obfs Host"
+      },
+      "description": {
+        "en": "Host header for Snell v6 obfs.",
+        "ru": "Host header для Snell v6 obfs."
+      }
+    }
   }
 }

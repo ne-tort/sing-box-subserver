@@ -183,6 +183,11 @@ services:
     container_name: subserver
     network_mode: host
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
       - $REMOTE_DIR/agent.yaml:/etc/subserver/agent.yaml:ro
 ${TLS_VOL}      - $REMOTE_DIR/data:/var/lib/subserver
@@ -197,6 +202,11 @@ services:
     container_name: subserver
     network_mode: host
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
       - $REMOTE_DIR/agent.yaml:/etc/subserver/agent.yaml:ro
 ${TLS_VOL}      - $REMOTE_DIR/data:/var/lib/subserver

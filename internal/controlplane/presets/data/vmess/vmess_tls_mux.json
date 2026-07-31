@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess TLS + multiplex",
       "description": "VMess+TLS с smux multiplex (padding, stream limits)."
+    },
+    "en": {
+      "title": "VMess TLS mux",
+      "description": "VMess+TLS with multiplex padding. Timing change only — not Reality-class."
     }
   },
   "traits": [

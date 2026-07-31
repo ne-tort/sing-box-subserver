@@ -28,7 +28,9 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxrecipes"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/materialize"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/paramvalidate"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
+	cpi18n "github.com/ne-tort/sing-box-subserver/internal/controlplane/presets/i18n"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/store"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
 	"golang.org/x/crypto/curve25519"
@@ -608,22 +610,30 @@ func (s *Service) publicHost(r *http.Request) string {
 	return "127.0.0.1"
 }
 
+func (s *Service) publicPort(r *http.Request) string {
+	if s.cfg.Cfg != nil {
+		if s.cfg.Cfg.Controlplane.PublicPort > 0 {
+			return strconv.Itoa(s.cfg.Cfg.Controlplane.PublicPort)
+		}
+		if _, p, err := net.SplitHostPort(s.cfg.Cfg.Listen); err == nil && p != "" {
+			return p
+		}
+	}
+	// Request may be Host:port (management URL); PublicHost strips it — recover port here.
+	if r != nil && r.Host != "" {
+		if _, p, err := net.SplitHostPort(r.Host); err == nil && p != "" {
+			return p
+		}
+	}
+	return ""
+}
+
 func (s *Service) subscriptionURL(r *http.Request, token string) (path, url string) {
 	path = "/v1/sub/" + token
 	host := s.publicHost(r)
-	port := ""
-	if s.cfg.Cfg != nil {
-		if s.cfg.Cfg.Controlplane.PublicPort > 0 {
-			port = strconv.Itoa(s.cfg.Cfg.Controlplane.PublicPort)
-		} else if _, p, err := net.SplitHostPort(s.cfg.Cfg.Listen); err == nil {
-			port = p
-		}
-	}
+	port := s.publicPort(r)
 	// CP builds always serve management/sub over HTTPS (CP TLS profile).
 	scheme := "https"
-	if s.cfg.Cfg != nil && s.cfg.Cfg.HasTLS() {
-		scheme = "https"
-	}
 	if port != "" && port != "80" && port != "443" {
 		url = fmt.Sprintf("%s://%s:%s%s", scheme, host, port, path)
 	} else {
@@ -1303,10 +1313,23 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 	}
 	boxUp := false
 	supState := ""
+	boxState := "stopped"
 	if s.cfg.Supervisor != nil {
 		snap := s.cfg.Supervisor.Status()
 		boxUp = snap.BoxUp
 		supState = string(snap.State)
+		switch {
+		case snap.BoxUp && snap.State == supervisor.StateRunning:
+			boxState = "running"
+		case snap.LastError != nil && *snap.LastError != "":
+			boxState = "failed"
+		case snap.State == supervisor.StateDegraded:
+			boxState = "failed"
+		case snap.State == supervisor.StateStarting || snap.State == supervisor.StateApplying:
+			boxState = "starting"
+		default:
+			boxState = "stopped"
+		}
 		if !snap.BoxUp || snap.State != supervisor.StateRunning {
 			ok = false
 			reasons = append(reasons, "dataplane_not_running")
@@ -1315,6 +1338,7 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 	return map[string]any{
 		"ok":               ok,
 		"box_up":           boxUp,
+		"box_state":        boxState,
 		"supervisor_state": supState,
 		"active_sets":      len(st.ActiveSets) > 0,
 		"wg_hub":           wgEnabled,
@@ -1803,7 +1827,21 @@ func (s *Service) handleUsersPutCreds(w http.ResponseWriter, r *http.Request) {
 }
 
 func requestLang(r *http.Request) string {
-	return domain.NormalizeLang(r.URL.Query().Get("lang"))
+	if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+		return domain.NormalizeLang(q)
+	}
+	if h := strings.TrimSpace(r.Header.Get("X-Lang")); h != "" {
+		return domain.NormalizeLang(h)
+	}
+	if h := strings.TrimSpace(r.Header.Get("Accept-Language")); h != "" {
+		// RFC 7231: take first language-range (ignore q-weights for now).
+		first := strings.Split(h, ",")[0]
+		first = strings.TrimSpace(strings.Split(first, ";")[0])
+		if first != "" && first != "*" {
+			return domain.NormalizeLang(first)
+		}
+	}
+	return "ru"
 }
 
 func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
@@ -1820,6 +1858,9 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		pp := inv.ToProtocolPreset(lang)
+		if d := cpi18n.Preset(pp.Name, "description", lang); d != "" {
+			pp.Description = d
+		}
 		item := map[string]any{
 			"name":         pp.Name,
 			"tag":          pp.Name,
@@ -1835,9 +1876,14 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			"cred_generators":     pp.CredGenerators,
 			"peer_secret_fields":  pp.PeerSecretFields,
 			"param_fields":          pp.ParamFields,
+			"optional_param_fields": pp.OptionalParamFields,
+			"custom_preset":         pp.CustomPreset,
 			"default_user_variants": pp.DefaultUserVariants,
-			"params_schema":         buildParamsSchema(pp, false),
-			"optional_params":       presetOptionalParams(pp),
+			"default_client_profiles": pp.DefaultClientProfiles,
+			"available_user_variants": domain.UserVariantCatalog(pp.Protocol),
+			"available_client_profiles": domain.ClientProfileCatalog(pp.Protocol),
+			"params_schema":         buildParamsSchemaLang(pp, false, lang),
+			"optional_params":       presetOptionalParamsLang(pp, lang),
 		}
 		if nets := networksFromTraits(pp.Traits); len(nets) > 0 {
 			item["networks"] = nets
@@ -1859,8 +1905,14 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pp := inv.ToProtocolPreset(lang)
+	if d := cpi18n.Preset(pp.Name, "description", lang); d != "" {
+		pp.Description = d
+	}
 	proto, _ := presets.GetProtocol(inv.Protocol)
 	_, pDesc := domain.ResolveI18n(proto.I18n, lang)
+	if ld := cpi18n.Protocol(proto.Tag, "description", lang); ld != "" {
+		pDesc = ld
+	}
 	okJSONETag(w, r, map[string]any{
 		"name":                  pp.Name,
 		"tag":                   pp.Name,
@@ -1877,10 +1929,15 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		"cred_generators":       pp.CredGenerators,
 		"peer_secret_fields":    pp.PeerSecretFields,
 		"param_fields":          pp.ParamFields,
+		"optional_param_fields": pp.OptionalParamFields,
+		"custom_preset":         pp.CustomPreset,
 		"default_user_variants": pp.DefaultUserVariants,
+		"default_client_profiles": pp.DefaultClientProfiles,
+		"available_user_variants": domain.UserVariantCatalog(pp.Protocol),
+		"available_client_profiles": domain.ClientProfileCatalog(pp.Protocol),
 		"client_notes":          inv.ClientNotes,
-		"params_schema":         buildParamsSchema(pp, true),
-		"optional_params":       presetOptionalParamsDetail(pp),
+		"params_schema":         buildParamsSchemaLang(pp, true, lang),
+		"optional_params":       presetOptionalParamsDetailLang(pp, lang),
 		"inbound_template":      pp.InboundTemplate,
 		"outbound_template":     pp.OutboundTemplate,
 		"protocol_meta": map[string]any{
@@ -1897,6 +1954,12 @@ func (s *Service) handleProtocolsList(w http.ResponseWriter, r *http.Request) {
 	out := make([]any, 0)
 	for _, p := range presets.Protocols() {
 		title, desc := domain.ResolveI18n(p.I18n, lang)
+		if t := cpi18n.Protocol(p.Tag, "title", lang); t != "" {
+			title = t
+		}
+		if d := cpi18n.Protocol(p.Tag, "description", lang); d != "" {
+			desc = d
+		}
 		out = append(out, map[string]any{
 			"tag":             p.Tag,
 			"short_name":      p.ShortName,
@@ -1918,6 +1981,12 @@ func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title, desc := domain.ResolveI18n(p.I18n, lang)
+	if t := cpi18n.Protocol(p.Tag, "title", lang); t != "" {
+		title = t
+	}
+	if d := cpi18n.Protocol(p.Tag, "description", lang); d != "" {
+		desc = d
+	}
 	invOut := make([]any, 0, len(p.InvariantTags))
 	for _, tag := range p.InvariantTags {
 		inv, err := presets.GetInvariant(tag)
@@ -1925,6 +1994,9 @@ func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		pp := inv.ToProtocolPreset(lang)
+		if d := cpi18n.Preset(pp.Name, "description", lang); d != "" {
+			pp.Description = d
+		}
 		item := map[string]any{
 			"tag":         pp.Name,
 			"short_name":  pp.ShortName,
@@ -2038,10 +2110,12 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 }
 
 func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm domain.CertManager) error {
-	for _, field := range p.ParamFields {
-		if strings.TrimSpace(b.Params[field]) == "" {
-			return fmt.Errorf("cp_invalid_bindings: preset %q requires bindings[].params[%q] (e.g. carrier room URL)", p.Name, field)
-		}
+	if b.Params == nil {
+		b.Params = map[string]string{}
+	}
+	applyParamMetaDefaults(p, b.Params)
+	if err := paramvalidate.Validate(p, b.Params); err != nil {
+		return err
 	}
 	sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
 	if sni == "" {
@@ -2058,6 +2132,17 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 		return fmt.Errorf("cp_invalid_bindings: params.sni %q not in cert-manager domains", sni)
 	}
 	return nil
+}
+
+func applyParamMetaDefaults(p domain.ProtocolPreset, params map[string]string) {
+	for k, meta := range p.ParamMeta {
+		if strings.TrimSpace(params[k]) != "" {
+			continue
+		}
+		if d := strings.TrimSpace(meta.Default); d != "" {
+			params[k] = d
+		}
+	}
 }
 
 // syncBindingSNI copies params.sni onto demux_sni so ClientHello matches cert/match.

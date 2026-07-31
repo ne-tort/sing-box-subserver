@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess TLS",
       "description": "VMess TCP с TLS-профилем CP."
+    },
+    "en": {
+      "title": "VMess TLS",
+      "description": "VMess + classic TLS. Weaker probing resistance than VLESS+Reality."
     }
   },
   "traits": [

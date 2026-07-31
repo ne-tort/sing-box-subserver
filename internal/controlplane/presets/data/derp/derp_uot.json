@@ -11,6 +11,10 @@
     "ru": {
       "title": "DERP UoT",
       "description": "DERP TLS + udp=uot (UDP over TCP framing)."
+    },
+    "en": {
+      "title": "DERP UoT",
+      "description": "DERP UDP-over-TCP mode. When raw UDP DERP is filtered."
     }
   },
   "traits": [
@@ -109,5 +113,25 @@
     "keys": "server peer private/public + per-user private/public (curve25519 RawURL)",
     "peer_public_key": "subscription uses set.peer_secrets[preset/public_key]",
     "params": "optional bindings[].params overrides: path"
+  },
+  "optional_param_fields": [
+    "path"
+  ],
+  "param_meta": {
+    "path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/derp",
+      "ui_group": "transport",
+      "ui_order": 42,
+      "title": {
+        "en": "Path",
+        "ru": "Path"
+      },
+      "description": {
+        "en": "HTTP/WebSocket path (DERP, etc.).",
+        "ru": "HTTP/WebSocket path (DERP и др.)."
+      }
+    }
   }
 }

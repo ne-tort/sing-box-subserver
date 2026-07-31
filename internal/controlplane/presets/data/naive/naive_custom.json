@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "tag": "naive_custom",
+  "protocol": "naive",
+  "aliases": [
+    "naive-custom"
+  ],
+  "short_name": "Naive TLS custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Naive TLS custom (конструктор)",
+      "description": "NaiveProxy конструктор: network tcp (TLS/H2) или udp (QUIC/H3)."
+    },
+    "en": {
+      "title": "NaiveProxy constructor",
+      "description": "Lab NaiveProxy: network tcp (TLS/H2) or udp (QUIC/H3 camouflage)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "http2",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "param_fields": [
+    "network"
+  ],
+  "param_meta": {
+    "network": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "tcp",
+        "udp"
+      ],
+      "default": "tcp",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {
+        "en": "Network",
+        "ru": "Сеть"
+      },
+      "description": {
+        "en": "Naive network: tcp+ALPN h2 or udp QUIC/H3 (see naive_tls vs naive_quic stock).",
+        "ru": "Naive network: tcp+ALPN h2 или udp QUIC/H3 (см. naive_tls / naive_quic)."
+      }
+    }
+  },
+  "inbound_template": {
+    "type": "naive",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "network": "{{param.network}}",
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "naive",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "network": "{{param.network}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}"
+    },
+    "extra_headers": {
+      "User-Agent": [
+        "Mozilla/5.0"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "custom_preset": true
+}

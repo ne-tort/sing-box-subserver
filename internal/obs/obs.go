@@ -219,16 +219,18 @@ func (h *ringHandler) WithGroup(name string) slog.Handler {
 	return &ringHandler{inner: h.inner.WithGroup(name), ring: h.ring}
 }
 
-// Observability bundles logger, ring, and metrics.
+// Observability bundles logger, rings, and metrics.
 type Observability struct {
 	Logger  *slog.Logger
-	Ring    *Ring
+	Ring    *Ring // agent (slog) logs
+	BoxRing *Ring // sing-box dataplane logs
 	Metrics *Metrics
 }
 
-// Setup builds slog + ring + metrics. level is debug|info|warn|error.
+// Setup builds slog + rings + metrics. level is debug|info|warn|error.
 func Setup(level string) *Observability {
 	ring := NewRing(2000)
+	boxRing := NewRing(4000)
 	metrics := &Metrics{}
 	var lvl slog.Level
 	switch strings.ToLower(level) {
@@ -243,5 +245,30 @@ func Setup(level string) *Observability {
 	}
 	inner := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
 	logger := slog.New(&ringHandler{inner: inner, ring: ring})
-	return &Observability{Logger: logger, Ring: ring, Metrics: metrics}
+	return &Observability{Logger: logger, Ring: ring, BoxRing: boxRing, Metrics: metrics}
+}
+
+// BoxPlatformWriter adapts sing-box PlatformWriter into BoxRing.
+type BoxPlatformWriter struct {
+	Ring *Ring
+}
+
+func (w BoxPlatformWriter) WriteMessage(level uint8, message string) {
+	if w.Ring == nil {
+		return
+	}
+	lvl := "info"
+	switch level {
+	case 0, 1: // panic/fatal
+		lvl = "error"
+	case 2:
+		lvl = "error"
+	case 3:
+		lvl = "warn"
+	case 4:
+		lvl = "info"
+	case 5, 6: // debug/trace
+		lvl = "debug"
+	}
+	w.Ring.Append(lvl, message, map[string]any{"component": "sing-box"})
 }

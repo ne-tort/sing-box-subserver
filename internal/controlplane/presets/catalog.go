@@ -8,6 +8,15 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
+// AllInvariants returns raw invariant JSON entries (including planned skipped? all loaded).
+func AllInvariants() []domain.InvariantPreset {
+	ensureLoaded()
+	mustOK()
+	out := make([]domain.InvariantPreset, len(invariants))
+	copy(out, invariants)
+	return out
+}
+
 // All returns stable+lab invariants as ProtocolPreset (compat), lang=ru descriptions.
 // Planned protocols without invariants are omitted.
 func All() []domain.ProtocolPreset {

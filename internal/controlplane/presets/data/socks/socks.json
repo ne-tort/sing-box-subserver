@@ -11,6 +11,10 @@
     "ru": {
       "title": "SOCKS5",
       "description": "SOCKS5 с логином/паролем (plaintext)."
+    },
+    "en": {
+      "title": "SOCKS5",
+      "description": "Classic SOCKS5. Utility inbound / demux inject target — not anti-DPI."
     }
   },
   "traits": [

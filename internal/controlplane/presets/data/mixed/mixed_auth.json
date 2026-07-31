@@ -12,6 +12,10 @@
     "ru": {
       "title": "Mixed HTTP+SOCKS",
       "description": "Один порт: HTTP CONNECT и SOCKS5 с auth (plaintext, DPI=1)."
+    },
+    "en": {
+      "title": "Mixed auth",
+      "description": "HTTP CONNECT + SOCKS5 with auth on one port. Local utility inbound."
     }
   },
   "traits": [

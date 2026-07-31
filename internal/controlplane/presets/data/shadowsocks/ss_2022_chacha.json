@@ -9,6 +9,10 @@
     "ru": {
       "title": "SS 2022 ChaCha20",
       "description": "Shadowsocks 2022-blake3-chacha20-poly1305 PSK-only (EIH/multi-user только для AES-2022)."
+    },
+    "en": {
+      "title": "SS 2022 ChaCha",
+      "description": "Shadowsocks 2022 ChaCha20. Prefer on ARM/mobile."
     }
   },
   "traits": [

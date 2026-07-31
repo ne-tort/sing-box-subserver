@@ -9,3 +9,8 @@ agent.local.yaml
 /data/
 testdata/docker/client/*.json
 !testdata/docker/client/.gitkeep
+
+# Python bytecode
+**/__pycache__/
+*.py[cod]
+

@@ -11,6 +11,10 @@
     "ru": {
       "title": "Carrier Jitsi users",
       "description": "Jitsi SFU + auth=users; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Jitsi users",
+      "description": "Jitsi underlay with per-user credentials. Stronger isolation; still needs a valid room URL."
     }
   },
   "traits": [
@@ -93,5 +97,78 @@
   },
   "param_fields": [
     "room"
+  ],
+  "param_meta": {
+    "room": {
+      "title": {
+        "en": "Room URL",
+        "ru": "URL комнаты"
+      },
+      "description": {
+        "en": "Video-call room link used by the Carrier transport.",
+        "ru": "Ссылка на комнату видеозвонка для Carrier."
+      },
+      "help": {
+        "summary": {
+          "en": "Paste the full URL of a Jitsi room.",
+          "ru": "Вставьте полный URL комнаты Jitsi."
+        },
+        "input_hint": {
+          "en": "Create a room on meet.jit.si and copy the link.",
+          "ru": "Создайте комнату на meet.jit.si и скопируйте ссылку."
+        },
+        "format": "https://meet.jit.si/MyRoom"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to get a room URL",
+          "ru": "Как получить URL комнаты"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Open Jitsi Meet",
+              "ru": "Откройте Jitsi Meet"
+            },
+            "url": "https://meet.jit.si"
+          },
+          {
+            "text": {
+              "en": "Create a video-call room",
+              "ru": "Создайте комнату видеозвонка"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the room link and paste it into «Room URL»",
+              "ru": "Скопируйте ссылку комнаты и вставьте в «URL комнаты»"
+            }
+          },
+          {
+            "text": {
+              "en": "Example format: https://meet.jit.si/MyRoom",
+              "ru": "Пример формата: https://meet.jit.si/MyRoom"
+            }
+          }
+        ]
+      }
+    },
+    "key": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 60,
+      "title": {
+        "en": "Room key",
+        "ru": "Ключ комнаты"
+      },
+      "description": {
+        "en": "Optional Carrier room key/token.",
+        "ru": "Опциональный ключ/токен комнаты Carrier."
+      }
+    }
+  },
+  "optional_param_fields": [
+    "key"
   ]
 }

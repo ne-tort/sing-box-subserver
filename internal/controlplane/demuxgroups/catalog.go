@@ -67,6 +67,23 @@ func builtInGroups() []Group {
 
 	return []Group{
 		{
+			Tag: "dg_443_fullstack", ShortName: "443 Full stack", Status: "stable", SuggestedPort: 443,
+			Networks: []string{"tcp", "udp"},
+			Scores:   map[string]int{"dpi": 9, "speed": 8, "mobile": 6, "setup": 5},
+			I18n: map[string]I18n{
+				"ru": {Title: "443 Full stack", Description: "Осознанный стек на :443: Reality + 2×TLS (.local/ALPN) + QUIC Hy2 + plain mieru."},
+				"en": {Title: "443 Full stack", Description: "Full :443 stack: Reality + 2×TLS (.local/ALPN) + QUIC Hy2 + plain mieru."},
+			},
+			Slots: []Slot{
+				{ID: "reality", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
+				{ID: "tls_h2", Role: RoleTCPTLS, DefaultPreset: "vless_grpc_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"h2"}},
+				{ID: "tls_h1", Role: RoleTCPTLS, DefaultPreset: "anytls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool", PreferredALPN: []string{"http/1.1"}},
+				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "protocol_only"},
+				{ID: "plain", Role: RoleTCPPlain, DefaultPreset: "mieru_tcp", Substitutes: tcpPlainSubs, MatchHint: "always_plain"},
+			},
+			Notes: "Per-slot demux_sni (.local / pool); Reality from SNI pool; plain first-bytes / always_plain.",
+		},
+		{
 			Tag: "dg_443_dual", ShortName: "443 Dual", Status: "stable", SuggestedPort: 443,
 			Networks: []string{"tcp", "udp"},
 			Scores:   map[string]int{"dpi": 9, "speed": 8, "mobile": 7, "setup": 8},

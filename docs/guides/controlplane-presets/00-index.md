@@ -13,6 +13,10 @@
 | [05-priority.md](05-priority.md) | Приоритет протоколов и матрица variants |
 | [06-invariant-matrix.md](06-invariant-matrix.md) | Docker+iperf чеклист / harness |
 | [07-demux-groups.md](07-demux-groups.md) | Demux-группы: каталог, API, SNI/Reality, Docker matrix |
+| [08-overhaul-checklist.md](08-overhaul-checklist.md) | Living checklist A–F по протоколам |
+| [08a-metadata-adr.md](08a-metadata-adr.md) | ADR: scores, описания, schema v2, i18n |
+| [09-custom-presets.md](09-custom-presets.md) | Архитектура `{protocol}_custom` + UI из schema |
 
-Данные: `internal/controlplane/presets/data/`.
+Данные: `internal/controlplane/presets/data/`.  
+Locales: `internal/controlplane/presets/i18n/locales/`.  
 Harness: `scripts/invariant_matrix/`, `scripts/demux_groups_matrix/`.

@@ -12,6 +12,10 @@
     "ru": {
       "title": "ShadowTLS v3 wildcard",
       "description": "ShadowTLS v3 wildcard_sni=authed — SNI из ClientHello для handshake."
+    },
+    "en": {
+      "title": "ShadowTLS v3 wildcard",
+      "description": "ShadowTLS v3 with wildcard handshake matching. Broader SNI accept; easier misconfig."
     }
   },
   "traits": [
@@ -75,5 +79,25 @@
   "client_notes": {
     "wildcard_sni": "authed — только после успешной auth; outbound SNI = handshake target",
     "params": "optional bindings[].params overrides: handshake_server"
+  },
+  "optional_param_fields": [
+    "handshake_server"
+  ],
+  "param_meta": {
+    "handshake_server": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.apple.com",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "title": {
+        "en": "Handshake server",
+        "ru": "Handshake server"
+      },
+      "description": {
+        "en": "ShadowTLS v3 handshake mimic target (SNI).",
+        "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    }
   }
 }

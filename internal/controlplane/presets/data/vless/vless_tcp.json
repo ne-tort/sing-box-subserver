@@ -37,6 +37,10 @@
     "uuid_xtls",
     "uuid_udp"
   ],
+  "default_user_variants": [
+    "flow-none",
+    "flow-xtls-rprx-vision"
+  ],
   "inbound_template": {
     "type": "vless",
     "tag": "{{tag}}",

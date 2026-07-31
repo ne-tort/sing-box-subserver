@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "wg_awg3",
   "protocol": "wireguard",
-  "aliases": ["awg3", "amnezia-wg3"],
+  "aliases": [
+    "awg3",
+    "amnezia-wg3"
+  ],
   "short_name": "AWG3",
   "status": "stable",
   "i18n": {
@@ -11,19 +14,39 @@
       "description": "AWG3 (HP/CPA/timings) + AWG2 + всегда masquerade."
     }
   },
-  "traits": ["udp", "endpoint", "wireguard", "awg", "awg3", "masquerade"],
+  "traits": [
+    "udp",
+    "endpoint",
+    "wireguard",
+    "awg",
+    "awg3",
+    "masquerade"
+  ],
   "demux_hints": {
-    "network": ["udp"],
+    "network": [
+      "udp"
+    ],
     "looks_like": "raw_udp",
     "compatible_with_demux": false
   },
-  "scores": { "dpi": 9, "speed": 8, "mobile": 6, "setup": 4 },
-  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "scores": {
+    "dpi": 9,
+    "speed": 8,
+    "mobile": 6,
+    "setup": 4
+  },
+  "cred_fields": [
+    "private_key",
+    "public_key",
+    "wg_host_index"
+  ],
   "cred_generators": {
     "private_key": "curve25519",
     "wg_host_index": "wg_host_index"
   },
-  "requirements": { "build_tag": "with_awg" },
+  "requirements": {
+    "build_tag": "with_awg"
+  },
   "endpoint_template": {
     "type": "wireguard",
     "tag": "cp-wg",
@@ -51,5 +74,25 @@
   },
   "client_notes": {
     "masquerade": "всегда; AWG3 HP требует s≥12"
+  },
+  "optional_param_fields": [
+    "mtu"
+  ],
+  "param_meta": {
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "WireGuard MTU override.",
+        "ru": "Переопределение MTU WireGuard."
+      },
+      "default": "1280"
+    }
   }
 }

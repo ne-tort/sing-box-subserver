@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess WebSocket TLS",
       "description": "VMess + TLS + WebSocket."
+    },
+    "en": {
+      "title": "VMess WS TLS",
+      "description": "VMess + TLS + WebSocket. CDN-friendly post-TLS; set ws_path/ws_host."
     }
   },
   "traits": [
@@ -110,5 +114,40 @@
     "security": "outbound-only: sec-auto / sec-aes128 / sec-chacha / pkt-xudp через enabled_client_profiles",
     "params": "optional bindings[].params overrides: ws_host, ws_path",
     "ws_path_default": "/vmess"
+  },
+  "optional_param_fields": [
+    "ws_host",
+    "ws_path"
+  ],
+  "param_meta": {
+    "ws_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 31,
+      "title": {
+        "en": "WebSocket Host",
+        "ru": "WebSocket Host"
+      },
+      "description": {
+        "en": "Host header for WebSocket (defaults to server/SNI).",
+        "ru": "Host header для WebSocket (по умолчанию server/SNI)."
+      }
+    },
+    "ws_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/vmess",
+      "ui_group": "transport",
+      "ui_order": 30,
+      "title": {
+        "en": "WebSocket path",
+        "ru": "WebSocket path"
+      },
+      "description": {
+        "en": "HTTP path for WebSocket after TLS.",
+        "ru": "HTTP path для WebSocket после TLS."
+      }
+    }
   }
 }

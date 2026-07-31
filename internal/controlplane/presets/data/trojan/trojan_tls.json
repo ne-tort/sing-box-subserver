@@ -11,6 +11,10 @@
     "ru": {
       "title": "Trojan TLS",
       "description": "Trojan поверх TCP+TLS (профиль CP)."
+    },
+    "en": {
+      "title": "Trojan TLS",
+      "description": "Password over TLS. HTTPS shape; without Reality weaker vs active probe than VLESS+Reality."
     }
   },
   "traits": [

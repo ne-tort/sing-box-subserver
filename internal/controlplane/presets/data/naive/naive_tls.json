@@ -12,6 +12,10 @@
     "ru": {
       "title": "Naive TLS",
       "description": "NaiveProxy TCP+TLS (HTTP/2): DPI видит обычный H2 к SNI."
+    },
+    "en": {
+      "title": "NaiveProxy TLS",
+      "description": "NaiveProxy over TLS/H2. Strong HTTPS camouflage; heavy Chromium/cronet stack."
     }
   },
   "traits": [

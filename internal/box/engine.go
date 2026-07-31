@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	singbox "github.com/sagernet/sing-box"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -15,8 +16,9 @@ var ErrUnsupported = errors.New("unsupported feature")
 
 // Engine creates and validates sing-box instances with server registries.
 type Engine struct {
-	base context.Context
-	hook TrafficHook
+	base              context.Context
+	hook              TrafficHook
+	platformLogWriter log.PlatformWriter
 }
 
 // NewEngine builds a reusable engine with registries installed on a base context.
@@ -43,6 +45,14 @@ func (e *Engine) SetTrafficHook(h TrafficHook) {
 		return
 	}
 	e.hook = h
+}
+
+// SetPlatformLogWriter captures sing-box core logs (nil clears).
+func (e *Engine) SetPlatformLogWriter(w log.PlatformWriter) {
+	if e == nil {
+		return
+	}
+	e.platformLogWriter = w
 }
 
 // Validate unmarshals options without starting listeners and enforces agent policy.
@@ -144,8 +154,9 @@ func (e *Engine) Start(ctx context.Context, raw []byte) (Instance, error) {
 		return nil, fmt.Errorf("config invalid: %w", err)
 	}
 	b, err := singbox.New(singbox.Options{
-		Context: runCtx,
-		Options: opt,
+		Context:           runCtx,
+		Options:           opt,
+		PlatformLogWriter: e.platformLogWriter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create box: %w", err)

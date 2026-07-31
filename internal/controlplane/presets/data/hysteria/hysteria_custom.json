@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "tag": "hysteria_custom",
+  "protocol": "hysteria",
+  "aliases": [
+    "hysteria-custom"
+  ],
+  "short_name": "Hy1 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hy1 custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе hy1.json."
+    },
+    "en": {
+      "title": "Hysteria1 constructor",
+      "description": "Lab hy1 constructor. Prefer hy2_custom for new stacks."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "hysteria"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "auth_str"
+  ],
+  "inbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "hysteria",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "auth_str": "{{user.auth_str}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "client_notes": {
+    "auth_str": "user_symmetric: inbound users[].auth_str <-> outbound auth_str"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [],
+  "param_meta": {}
+}

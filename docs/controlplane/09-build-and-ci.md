@@ -85,9 +85,15 @@ They pull a prebuilt image:
 Dockerfile:
 
 ```bash
-docker build -t ghcr.io/ne-tort/sing-box-subserver:controlplane \
+# Context = vendor/ (sibling of sing-vmess). Do NOT build with context=sing-box-subserver alone.
+cd vendor
+docker build -f sing-box-subserver/Dockerfile \
+  -t ghcr.io/ne-tort/sing-box-subserver:controlplane \
   --build-arg TAGS_FILE=build/tags.server.controlplane .
 ```
+
+Windows one-shot (subserver + core + Flutter + push): from repo root
+`.\scripts\build_cp_windows.ps1` (see app docs `docs/controlplane-client/09-build-and-ci.md`).
 
 CI **should** publish `:controlplane` (and versioned `-controlplane` tags) on main/release.
 Until the publish job exists, local/lab builds must tag explicitly — see

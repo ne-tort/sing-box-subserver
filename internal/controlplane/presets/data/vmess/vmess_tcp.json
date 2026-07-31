@@ -11,6 +11,10 @@
     "ru": {
       "title": "VMess TCP",
       "description": "VMess без TLS."
+    },
+    "en": {
+      "title": "VMess TCP",
+      "description": "VMess without TLS. Lab/LAN only — trivial on public DPI."
     }
   },
   "traits": [

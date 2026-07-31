@@ -65,5 +65,24 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: traffic_pattern"
+  },
+  "optional_param_fields": [
+    "traffic_pattern"
+  ],
+  "param_meta": {
+    "traffic_pattern": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 44,
+      "title": {
+        "en": "Traffic pattern",
+        "ru": "Traffic pattern"
+      },
+      "description": {
+        "en": "Mieru traffic shaping profile name.",
+        "ru": "Имя профиля shaping трафика Mieru."
+      }
+    }
   }
 }

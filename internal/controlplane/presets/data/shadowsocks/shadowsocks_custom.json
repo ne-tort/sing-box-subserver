@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "tag": "shadowsocks_custom",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-custom"
+  ],
+  "short_name": "SS AES128 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SS AES128 custom (конструктор)",
+      "description": "Shadowsocks конструктор: выбор AEAD/2022 method (без TLS-камуфляжа)."
+    },
+    "en": {
+      "title": "Shadowsocks constructor",
+      "description": "Lab Shadowsocks: pick AEAD or 2022 cipher method (no TLS camouflage)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_fields": [
+    "method"
+  ],
+  "param_meta": {
+    "method": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "aes-128-gcm",
+        "aes-256-gcm",
+        "chacha20-ietf-poly1305",
+        "2022-blake3-aes-128-gcm",
+        "2022-blake3-aes-256-gcm",
+        "2022-blake3-chacha20-poly1305"
+      ],
+      "default": "aes-128-gcm",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "Cipher method",
+        "ru": "Метод шифрования"
+      },
+      "description": {
+        "en": "Shadowsocks method (sing-box shadowsocks.method).",
+        "ru": "Метод Shadowsocks (shadowsocks.method)."
+      }
+    }
+  },
+  "inbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "method": "{{param.method}}",
+    "users": [],
+    "network": "tcp"
+  },
+  "outbound_template": {
+    "type": "shadowsocks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "method": "{{param.method}}",
+    "password": "{{user.password}}",
+    "network": "tcp"
+  },
+  "custom_preset": true
+}

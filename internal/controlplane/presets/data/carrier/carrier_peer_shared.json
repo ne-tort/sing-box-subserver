@@ -13,6 +13,10 @@
     "ru": {
       "title": "Carrier peer shared",
       "description": "Self-host TCP peer underlay + shared password; client device_id. link.peer ← set listen:port."
+    },
+    "en": {
+      "title": "Carrier peer shared",
+      "description": "Direct peer underlay (self-host), shared auth. No public SFU — you run the peer endpoint."
     }
   },
   "traits": [

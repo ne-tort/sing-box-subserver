@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel_custom",
+  "protocol": "trusttunnel",
+  "aliases": [
+    "trusttunnel-custom"
+  ],
+  "short_name": "TT auto custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TT auto custom (конструктор)",
+      "description": "TrustTunnel конструктор: upstream_protocol h2|h3|auto для demux-ролей."
+    },
+    "en": {
+      "title": "TrustTunnel constructor",
+      "description": "Lab TrustTunnel: pick upstream_protocol h2, h3, or auto for demux-friendly stacks."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp",
+    "quic",
+    "tls_custom",
+    "http3",
+    "auto",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "param_fields": [
+    "mode"
+  ],
+  "param_meta": {
+    "mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "h2",
+        "h3",
+        "auto"
+      ],
+      "default": "auto",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {
+        "en": "Upstream protocol",
+        "ru": "Upstream protocol"
+      },
+      "description": {
+        "en": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto fallback).",
+        "ru": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto)."
+      }
+    }
+  },
+  "inbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "hostname": "{{server}}",
+    "users": [],
+    "tls": {
+      "server_name": "{{server}}"
+    },
+    "transport": {
+      "upstream_protocol": "{{param.mode}}",
+      "anti_dpi": true,
+      "enable_protocol_fallback": true,
+      "protocol_fallback_delay": "1s",
+      "connection_timeout": "10s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "enable_icmp": false
+  },
+  "outbound_template": {
+    "type": "trusttunnel",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "hostname": "{{server}}",
+    "username": "{{user.username}}",
+    "password": "{{user.password}}",
+    "tls": {
+      "server_name": "{{server}}",
+      "skip_verification": true
+    },
+    "transport": {
+      "upstream_protocol": "{{param.mode}}",
+      "anti_dpi": true,
+      "enable_protocol_fallback": true,
+      "protocol_fallback_delay": "1s",
+      "connection_timeout": "10s",
+      "initial_stream_window": 8388608,
+      "initial_connection_window": 16777216,
+      "disable_header_compression": false
+    },
+    "headers": {
+      "user_agent": "Mozilla/5.0",
+      "app_name": "Chrome",
+      "platform": "windows"
+    },
+    "enable_tcp": true,
+    "enable_udp": true,
+    "health_check": {
+      "enabled": true,
+      "interval": "30s",
+      "timeout": "5s"
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_trusttunnel"
+  },
+  "custom_preset": true
+}

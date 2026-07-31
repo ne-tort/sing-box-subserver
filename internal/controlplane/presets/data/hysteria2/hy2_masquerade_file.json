@@ -84,5 +84,60 @@
   },
   "param_fields": [
     "masquerade_dir"
-  ]
+  ],
+  "param_meta": {
+    "masquerade_dir": {
+      "title": {
+        "en": "Masquerade directory",
+        "ru": "Каталог masquerade"
+      },
+      "description": {
+        "en": "Absolute path to static files served as Hy2 file masquerade.",
+        "ru": "Абсолютный путь к статике для Hy2 file masquerade."
+      },
+      "help": {
+        "summary": {
+          "en": "Absolute path to a directory served as file masquerade.",
+          "ru": "Абсолютный путь к каталогу, который отдаётся как masquerade."
+        },
+        "input_hint": {
+          "en": "Directory must exist on the VPS and be readable.",
+          "ru": "Каталог должен существовать на VPS и быть читаемым."
+        },
+        "format": "/var/www/html"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to set masquerade directory",
+          "ru": "Как указать каталог masquerade"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "On the VPS, pick a directory with static files (HTML/CSS/images)",
+              "ru": "На VPS выберите каталог со статическими файлами (HTML/CSS/изображения)"
+            }
+          },
+          {
+            "text": {
+              "en": "Ensure the subserver process can read that path",
+              "ru": "Убедитесь, что процесс subserver может читать этот путь"
+            }
+          },
+          {
+            "text": {
+              "en": "Paste the absolute path into «Masquerade directory»",
+              "ru": "Вставьте абсолютный путь в «Каталог masquerade»"
+            }
+          },
+          {
+            "text": {
+              "en": "Example: /var/www/html",
+              "ru": "Пример: /var/www/html"
+            }
+          }
+        ]
+      }
+    }
+  }
 }

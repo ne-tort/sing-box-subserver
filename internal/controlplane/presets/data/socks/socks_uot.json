@@ -11,6 +11,10 @@
     "ru": {
       "title": "SOCKS + UDP-over-TCP",
       "description": "SOCKS5 auth; outbound включает udp_over_tcp (клиентский UDP через TCP)."
+    },
+    "en": {
+      "title": "SOCKS5 UoT",
+      "description": "SOCKS5 with UDP-over-TCP. Utility when UDP associate is blocked."
     }
   },
   "traits": [

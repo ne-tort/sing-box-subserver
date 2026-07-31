@@ -12,6 +12,10 @@
     "ru": {
       "title": "Sudoku padding",
       "description": "Sudoku TCP: AEAD + padding + fallback decoy; shared peer key."
+    },
+    "en": {
+      "title": "Sudoku pad",
+      "description": "Sudoku with padding obfuscation. Plain-TCP demux slot; shared key."
     }
   },
   "traits": [
@@ -75,5 +79,25 @@
   "client_notes": {
     "key": "shared peer key (не per-user); set.peer_secrets",
     "params": "optional bindings[].params overrides: fallback"
+  },
+  "optional_param_fields": [
+    "fallback"
+  ],
+  "param_meta": {
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "http://127.0.0.1:80",
+      "ui_group": "core",
+      "ui_order": 40,
+      "title": {
+        "en": "Fallback URL",
+        "ru": "Fallback URL"
+      },
+      "description": {
+        "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
+        "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      }
+    }
   }
 }

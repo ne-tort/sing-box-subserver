@@ -103,5 +103,101 @@
   ],
   "client_notes": {
     "realm": "params.realm_server_url + realm_id; peer_secrets realm_token"
+  },
+  "param_meta": {
+    "realm_server_url": {
+      "title": {
+        "en": "Realm server URL",
+        "ru": "URL realm-сервера"
+      },
+      "description": {
+        "en": "Base HTTPS URL of the Hysteria realm control plane.",
+        "ru": "Базовый HTTPS URL панели Hysteria realm."
+      },
+      "help": {
+        "summary": {
+          "en": "Base URL of the realm control plane.",
+          "ru": "Базовый URL панели управления realm."
+        },
+        "input_hint": {
+          "en": "HTTPS URL without trailing path clutter.",
+          "ru": "HTTPS URL без лишнего хвоста пути."
+        },
+        "format": "https://realm.example.com"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to set realm server URL",
+          "ru": "Как указать URL realm-сервера"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Open your Hysteria realm control-plane dashboard",
+              "ru": "Откройте панель управления Hysteria realm"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the base HTTPS URL of the realm server",
+              "ru": "Скопируйте базовый HTTPS URL realm-сервера"
+            }
+          },
+          {
+            "text": {
+              "en": "Paste it into «Realm server URL»",
+              "ru": "Вставьте его в «URL realm-сервера»"
+            }
+          }
+        ]
+      }
+    },
+    "realm_id": {
+      "title": {
+        "en": "Realm ID",
+        "ru": "ID realm"
+      },
+      "description": {
+        "en": "Realm identifier from the control plane.",
+        "ru": "Идентификатор realm из панели управления."
+      },
+      "help": {
+        "summary": {
+          "en": "Realm identifier assigned by the control plane.",
+          "ru": "Идентификатор realm, выданный панелью."
+        },
+        "input_hint": {
+          "en": "Copy the id from the realm dashboard.",
+          "ru": "Скопируйте id из панели realm."
+        },
+        "format": "realm-xxxxxxxx"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to set realm ID",
+          "ru": "Как указать ID realm"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "In the realm dashboard, open the target realm",
+              "ru": "В панели realm откройте нужный realm"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the realm id / identifier",
+              "ru": "Скопируйте id / идентификатор realm"
+            }
+          },
+          {
+            "text": {
+              "en": "Paste it into «Realm ID»",
+              "ru": "Вставьте его в «ID realm»"
+            }
+          }
+        ]
+      }
+    }
   }
 }

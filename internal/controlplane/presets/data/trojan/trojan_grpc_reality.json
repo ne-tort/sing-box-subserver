@@ -55,7 +55,7 @@
     },
     "transport": {
       "type": "grpc",
-      "service_name": "GunService",
+      "service_name": "{{param.service_name}}",
       "idle_timeout": "15s",
       "ping_timeout": "15s",
       "permit_without_stream": false
@@ -79,7 +79,7 @@
     },
     "transport": {
       "type": "grpc",
-      "service_name": "GunService",
+      "service_name": "{{param.service_name}}",
       "idle_timeout": "15s",
       "ping_timeout": "15s",
       "permit_without_stream": false
@@ -89,5 +89,25 @@
   "requirements": {
     "tls_profile": true,
     "reality_assignment": true
+  },
+  "optional_param_fields": [
+    "service_name"
+  ],
+  "param_meta": {
+    "service_name": {
+      "type": "string",
+      "widget": "text",
+      "default": "TrojanService",
+      "ui_group": "transport",
+      "ui_order": 36,
+      "title": {
+        "en": "gRPC service name",
+        "ru": "gRPC service name"
+      },
+      "description": {
+        "en": "gRPC Gun service_name after Reality (Trojan default TrojanService).",
+        "ru": "gRPC Gun service_name после Reality (дефолт TrojanService)."
+      }
+    }
   }
 }

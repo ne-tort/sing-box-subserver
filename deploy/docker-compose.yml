@@ -18,6 +18,11 @@ services:
     container_name: subserver
     network_mode: host
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
       - /opt/subserver/agent.yaml:/etc/subserver/agent.yaml:ro
       - /opt/subserver/data:/var/lib/subserver

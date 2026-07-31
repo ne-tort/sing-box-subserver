@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_custom",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-custom"
+  ],
+  "short_name": "Trojan TLS custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Trojan TLS custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе trojan_tls.json."
+    },
+    "en": {
+      "title": "Trojan TLS custom constructor",
+      "description": "Minimal lab constructor based on trojan_tls.json."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fingerprint"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 21,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Client uTLS fingerprint on outbound.",
+        "ru": "uTLS fingerprint клиента на outbound."
+      }
+    }
+  }
+}

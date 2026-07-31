@@ -11,6 +11,10 @@
     "ru": {
       "title": "vmess QUIC TLS",
       "description": "vmess + TLS + transport.type=quic (UDP)."
+    },
+    "en": {
+      "title": "VMess QUIC TLS",
+      "description": "VMess + TLS + QUIC transport (UDP). Not Hy2."
     }
   },
   "traits": [

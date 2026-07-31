@@ -82,6 +82,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /v1/config", s.requireAuth(s.handlePutConfig))
 	s.mux.HandleFunc("POST /v1/validate", s.requireAuth(s.handleValidate))
 	s.mux.HandleFunc("GET /v1/logs", s.requireAuth(s.handleLogs))
+	s.mux.HandleFunc("GET /v1/logs/box", s.requireAuth(s.handleBoxLogs))
 	s.mux.HandleFunc("GET /v1/metrics", s.requireAuth(s.handleMetrics))
 	s.mux.HandleFunc("POST /v1/box/stop", s.requireAuth(s.handleBoxStop))
 	s.mux.HandleFunc("POST /v1/box/start", s.requireAuth(s.handleBoxStart))
@@ -102,6 +103,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /v1/auth/tokens/{id}", s.requireAuth(s.handleAuthDelete))
 	s.mux.HandleFunc("POST /v1/auth/rotate", s.requireAuth(s.handleAuthRotate))
 	s.mux.HandleFunc("POST /v1/auth/bootstrap/disable", s.requireAuth(s.handleAuthBootstrapDisable))
+	s.mux.HandleFunc("GET /v1/host/ports", s.requireAuth(s.handleHostPorts))
 }
 
 // SetControlplane wires optional CP routes (call after New; routes are additive).
@@ -310,11 +312,27 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		since, _ = strconv.ParseUint(strings.TrimPrefix(v, "seq-"), 10, 64)
 	}
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	entries, next := s.Obs.Ring.Query(since, q.Get("level"), limit)
+	ring := s.Obs.Ring
+	source := strings.ToLower(strings.TrimSpace(q.Get("source")))
+	if source == "box" || source == "sing-box" || source == "core" {
+		if s.Obs.BoxRing != nil {
+			ring = s.Obs.BoxRing
+		}
+	}
+	entries, next := ring.Query(since, q.Get("level"), limit)
 	OK(w, http.StatusOK, map[string]any{
 		"next":    "seq-" + strconv.FormatUint(next, 10),
 		"entries": entries,
+		"source":  map[bool]string{true: "box", false: "agent"}[source == "box" || source == "sing-box" || source == "core"],
 	})
+}
+
+func (s *Server) handleBoxLogs(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	q.Set("source", "box")
+	r2 := r.Clone(r.Context())
+	r2.URL.RawQuery = q.Encode()
+	s.handleLogs(w, r2)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

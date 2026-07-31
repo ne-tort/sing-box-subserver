@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "wg",
   "protocol": "wireguard",
-  "aliases": ["wireguard", "plain"],
+  "aliases": [
+    "wireguard",
+    "plain"
+  ],
   "short_name": "WG",
   "status": "stable",
   "i18n": {
@@ -11,14 +14,29 @@
       "description": "Голый WireGuard endpoint (без AWG/masquerade). Singleton hub."
     }
   },
-  "traits": ["udp", "endpoint", "wireguard"],
+  "traits": [
+    "udp",
+    "endpoint",
+    "wireguard"
+  ],
   "demux_hints": {
-    "network": ["udp"],
+    "network": [
+      "udp"
+    ],
     "looks_like": "raw_udp",
     "compatible_with_demux": false
   },
-  "scores": { "dpi": 3, "speed": 10, "mobile": 8, "setup": 7 },
-  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "scores": {
+    "dpi": 3,
+    "speed": 10,
+    "mobile": 8,
+    "setup": 7
+  },
+  "cred_fields": [
+    "private_key",
+    "public_key",
+    "wg_host_index"
+  ],
   "cred_generators": {
     "private_key": "curve25519",
     "wg_host_index": "wg_host_index"
@@ -50,5 +68,25 @@
   },
   "client_notes": {
     "singleton": "один hub на агент; profile через PUT /v1/controlplane/wg"
+  },
+  "optional_param_fields": [
+    "mtu"
+  ],
+  "param_meta": {
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "WireGuard MTU override.",
+        "ru": "Переопределение MTU WireGuard."
+      },
+      "default": "1408"
+    }
   }
 }

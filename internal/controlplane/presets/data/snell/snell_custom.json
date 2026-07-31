@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "tag": "snell_custom",
+  "protocol": "snell",
+  "aliases": [
+    "snell-custom"
+  ],
+  "short_name": "Snell v5 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Snell v5 custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе snell_v5.json."
+    },
+    "en": {
+      "title": "Snell constructor",
+      "description": "Lab Snell with obfs_host/fallback knobs."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "snell AEAD",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "userkey"
+  ],
+  "peer_secret_fields": {
+    "psk": "password"
+  },
+  "inbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 5,
+    "psk": "{{peer.psk}}",
+    "users": [],
+    "obfs_mode": "http"
+  },
+  "outbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 4,
+    "psk": "{{peer.psk}}",
+    "userkey": "{{user.userkey}}",
+    "obfs_mode": "http",
+    "obfs_host": "{{param.obfs_host}}"
+  },
+  "client_notes": {
+    "version": "inbound v5 ~ outbound v4 wire",
+    "psk": "peer_symmetric",
+    "userkey": "user_symmetric",
+    "params": "optional bindings[].params overrides: obfs_host"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "obfs_host"
+  ],
+  "param_meta": {
+    "obfs_host": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.bing.com",
+      "ui_group": "obfs",
+      "ui_order": 41,
+      "title": {
+        "en": "Obfs Host",
+        "ru": "Obfs Host"
+      },
+      "description": {
+        "en": "Host header for Snell v6 obfs.",
+        "ru": "Host header для Snell v6 obfs."
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "tag": "mixed_custom",
+  "protocol": "mixed",
+  "aliases": [
+    "mixed-custom"
+  ],
+  "short_name": "Mixed auth custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mixed auth custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе mixed_auth.json."
+    },
+    "en": {
+      "title": "Mixed constructor",
+      "description": "Lab mixed inbound constructor."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP methods or SOCKS5",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mixed",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}"
+  },
+  "client_notes": {
+    "outbound": "клиент подключается как SOCKS5 к mixed inbound"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [],
+  "param_meta": {}
+}

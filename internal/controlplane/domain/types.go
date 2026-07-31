@@ -135,6 +135,12 @@ type ProtocolPreset struct {
 	PeerSecretFields       map[string]string `json:"peer_secret_fields,omitempty"` // inbound top-level secrets: field→generator
 	// ParamFields lists required keys in SetBinding.Params (e.g. carrier room URL).
 	ParamFields            []string          `json:"param_fields,omitempty"`
+	// OptionalParamFields lists optional binding keys exposed in params_schema.
+	OptionalParamFields    []string          `json:"optional_param_fields,omitempty"`
+	// ParamMeta per-field schema v2 + UX (title/help/required_guide) for thin clients.
+	ParamMeta              map[string]ParamFieldMeta `json:"param_meta,omitempty"`
+	// CustomPreset marks a full user-driven constructor invariant ({protocol}_custom).
+	CustomPreset           bool              `json:"custom_preset,omitempty"`
 	Aliases                []string          `json:"aliases,omitempty"`
 	ShortName              string            `json:"short_name,omitempty"`
 	Status                 string            `json:"status,omitempty"`
@@ -208,12 +214,108 @@ type InvariantPreset struct {
 	CredGenerators        map[string]string        `json:"cred_generators,omitempty"`
 	PeerSecretFields      map[string]string        `json:"peer_secret_fields,omitempty"`
 	ParamFields           []string                 `json:"param_fields,omitempty"`
+	OptionalParamFields   []string                 `json:"optional_param_fields,omitempty"`
+	ParamMeta             map[string]ParamFieldMeta `json:"param_meta,omitempty"`
+	CustomPreset          bool                     `json:"custom_preset,omitempty"`
 	DefaultUserVariants   []string                 `json:"default_user_variants,omitempty"`
 	DefaultClientProfiles []string                 `json:"default_client_profiles,omitempty"`
 	InboundTemplate       map[string]any           `json:"inbound_template,omitempty"`
 	OutboundTemplate      map[string]any           `json:"outbound_template,omitempty"`
 	EndpointTemplate      map[string]any           `json:"endpoint_template,omitempty"`
 	ClientNotes           map[string]string        `json:"client_notes,omitempty"`
+}
+
+// ParamFieldMeta is schema v2 + UX metadata for a preset param.
+// Localized maps use language keys (ru/en); structural fields are language-agnostic.
+type ParamFieldMeta struct {
+	// Required overrides membership in param_fields when set.
+	Required *bool `json:"required,omitempty"`
+	// Type: string | uint16 | bool | enum | string_list (default string).
+	Type string `json:"type,omitempty"`
+	// Enum lists allowed values when Type is enum (or for select widgets).
+	Enum []string `json:"enum,omitempty"`
+	// EnumLabels maps value → localized label (lang → text). Prefer i18n locale files.
+	EnumLabels map[string]map[string]string `json:"enum_labels,omitempty"`
+	Default    string                       `json:"default,omitempty"`
+	Placeholder string                      `json:"placeholder,omitempty"`
+	Pattern    string                       `json:"pattern,omitempty"`
+	Min        *float64                     `json:"min,omitempty"`
+	Max        *float64                     `json:"max,omitempty"`
+	UiGroup    string                       `json:"ui_group,omitempty"`
+	UiOrder    int                          `json:"ui_order,omitempty"`
+	// Widget: text | select | toggle | port | path (hint for thin clients).
+	Widget string `json:"widget,omitempty"`
+	// VisibleWhen: all conditions must match for the field to show.
+	VisibleWhen []ParamCondition `json:"visible_when,omitempty"`
+	// Requires: other param keys that must be non-empty / true.
+	Requires []string `json:"requires,omitempty"`
+	// ConflictsWith: mutually exclusive param keys (reject if both set).
+	ConflictsWith []string `json:"conflicts_with,omitempty"`
+
+	Title         map[string]string `json:"title,omitempty"`
+	Description   map[string]string `json:"description,omitempty"`
+	Help          *ParamHelpMeta    `json:"help,omitempty"`
+	RequiredGuide *ParamGuideMeta   `json:"required_guide,omitempty"`
+}
+
+// ParamCondition is a machine-readable visibility / branch rule.
+type ParamCondition struct {
+	Key      string   `json:"key"`
+	Equals   string   `json:"equals,omitempty"`
+	In       []string `json:"in,omitempty"`
+	NotEmpty bool     `json:"not_empty,omitempty"`
+}
+
+// ParamHelpMeta is the simple form shown next to a parameter field.
+type ParamHelpMeta struct {
+	Summary   map[string]string `json:"summary,omitempty"`
+	InputHint map[string]string `json:"input_hint,omitempty"`
+	Format    string            `json:"format,omitempty"`
+}
+
+// ParamGuideMeta is a step-by-step guide for required parameters.
+type ParamGuideMeta struct {
+	Title map[string]string  `json:"title,omitempty"`
+	Steps []ParamGuideStepMeta `json:"steps,omitempty"`
+}
+
+// ParamGuideStepMeta is one guide step (optional URL).
+type ParamGuideStepMeta struct {
+	Text map[string]string `json:"text,omitempty"`
+	URL  string            `json:"url,omitempty"`
+}
+
+func cloneParamMeta(in map[string]ParamFieldMeta) map[string]ParamFieldMeta {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]ParamFieldMeta, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+// PickLocalized returns lang, then ru, then en, then any non-empty value.
+func PickLocalized(m map[string]string, lang string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	lang = NormalizeLang(lang)
+	for _, k := range []string{lang, "ru", "en"} {
+		if k == "" {
+			continue
+		}
+		if v := strings.TrimSpace(m[k]); v != "" {
+			return v
+		}
+	}
+	for _, v := range m {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // ToProtocolPreset builds the compat view with description resolved for lang (ru default).
@@ -249,6 +351,9 @@ func (inv InvariantPreset) ToProtocolPreset(lang string) ProtocolPreset {
 		CredGenerators:        gens,
 		PeerSecretFields:      peer,
 		ParamFields:           append([]string{}, inv.ParamFields...),
+		OptionalParamFields:   append([]string{}, inv.OptionalParamFields...),
+		ParamMeta:             cloneParamMeta(inv.ParamMeta),
+		CustomPreset:          inv.CustomPreset,
 		Aliases:               append([]string{}, inv.Aliases...),
 		ShortName:             inv.ShortName,
 		Status:                inv.Status,
@@ -280,14 +385,35 @@ func ResolveI18n(i18n map[string]LocalizedText, lang string) (title, description
 	return "", ""
 }
 
-// NormalizeLang maps ru-RU → ru, en_US → en.
+// NormalizeLang maps BCP-47 / ISO tags to catalog locale keys.
+// Known regional variants (Hiddify app locales): pt-BR, zh-CN, zh-TW.
+// Others collapse to ISO 639-1 primary subtag (ru-RU→ru, en_US→en).
 func NormalizeLang(lang string) string {
 	lang = strings.TrimSpace(strings.ToLower(lang))
-	if lang == "" {
+	lang = strings.ReplaceAll(lang, "_", "-")
+	if lang == "" || lang == "*" {
 		return "ru"
 	}
-	if i := strings.IndexAny(lang, "-_"); i > 0 {
+	switch {
+	case lang == "pt-br" || lang == "ptbr" || strings.HasPrefix(lang, "pt-br"):
+		return "pt-BR"
+	case lang == "zh-cn" || lang == "zhcn" || lang == "zh-hans" || strings.HasPrefix(lang, "zh-cn") || strings.HasPrefix(lang, "zh-hans"):
+		return "zh-CN"
+	case lang == "zh-tw" || lang == "zhtw" || lang == "zh-hant" || strings.HasPrefix(lang, "zh-tw") || strings.HasPrefix(lang, "zh-hant"):
+		return "zh-TW"
+	case lang == "zh":
+		return "zh-CN"
+	case lang == "pt":
+		return "pt-BR"
+	}
+	if i := strings.Index(lang, "-"); i > 0 {
 		lang = lang[:i]
 	}
 	return lang
+}
+
+// CatalogLangs are locale directories shipped for controlplane catalog copy.
+// Matches Hiddify client language picker; missing keys fall back to English.
+var CatalogLangs = []string{
+	"ar", "en", "es", "fa", "fr", "id", "pt-BR", "ru", "tr", "zh-CN", "zh-TW",
 }

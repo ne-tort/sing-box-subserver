@@ -11,6 +11,10 @@
     "ru": {
       "title": "SS ChaCha20",
       "description": "Shadowsocks chacha20-ietf-poly1305, TCP."
+    },
+    "en": {
+      "title": "SS ChaCha20",
+      "description": "Shadowsocks AEAD ChaCha20-Poly1305. Better on mobile CPUs without AES-NI."
     }
   },
   "traits": [

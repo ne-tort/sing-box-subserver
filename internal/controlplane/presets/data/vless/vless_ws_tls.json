@@ -114,5 +114,40 @@
     "packet_encoding": "по умолчанию xudp; профили pkt-none / pkt-packetaddr через enabled_client_profiles",
     "params": "optional bindings[].params overrides: ws_host, ws_path",
     "ws_path_default": "/vless-ws"
+  },
+  "optional_param_fields": [
+    "ws_path",
+    "ws_host"
+  ],
+  "param_meta": {
+    "ws_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/vless-ws",
+      "ui_group": "transport",
+      "ui_order": 30,
+      "title": {
+        "en": "WebSocket path",
+        "ru": "WebSocket path"
+      },
+      "description": {
+        "en": "HTTP path for VLESS WebSocket.",
+        "ru": "HTTP path для VLESS WebSocket."
+      }
+    },
+    "ws_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 31,
+      "title": {
+        "en": "WebSocket Host",
+        "ru": "WebSocket Host"
+      },
+      "description": {
+        "en": "Host header for WebSocket (defaults to server name).",
+        "ru": "Host header для WebSocket (по умолчанию server)."
+      }
+    }
   }
 }

@@ -11,6 +11,10 @@
     "ru": {
       "title": "SS AES-256-GCM",
       "description": "Shadowsocks AES-256-GCM multi-user, TCP."
+    },
+    "en": {
+      "title": "SS AES-256-GCM",
+      "description": "Shadowsocks AEAD AES-256-GCM. Same DPI profile as AES-128; slightly heavier crypto."
     }
   },
   "traits": [

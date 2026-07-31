@@ -11,6 +11,10 @@
     "ru": {
       "title": "TUIC v5",
       "description": "TUIC v5 UDP/QUIC + TLS, congestion BBR, udp_relay_mode native."
+    },
+    "en": {
+      "title": "TUIC",
+      "description": "TUIC v5 over QUIC/TLS. Primary Hy2 substitute on UDP:443 demux."
     }
   },
   "traits": [

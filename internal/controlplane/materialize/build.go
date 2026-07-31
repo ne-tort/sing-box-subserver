@@ -275,6 +275,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		if err != nil {
 			return nil, err
 		}
+		applyCustomPresetInboundKnobs(ib, p.Name, b.Params)
 		ib["tag"] = tag
 		if presetHasTrait(p, "no_listen") || (p.Protocol == "carrier" && !presetHasTrait(p, "needs_listen")) {
 			// SFU / cloudflared underlay does not bind set.listen_port.
@@ -717,6 +718,11 @@ func paramDefaultsForPreset(name string) map[string]string {
 		return nil
 	}
 	out := map[string]string{}
+	for field, meta := range inv.ParamMeta {
+		if strings.TrimSpace(meta.Default) != "" {
+			out[field] = strings.TrimSpace(meta.Default)
+		}
+	}
 	notes := inv.ClientNotes
 	if notes == nil {
 		return out
@@ -737,7 +743,7 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 	// Defaults for optional operator overrides; empty for required ParamFields
 	// (carrier room, cloudflared token, hy2 masquerade_dir / realm_*) until set.
 	defaults := map[string]string{
-		"room": "", "token": "", "transport": "", "key": "", "peer": "",
+		"room": "", "token": "", "key": "", "peer": "",
 		"server": "", "server_port": "", "vk_hash": "", "wrap_password": "",
 		"wg_port": "", "password": "", "device_id": "",
 		// ShadowQUIC JLS
@@ -751,6 +757,7 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		// Hy2 masquerade proxy (file/realm use required param_fields)
 		"masquerade_url": "https://www.cloudflare.com",
 		"masquerade_dir": "",
+		"masquerade_mode": "",
 		"realm_server_url": "", "realm_id": "",
 		// Sudoku / Snell / DERP / SSH / Mieru
 		"fallback": "http://127.0.0.1:80",
@@ -759,6 +766,18 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		"server_version": "SSH-2.0-OpenSSH_8.9",
 		"traffic_pattern": "",
 		"httpmask_path": "/sudoku", "httpmask_host": "{{server}}",
+		// Custom constructors (vless_custom / hy2_custom / wg_custom)
+		"transport": "tcp", "tls_mode": "tls",
+		"flow": "", "packet_encoding": "xudp", "fingerprint": "chrome",
+		"transport_path": "/vless", "transport_host": "{{server}}", "service_name": "GunService",
+		"alpn": "h2,http/1.1",
+		"obfs": "", "obfs_password": "",
+		"up_mbps": "100", "down_mbps": "100",
+		"mtu": "1408", "jc": "", "jmin": "", "jmax": "",
+		"i1": "", "i2": "", "i3": "", "i4": "", "i5": "",
+		// TUIC / TrustTunnel / SS / Naive constructors
+		"congestion_control": "bbr", "udp_relay_mode": "native", "zero_rtt": "false",
+		"mode": "auto", "method": "aes-128-gcm", "network": "tcp",
 	}
 	for k, v := range presetDefaults {
 		if strings.TrimSpace(v) != "" {
@@ -1230,6 +1249,42 @@ func cloneMap(m map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
+func applyTuicZeroRTT(m map[string]any, preset string, params map[string]string) {
+	if preset != "tuic_custom" {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true") {
+		m["zero_rtt_handshake"] = true
+	} else {
+		delete(m, "zero_rtt_handshake")
+	}
+}
+
+func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[string]string) {
+	applyTuicZeroRTT(ib, preset, params)
+	applyNaiveNetworkKnobs(ib, preset, params)
+}
+
+func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map[string]string) {
+	applyTuicZeroRTT(ob, preset, params)
+	applyNaiveNetworkKnobs(ob, preset, params)
+}
+
+func applyNaiveNetworkKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "naive_custom" {
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(params["network"]), "udp") {
+		return
+	}
+	m["network"] = "udp"
+	if tls, ok := m["tls"].(map[string]any); ok {
+		tls["alpn"] = []any{"h3"}
+	}
+	m["quic_congestion_control"] = "bbr"
+	m["quic"] = true
+}
+
 func substituteMap(m map[string]any, vars map[string]string) (map[string]any, error) {
 	raw, err := json.Marshal(m)
 	if err != nil {
@@ -1394,6 +1449,7 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					if err != nil {
 						return err
 					}
+					applyCustomPresetOutboundKnobs(ob, p.Name, b.Params)
 					ob["tag"] = tag
 					ob["server"] = publicHost
 					if publicHost == "" {
@@ -1501,6 +1557,7 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 				if err != nil {
 					return nil, err
 				}
+				applyCustomPresetOutboundKnobs(ob, p.Name, b.Params)
 				ob["tag"] = tag
 				if p.Protocol == "carrier" {
 					finalizeCarrierOutbound(ob, set, p, creds, b, publicHost, serverName)

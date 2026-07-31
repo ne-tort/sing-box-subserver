@@ -11,6 +11,10 @@
     "ru": {
       "title": "HTTP CONNECT",
       "description": "HTTP CONNECT прокси с логином."
+    },
+    "en": {
+      "title": "HTTP CONNECT",
+      "description": "Utility HTTP CONNECT proxy. Not anti-DPI; local/service use."
     }
   },
   "traits": [

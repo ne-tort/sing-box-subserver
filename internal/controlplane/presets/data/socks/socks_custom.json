@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "tag": "socks_custom",
+  "protocol": "socks",
+  "aliases": [
+    "socks-custom"
+  ],
+  "short_name": "SOCKS5 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SOCKS5 custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе socks.json."
+    },
+    "en": {
+      "title": "SOCKS constructor",
+      "description": "Lab SOCKS5 constructor."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SOCKS greeting",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "socks",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "username": "{{user.username}}",
+    "password": "{{user.password}}"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [],
+  "param_meta": {}
+}

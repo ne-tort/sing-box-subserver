@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "tag": "shadowtls_custom",
+  "protocol": "shadowtls",
+  "aliases": [
+    "shadowtls-custom"
+  ],
+  "short_name": "ShadowTLS v3 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowTLS v3 custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе shadowtls_v3.json."
+    },
+    "en": {
+      "title": "ShadowTLS constructor",
+      "description": "Lab ShadowTLS with handshake_server override. Prefer shadowtls_v3."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_mimic",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello → handshake server",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "shadowtls",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 3,
+    "strict_mode": true,
+    "users": [],
+    "handshake": {
+      "server": "{{param.handshake_server}}",
+      "server_port": 443
+    },
+    "wildcard_sni": "off"
+  },
+  "outbound_template": {
+    "type": "shadowtls",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 3,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{param.handshake_server}}",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "chrome"
+      },
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "client_notes": {
+    "handshake": "SNI/handshake server должен быть доступен с edge; outbound tls.server_name обычно совпадает",
+    "detour": "часто ставят SS/VLESS за ShadowTLS — в CP пока standalone proxy",
+    "params": "optional bindings[].params overrides: handshake_server"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "handshake_server"
+  ],
+  "param_meta": {
+    "handshake_server": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.apple.com",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "title": {
+        "en": "Handshake server",
+        "ru": "Handshake server"
+      },
+      "description": {
+        "en": "ShadowTLS v3 handshake mimic target (SNI).",
+        "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    }
+  }
+}

@@ -632,7 +632,7 @@ func TestValidateBindingParamsRequiresRoom(t *testing.T) {
 		Bindings: []domain.SetBinding{{Preset: "carrier_jitsi_shared"}},
 	}
 	err := svc.validateSet(set, nil)
-	if err == nil || !strings.Contains(err.Error(), "params") {
+	if err == nil || (!strings.Contains(err.Error(), "params") && !strings.Contains(err.Error(), "cp_param_required")) {
 		t.Fatalf("want params error, got %v", err)
 	}
 	set.Bindings[0].Params = map[string]string{"room": "https://meet.jit.si/r"}

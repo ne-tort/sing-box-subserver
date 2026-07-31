@@ -47,6 +47,9 @@ func Run(opts Options) error {
 		return err
 	}
 	engine := box.NewEngine(context.Background())
+	if o.BoxRing != nil {
+		engine.SetPlatformLogWriter(obs.BoxPlatformWriter{Ring: o.BoxRing})
+	}
 	trafficMod := traffic.New(traffic.Deps{
 		DataDir:       cfg.DataDir,
 		FlushInterval: time.Duration(cfg.Traffic.FlushIntervalSec) * time.Second,

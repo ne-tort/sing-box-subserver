@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_custom",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-custom"
+  ],
+  "short_name": "VMess TLS custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "VMess TLS custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе vmess_tls.json."
+    },
+    "en": {
+      "title": "VMess constructor",
+      "description": "Lab VMess with transport/TLS/fingerprint knobs. Prefer VLESS for new Reality stacks."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "inbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "vmess",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "security": "auto",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "client_notes": {
+    "security": "outbound-only profiles: sec-auto / sec-aes128 / sec-chacha / pkt-xudp"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fingerprint"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 21,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Client uTLS fingerprint on outbound.",
+        "ru": "uTLS fingerprint клиента на outbound."
+      }
+    }
+  }
+}

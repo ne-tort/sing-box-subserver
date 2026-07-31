@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "tag": "wg_custom",
+  "protocol": "wireguard",
+  "aliases": ["wireguard-custom", "wg-constructor"],
+  "short_name": "WG custom",
+  "status": "lab",
+  "custom_preset": true,
+  "i18n": {
+    "ru": {
+      "title": "WireGuard / AWG конструктор",
+      "description": "Лабораторный endpoint: MTU и опциональные AWG jc/jmin/jmax/i1–i5 через params."
+    },
+    "en": {
+      "title": "WireGuard / AWG constructor",
+      "description": "Lab endpoint hub: MTU plus optional AWG jc/jmin/jmax and i1–i5 params."
+    }
+  },
+  "traits": ["udp", "endpoint", "wireguard", "awg", "custom"],
+  "demux_hints": {
+    "network": ["udp"],
+    "looks_like": "raw_udp",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 9,
+    "mobile": 7,
+    "setup": 3
+  },
+  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "cred_generators": {
+    "private_key": "curve25519",
+    "wg_host_index": "wg_host_index"
+  },
+  "requirements": {
+    "build_tag": "with_awg"
+  },
+  "optional_param_fields": [
+    "mtu",
+    "jc",
+    "jmin",
+    "jmax",
+    "i1",
+    "i2",
+    "i3",
+    "i4",
+    "i5",
+    "listen_port"
+  ],
+  "param_meta": {
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "1408",
+      "ui_group": "core",
+      "ui_order": 1,
+      "min": 576,
+      "max": 65535,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "WireGuard interface MTU.",
+        "ru": "MTU интерфейса WireGuard."
+      }
+    },
+    "listen_port": {
+      "type": "uint16",
+      "widget": "port",
+      "default": "51820",
+      "ui_group": "listen",
+      "ui_order": 0,
+      "title": {
+        "en": "Listen port",
+        "ru": "Порт listen"
+      },
+      "description": {
+        "en": "UDP listen port on the WG hub (endpoint).",
+        "ru": "UDP-порт hub endpoint."
+      }
+    },
+    "jc": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 10,
+      "title": {
+        "en": "AWG jc",
+        "ru": "AWG jc"
+      },
+      "description": {
+        "en": "AmneziaWG junk packet count (optional).",
+        "ru": "AmneziaWG jc (опционально)."
+      }
+    },
+    "jmin": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 11,
+      "title": {
+        "en": "AWG jmin",
+        "ru": "AWG jmin"
+      },
+      "description": {
+        "en": "Minimum junk packet size.",
+        "ru": "Минимальный размер junk-пакета."
+      }
+    },
+    "jmax": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 12,
+      "title": {
+        "en": "AWG jmax",
+        "ru": "AWG jmax"
+      },
+      "description": {
+        "en": "Maximum junk packet size.",
+        "ru": "Максимальный размер junk-пакета."
+      }
+    },
+    "i1": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 20,
+      "title": {"en": "AWG i1", "ru": "AWG i1"},
+      "description": {
+        "en": "Optional AWG i1 parameter.",
+        "ru": "Опциональный параметр AWG i1."
+      }
+    },
+    "i2": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 21,
+      "title": {"en": "AWG i2", "ru": "AWG i2"},
+      "description": {
+        "en": "Optional AWG i2 parameter.",
+        "ru": "Опциональный параметр AWG i2."
+      }
+    },
+    "i3": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 22,
+      "title": {"en": "AWG i3", "ru": "AWG i3"},
+      "description": {
+        "en": "Optional AWG i3 parameter.",
+        "ru": "Опциональный параметр AWG i3."
+      }
+    },
+    "i4": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 23,
+      "title": {"en": "AWG i4", "ru": "AWG i4"},
+      "description": {
+        "en": "Optional AWG i4 parameter.",
+        "ru": "Опциональный параметр AWG i4."
+      }
+    },
+    "i5": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "awg",
+      "ui_order": 24,
+      "title": {"en": "AWG i5", "ru": "AWG i5"},
+      "description": {
+        "en": "Optional AWG i5 parameter.",
+        "ru": "Опциональный параметр AWG i5."
+      }
+    }
+  },
+  "endpoint_template": {
+    "type": "wireguard",
+    "tag": "cp-wg",
+    "mtu": 1408,
+    "address": [],
+    "private_key": "",
+    "listen_port": 51820,
+    "peers": []
+  },
+  "outbound_template": {
+    "type": "wireguard",
+    "tag": "{{tag}}",
+    "mtu": 1408,
+    "address": [],
+    "private_key": "{{user.private_key}}",
+    "peers": [
+      {
+        "address": "{{server}}",
+        "port": 0,
+        "public_key": "",
+        "allowed_ips": [],
+        "persistent_keepalive_interval": 25
+      }
+    ]
+  },
+  "client_notes": {
+    "endpoint": "PUT /v1/controlplane/wg applies mtu/listen_port/AWG fields from params",
+    "awg": "Optional i1–i5 map to CPS when build tag with_awg"
+  }
+}

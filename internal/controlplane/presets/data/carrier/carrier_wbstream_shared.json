@@ -12,6 +12,10 @@
     "ru": {
       "title": "Carrier WB Stream",
       "description": "WB Stream: guest-register join. params.room=URL комнаты; опц. params.token."
+    },
+    "en": {
+      "title": "Carrier WB Stream shared",
+      "description": "Wildberries stream SFU underlay (shared). Needs room + often token/key params."
     }
   },
   "traits": [
@@ -96,5 +100,86 @@
   },
   "param_fields": [
     "room"
+  ],
+  "param_meta": {
+    "room": {
+      "title": {
+        "en": "Room URL",
+        "ru": "URL комнаты"
+      },
+      "description": {
+        "en": "WB Stream room / broadcast URL used by the Carrier transport.",
+        "ru": "URL комнаты / трансляции WB Stream для Carrier."
+      },
+      "help": {
+        "summary": {
+          "en": "Paste the full WB Stream room URL.",
+          "ru": "Вставьте полный URL комнаты WB Stream."
+        },
+        "input_hint": {
+          "en": "Copy the room URL from the browser address bar.",
+          "ru": "Скопируйте URL комнаты из адресной строки браузера."
+        },
+        "format": "https://…/room/…"
+      },
+      "required_guide": {
+        "title": {
+          "en": "How to get a WB Stream room URL",
+          "ru": "Как получить URL комнаты WB Stream"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Open the WB Stream room / broadcast page",
+              "ru": "Откройте страницу комнаты / трансляции WB Stream"
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the full room URL from the browser address bar",
+              "ru": "Скопируйте полный URL комнаты из адресной строки браузера"
+            }
+          },
+          {
+            "text": {
+              "en": "Paste it into «Room URL»",
+              "ru": "Вставьте его в «URL комнаты»"
+            }
+          }
+        ]
+      }
+    },
+    "key": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "carrier",
+      "ui_order": 60,
+      "title": {
+        "en": "Room key",
+        "ru": "Ключ комнаты"
+      },
+      "description": {
+        "en": "Optional Carrier room key/token.",
+        "ru": "Опциональный ключ/токен комнаты Carrier."
+      }
+    },
+    "token": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 63,
+      "title": {
+        "en": "Token",
+        "ru": "Токен"
+      },
+      "description": {
+        "en": "Optional tunnel or room token.",
+        "ru": "Опциональный токен туннеля или комнаты."
+      }
+    }
+  },
+  "optional_param_fields": [
+    "key",
+    "token"
   ]
 }

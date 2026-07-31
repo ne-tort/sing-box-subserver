@@ -11,6 +11,10 @@
     "ru": {
       "title": "ShadowTLS v3 wildcard=all",
       "description": "wildcard_sni=all — handshake по SNI из ClientHello для любого имени."
+    },
+    "en": {
+      "title": "ShadowTLS v3 wildcard-all",
+      "description": "Most permissive ShadowTLS wildcard mode. Lab/edge cases only."
     }
   },
   "traits": [
@@ -73,5 +77,25 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: handshake_server"
+  },
+  "optional_param_fields": [
+    "handshake_server"
+  ],
+  "param_meta": {
+    "handshake_server": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.apple.com",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "title": {
+        "en": "Handshake server",
+        "ru": "Handshake server"
+      },
+      "description": {
+        "en": "ShadowTLS v3 handshake mimic target (SNI).",
+        "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    }
   }
 }

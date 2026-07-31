@@ -11,6 +11,10 @@
     "ru": {
       "title": "Mixed + TLS",
       "description": "HTTP+SOCKS за TLS (DPI видит ClientHello)."
+    },
+    "en": {
+      "title": "Mixed TLS",
+      "description": "Mixed HTTP/SOCKS behind TLS. Utility; not a DPI strategy."
     }
   },
   "traits": [

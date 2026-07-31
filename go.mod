@@ -229,3 +229,6 @@ require (
 replace github.com/sagernet/sing-box => ./third_party/sing-box-lx
 
 replace github.com/sagernet/wireguard-go => ./third_party/sing-box-lx/submodules/wireguard-go
+
+// Same patched sing-vmess as hiddify-core / vendor/sing-box-lx (VLESS udp443 flow).
+replace github.com/sagernet/sing-vmess => ../sing-vmess

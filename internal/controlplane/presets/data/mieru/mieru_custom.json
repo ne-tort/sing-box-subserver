@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "tag": "mieru_custom",
+  "protocol": "mieru",
+  "aliases": [
+    "mieru-custom"
+  ],
+  "short_name": "Mieru TCP custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru TCP custom (конструктор)",
+      "description": "Минимальный лабораторный конструктор на базе mieru_tcp.json."
+    },
+    "en": {
+      "title": "Mieru constructor",
+      "description": "Lab Mieru. Use mieru_tcp as demux always_plain slot."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "mieru framing",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "transport": "TCP",
+    "users": [],
+    "mtu": 1400,
+    "user_hint_is_mandatory": false,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "outbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "transport": "TCP",
+    "username": "{{user.name}}",
+    "password": "{{user.password}}",
+    "multiplexing": "MULTIPLEXING_HIGH",
+    "handshake_mode": "HANDSHAKE_STANDARD",
+    "mtu": 1400,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "requirements": {
+    "build_tag": "with_mieru"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: traffic_pattern"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "traffic_pattern"
+  ],
+  "param_meta": {
+    "traffic_pattern": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 44,
+      "title": {
+        "en": "Traffic pattern",
+        "ru": "Traffic pattern"
+      },
+      "description": {
+        "en": "Mieru traffic shaping profile name.",
+        "ru": "Имя профиля shaping трафика Mieru."
+      }
+    }
+  }
+}

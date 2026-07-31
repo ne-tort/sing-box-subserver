@@ -14,7 +14,19 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxgroups"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
+	cpi18n "github.com/ne-tort/sing-box-subserver/internal/controlplane/presets/i18n"
 )
+
+func demuxGroupText(g demuxgroups.Group, lang string) (title, desc string) {
+	title, desc = g.ResolveI18n(lang)
+	if t := cpi18n.Demux(g.Tag, "title", lang); t != "" {
+		title = t
+	}
+	if d := cpi18n.Demux(g.Tag, "description", lang); d != "" {
+		desc = d
+	}
+	return title, desc
+}
 
 func (s *Service) handleDemuxGroupsList(w http.ResponseWriter, r *http.Request) {
 	lang := requestLang(r)
@@ -24,7 +36,7 @@ func (s *Service) handleDemuxGroupsList(w http.ResponseWriter, r *http.Request) 
 		if statusFilter != "" && !strings.EqualFold(g.Status, statusFilter) {
 			continue
 		}
-		title, desc := g.ResolveI18n(lang)
+		title, desc := demuxGroupText(g, lang)
 		meta := demuxgroups.BuildGroupMatchMeta(g)
 		slots := make([]any, 0, len(g.Slots))
 		for _, slot := range g.Slots {
@@ -54,7 +66,7 @@ func (s *Service) handleDemuxGroupsGet(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 404, "not_found", err.Error())
 		return
 	}
-	title, desc := g.ResolveI18n(lang)
+	title, desc := demuxGroupText(g, lang)
 	meta := demuxgroups.BuildGroupMatchMeta(g)
 	slots := make([]any, 0, len(g.Slots))
 	for _, slot := range g.Slots {
@@ -237,11 +249,13 @@ func (s *Service) replaceOrConflictSet(ctx context.Context, sets []domain.Inboun
 func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Items []struct {
-			Name       string            `json:"name"`
-			Preset     string            `json:"preset"`
-			ListenPort uint16            `json:"listen_port"`
-			Listen     string            `json:"listen,omitempty"`
-			Params     map[string]string `json:"params,omitempty"`
+			Name                  string            `json:"name"`
+			Preset                string            `json:"preset"`
+			ListenPort            uint16            `json:"listen_port"`
+			Listen                string            `json:"listen,omitempty"`
+			Params                map[string]string `json:"params,omitempty"`
+			EnabledUserVariants   []string          `json:"enabled_user_variants,omitempty"`
+			EnabledClientProfiles []string          `json:"enabled_client_profiles,omitempty"`
 		} `json:"items"`
 		Activate bool `json:"activate"`
 		Replace  bool `json:"replace"`
@@ -318,9 +332,14 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			Listen:     listen,
 			ListenPort: listenPort,
 			Presets:    []string{preset},
-			Bindings:   []domain.SetBinding{{Preset: preset, Params: it.Params}},
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			Bindings: []domain.SetBinding{{
+				Preset:                preset,
+				Params:                it.Params,
+				EnabledUserVariants:   append([]string{}, it.EnabledUserVariants...),
+				EnabledClientProfiles: append([]string{}, it.EnabledClientProfiles...),
+			}},
+			CreatedAt: now,
+			UpdatedAt: now,
 		}
 		syncBindingSNI(&set)
 		others := append(append([]domain.InboundSet{}, sets...), created...)

@@ -12,6 +12,10 @@
     "ru": {
       "title": "SSH public key",
       "description": "SSH inbound: user + authorized public_key; outbound private_key (ed25519 auto)."
+    },
+    "en": {
+      "title": "SSH pubkey",
+      "description": "SSH inbound with public-key auth. Same plain SSH fingerprint as password variant."
     }
   },
   "traits": [
@@ -67,5 +71,25 @@
   "client_notes": {
     "keys": "ensureCreds генерирует ed25519 PEM + authorized_keys; inbound users[].public_key",
     "params": "optional bindings[].params overrides: server_version"
+  },
+  "optional_param_fields": [
+    "server_version"
+  ],
+  "param_meta": {
+    "server_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 43,
+      "title": {
+        "en": "SSH banner",
+        "ru": "SSH banner"
+      },
+      "description": {
+        "en": "SSH version string shown to clients.",
+        "ru": "Строка версии SSH для клиентов."
+      }
+    }
   }
 }

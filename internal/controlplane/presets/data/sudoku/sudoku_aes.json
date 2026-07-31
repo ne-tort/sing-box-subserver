@@ -11,6 +11,10 @@
     "ru": {
       "title": "Sudoku AES-GCM",
       "description": "Sudoku shared key + aes-128-gcm + entropy table."
+    },
+    "en": {
+      "title": "Sudoku AES",
+      "description": "Sudoku AES mode. Stronger payload crypto inside the sudoku framing."
     }
   },
   "traits": [
@@ -73,5 +77,25 @@
   },
   "client_notes": {
     "params": "optional bindings[].params overrides: fallback"
+  },
+  "optional_param_fields": [
+    "fallback"
+  ],
+  "param_meta": {
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "http://127.0.0.1:80",
+      "ui_group": "core",
+      "ui_order": 40,
+      "title": {
+        "en": "Fallback URL",
+        "ru": "Fallback URL"
+      },
+      "description": {
+        "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
+        "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      }
+    }
   }
 }
