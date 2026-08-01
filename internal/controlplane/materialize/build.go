@@ -270,12 +270,13 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		for field, val := range peerSecretsForPreset(set, p.Name) {
 			vars["{{peer."+field+"}}"] = val
 		}
-		applyBindingParamVars(vars, paramsForDemuxSlot(b.Params, p.Protocol, slotSNI), paramDefaultsForPreset(p.Name))
+		slotParams := paramsForDemuxSlot(b.Params, p.Protocol, slotSNI)
+		applyBindingParamVars(vars, slotParams, paramDefaultsForPreset(p.Name))
 		ib, err = substituteMap(ib, vars)
 		if err != nil {
 			return nil, err
 		}
-		applyCustomPresetInboundKnobs(ib, p.Name, b.Params)
+		applyCustomPresetInboundKnobs(ib, p.Name, effectiveKnobParams(slotParams, p.Name))
 		ib["tag"] = tag
 		if presetHasTrait(p, "no_listen") || (p.Protocol == "carrier" && !presetHasTrait(p, "needs_listen")) {
 			// SFU / cloudflared underlay does not bind set.listen_port.
@@ -749,6 +750,30 @@ func paramDefaultsForPreset(name string) map[string]string {
 	}
 	if v := notes["http_path_default"]; v != "" {
 		out["http_path"] = v
+	}
+	return out
+}
+
+// effectiveKnobParams merges preset defaults under operator params for Go-side knobs.
+// Template substitution already merges via applyBindingParamVars; knobs need the same
+// effective map so optional_param_fields (e.g. Hy2 up/down Mbps) are not ignored.
+func effectiveKnobParams(params map[string]string, presetName string) map[string]string {
+	out := map[string]string{}
+	for k, v := range paramDefaultsForPreset(presetName) {
+		if strings.TrimSpace(v) != "" {
+			out[k] = strings.TrimSpace(v)
+		}
+	}
+	for k, v := range params {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		out[k] = v
 	}
 	return out
 }
@@ -1430,12 +1455,13 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					vars["{{user.uuid}}"] = fmt.Sprint(uuid)
 					applyPeerSecretVars(vars, set, p.Name)
 					slotSNI := strings.TrimSpace(b.Params["demux_sni"])
-					applyBindingParamVars(vars, paramsForDemuxSlot(b.Params, p.Protocol, slotSNI), paramDefaultsForPreset(p.Name))
+					slotParams := paramsForDemuxSlot(b.Params, p.Protocol, slotSNI)
+					applyBindingParamVars(vars, slotParams, paramDefaultsForPreset(p.Name))
 					ob, err = substituteMap(ob, vars)
 					if err != nil {
 						return err
 					}
-					applyCustomPresetOutboundKnobs(ob, p.Name, b.Params)
+					applyCustomPresetOutboundKnobs(ob, p.Name, effectiveKnobParams(slotParams, p.Name))
 					ob["tag"] = tag
 					ob["server"] = publicHost
 					if publicHost == "" {
@@ -1544,12 +1570,13 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 				applyUserCredVars(vars, user.Name, creds)
 				applyPeerSecretVars(vars, set, p.Name)
 				slotSNI := strings.TrimSpace(b.Params["demux_sni"])
-				applyBindingParamVars(vars, paramsForDemuxSlot(b.Params, p.Protocol, slotSNI), paramDefaultsForPreset(p.Name))
+				slotParams := paramsForDemuxSlot(b.Params, p.Protocol, slotSNI)
+				applyBindingParamVars(vars, slotParams, paramDefaultsForPreset(p.Name))
 				ob, err = substituteMap(ob, vars)
 				if err != nil {
 					return nil, err
 				}
-				applyCustomPresetOutboundKnobs(ob, p.Name, b.Params)
+				applyCustomPresetOutboundKnobs(ob, p.Name, effectiveKnobParams(slotParams, p.Name))
 				ob["tag"] = tag
 				if p.Protocol == "carrier" {
 					finalizeCarrierOutbound(ob, set, p, creds, b, publicHost, serverName)
