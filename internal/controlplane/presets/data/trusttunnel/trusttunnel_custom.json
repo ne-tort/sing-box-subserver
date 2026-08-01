@@ -51,6 +51,10 @@
   "param_fields": [
     "mode"
   ],
+  "optional_param_fields": [
+    "anti_dpi",
+    "enable_protocol_fallback"
+  ],
   "param_meta": {
     "mode": {
       "type": "enum",
@@ -70,6 +74,37 @@
       "description": {
         "en": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto fallback).",
         "ru": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto)."
+      }
+    },
+    "anti_dpi": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "transport",
+      "ui_order": 2,
+      "title": {
+        "en": "Anti-DPI",
+        "ru": "Anti-DPI"
+      },
+      "description": {
+        "en": "transport.anti_dpi — padding/timing hardening on TrustTunnel streams.",
+        "ru": "transport.anti_dpi — hardening потоков TrustTunnel."
+      }
+    },
+    "enable_protocol_fallback": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "transport",
+      "ui_order": 3,
+      "visible_when": [{"key": "mode", "equals": "auto"}],
+      "title": {
+        "en": "Protocol fallback",
+        "ru": "Protocol fallback"
+      },
+      "description": {
+        "en": "When mode=auto: enable_protocol_fallback between h2/h3.",
+        "ru": "При mode=auto: enable_protocol_fallback между h2/h3."
       }
     }
   },

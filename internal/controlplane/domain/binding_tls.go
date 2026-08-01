@@ -1,3 +1,5 @@
+//go:build with_controlplane
+
 package domain
 
 import "strings"

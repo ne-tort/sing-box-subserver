@@ -789,9 +789,11 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		"up_mbps": "100", "down_mbps": "100",
 		"mtu": "1408", "jc": "", "jmin": "", "jmax": "",
 		"i1": "", "i2": "", "i3": "", "i4": "", "i5": "",
-		// TUIC / TrustTunnel / SS / Naive constructors
+		// TUIC / TrustTunnel / SS / Naive / utility constructors
 		"congestion_control": "bbr", "udp_relay_mode": "native", "zero_rtt": "false",
 		"mode": "auto", "method": "aes-128-gcm", "network": "tcp",
+		"udp_over_tcp": "false", "anti_dpi": "true", "enable_protocol_fallback": "true",
+		"outbound_type": "socks",
 	}
 	for k, v := range presetDefaults {
 		if strings.TrimSpace(v) != "" {

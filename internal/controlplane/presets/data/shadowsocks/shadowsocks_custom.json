@@ -2,29 +2,23 @@
   "schema_version": 1,
   "tag": "shadowsocks_custom",
   "protocol": "shadowsocks",
-  "aliases": [
-    "shadowsocks-custom"
-  ],
-  "short_name": "SS AES128 custom",
+  "aliases": ["shadowsocks-custom", "ss-constructor"],
+  "short_name": "SS custom",
   "status": "lab",
+  "custom_preset": true,
   "i18n": {
     "ru": {
-      "title": "SS AES128 custom (конструктор)",
-      "description": "Shadowsocks конструктор: выбор AEAD/2022 method (без TLS-камуфляжа)."
+      "title": "Shadowsocks конструктор",
+      "description": "AEAD/2022 method, network tcp|udp, опциональный UDP-over-TCP. Без TLS-камуфляжа."
     },
     "en": {
       "title": "Shadowsocks constructor",
-      "description": "Lab Shadowsocks: pick AEAD or 2022 cipher method (no TLS camouflage)."
+      "description": "AEAD/2022 method, network tcp|udp, optional UDP-over-TCP. No TLS camouflage."
     }
   },
-  "traits": [
-    "tcp",
-    "custom"
-  ],
+  "traits": ["tcp", "custom"],
   "demux_hints": {
-    "network": [
-      "tcp"
-    ],
+    "network": ["tcp"],
     "looks_like": "raw_tcp",
     "alpn": [],
     "sni_required": false,
@@ -37,12 +31,9 @@
     "mobile": 6,
     "setup": 3
   },
-  "cred_fields": [
-    "password"
-  ],
-  "param_fields": [
-    "method"
-  ],
+  "cred_fields": ["password"],
+  "param_fields": ["method"],
+  "optional_param_fields": ["network", "udp_over_tcp"],
   "param_meta": {
     "method": {
       "type": "enum",
@@ -58,13 +49,35 @@
       "default": "aes-128-gcm",
       "ui_group": "core",
       "ui_order": 1,
-      "title": {
-        "en": "Cipher method",
-        "ru": "Метод шифрования"
-      },
+      "title": {"en": "Cipher method", "ru": "Метод шифрования"},
       "description": {
         "en": "Shadowsocks method (sing-box shadowsocks.method).",
         "ru": "Метод Shadowsocks (shadowsocks.method)."
+      }
+    },
+    "network": {
+      "type": "enum",
+      "widget": "select",
+      "enum": ["tcp", "udp", "tcp,udp"],
+      "default": "tcp",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {"en": "Network", "ru": "Сеть"},
+      "description": {
+        "en": "Listen/dial networks for the SS link.",
+        "ru": "Сети listen/dial для SS."
+      }
+    },
+    "udp_over_tcp": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "core",
+      "ui_order": 3,
+      "title": {"en": "UDP-over-TCP", "ru": "UDP-over-TCP"},
+      "description": {
+        "en": "Outbound udp_over_tcp v2 (when UDP path is filtered).",
+        "ru": "Outbound udp_over_tcp v2 (если UDP режется)."
       }
     }
   },
@@ -85,6 +98,5 @@
     "method": "{{param.method}}",
     "password": "{{user.password}}",
     "network": "tcp"
-  },
-  "custom_preset": true
+  }
 }
