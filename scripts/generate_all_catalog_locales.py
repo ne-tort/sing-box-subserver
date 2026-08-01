@@ -628,6 +628,35 @@ def translate_catalog(lang: str, en_master: dict[str, dict[str, str]], ru_master
     return out
 
 
+def fill_missing_param_help(files: dict[str, dict[str, str]], lang: str) -> int:
+    """Ensure every param.*.title has help.summary (+ hint) from description when missing."""
+    n = 0
+    for blob in files.values():
+        titles = [k for k in list(blob) if k.startswith("param.") and k.endswith(".title")]
+        for title_k in titles:
+            base = title_k[: -len(".title")]
+            hs = f"{base}.help.summary"
+            if hs in blob and blob[hs].strip():
+                continue
+            desc = (blob.get(f"{base}.description") or "").strip()
+            title = (blob.get(title_k) or "").strip()
+            if not desc and not title:
+                continue
+            src = desc or title
+            if lang == "ru":
+                summary = src if len(src) >= 45 else f"{src.rstrip('.')} — параметр inbound/outbound."
+                hint = "значение по docs протокола"
+            else:
+                summary = src if len(src) >= 45 else f"{src.rstrip('.')}; applied on inbound/outbound."
+                hint = "protocol-specific value"
+            blob[hs] = summary
+            ih = f"{base}.help.input_hint"
+            if ih not in blob or not str(blob.get(ih, "")).strip():
+                blob[ih] = hint
+            n += 1
+    return n
+
+
 def write_all(lang: str, files: dict[str, dict[str, str]]) -> int:
     count = 0
     for rel, blob in sorted(files.items()):
@@ -647,9 +676,13 @@ def write_all(lang: str, files: dict[str, dict[str, str]]) -> int:
 def main() -> None:
     rw = load_rw_module()
     en_master, ru_master = build_en_ru_masters(rw)
+    fill_missing_param_help(en_master, "en")
+    fill_missing_param_help(ru_master, "ru")
     stats: dict[str, int] = {}
     for lang in CATALOG_LANGS:
         files = translate_catalog(lang, en_master, ru_master)
+        if lang not in ("en", "ru"):
+            fill_missing_param_help(files, "en")
         stats[lang] = write_all(lang, files)
     print("Catalog locale generation complete:")
     for lang in CATALOG_LANGS:

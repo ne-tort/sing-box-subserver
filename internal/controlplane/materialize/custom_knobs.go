@@ -370,7 +370,8 @@ func applyTrustTunnelCustomKnobs(m map[string]any, preset string, params map[str
 }
 
 func applyAnyTLSCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
-	if preset != "anytls_custom" {
+	typ, _ := m["type"].(string)
+	if typ != "anytls" && preset != "anytls_custom" {
 		return
 	}
 	if alpn := strings.TrimSpace(params["alpn"]); alpn != "" {
@@ -381,11 +382,20 @@ func applyAnyTLSCustomKnobs(m map[string]any, preset string, params map[string]s
 	if inbound {
 		return
 	}
-	if strings.EqualFold(strings.TrimSpace(params["idle_session"]), "true") {
+	if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
+		if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
+			tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
+		}
+	}
+	// idle_session: custom constructor or explicit override on any anytls outbound
+	if strings.TrimSpace(params["idle_session"]) == "" && preset != "anytls_custom" && preset != "anytls_idle" {
+		return
+	}
+	if preset == "anytls_idle" || strings.EqualFold(strings.TrimSpace(params["idle_session"]), "true") {
 		m["idle_session_check_interval"] = "30s"
 		m["idle_session_timeout"] = "30s"
 		m["min_idle_session"] = 0
-	} else {
+	} else if preset == "anytls_custom" || strings.TrimSpace(params["idle_session"]) != "" {
 		delete(m, "idle_session_check_interval")
 		delete(m, "idle_session_timeout")
 		delete(m, "min_idle_session")
@@ -399,6 +409,13 @@ func applyShadowTLSCustomKnobs(m map[string]any, preset string, params map[strin
 	}
 	if _, ok := m["strict_mode"]; ok || strings.TrimSpace(params["strict_mode"]) != "" {
 		m["strict_mode"] = !strings.EqualFold(strings.TrimSpace(params["strict_mode"]), "false")
+	}
+	if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
+		if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
+			if _, isIn := m["listen"]; !isIn {
+				tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
+			}
+		}
 	}
 }
 
@@ -435,7 +452,16 @@ func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]str
 	if strings.TrimSpace(params["websocket"]) != "" {
 		m["websocket"] = strings.EqualFold(strings.TrimSpace(params["websocket"]), "true")
 	}
-	_ = inbound
+	if v := strings.TrimSpace(params["udp"]); v != "" {
+		m["udp"] = v
+	}
+	if !inbound {
+		if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
+			if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
+				tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
+			}
+		}
+	}
 }
 
 func applyCloudflaredCustomKnobs(m map[string]any, preset string, params map[string]string) {
