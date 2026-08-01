@@ -1,7 +1,7 @@
 {
   "param.vmess_custom.alpn.description": "ALPN через запятую (h3 для QUIC).",
   "param.vmess_custom.alpn.title": "Список ALPN",
-  "param.vmess_custom.fingerprint.description": "uTLS fingerprint клиента на outbound.",
+  "param.vmess_custom.fingerprint.description": "uTLS fingerprint клиента (не для QUIC).",
   "param.vmess_custom.fingerprint.help.format": "chrome",
   "param.vmess_custom.fingerprint.help.input_hint": "chrome|firefox|safari|…",
   "param.vmess_custom.fingerprint.help.summary": "uTLS fingerprint ClientHello на TCP+TLS outbound; на сыром QUIC/Hy2 не применяется.",
@@ -89,7 +89,7 @@
   "param.vmess_ws_tls.ws_path.help.summary": "Path после TLS для WebSocket; стоковые /ws легко ловятся DPI — совпадайте с CDN/nginx.",
   "param.vmess_ws_tls.ws_path.title": "WebSocket path",
   "preset.vmess_custom.description": "Lab конструктор VMess: transport × tls/reality/plain. Для Reality лучше VLESS.",
-  "preset.vmess_custom.title": "VMess TLS custom (конструктор)",
+  "preset.vmess_custom.title": "VMess конструктор",
   "preset.vmess_grpc_reality.description": "vmess + Reality + gRPC (ALPN h2).",
   "preset.vmess_grpc_reality.title": "VMESS gRPC+R",
   "preset.vmess_grpc_tls.description": "VMess + TLS + gRPC.",

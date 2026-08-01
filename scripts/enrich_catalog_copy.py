@@ -289,11 +289,13 @@ def help_for_field(field: str, lang: str, description: str = "") -> tuple[str, s
             return ru_s, ru_h, ru_f
         return en_s, en_h, en_f
     base = description.strip() or field.replace("_", " ")
+    # Prefer a concise technical sentence over filler templates.
     if lang == "ru":
-        summary = base if len(base) > 40 else f"Параметр {field}: {base}. Влияет на sing-box конфиг inbound/outbound."
+        summary = base if len(base) >= 24 else f"{base.rstrip('.')} — параметр inbound/outbound."
     else:
-        summary = base if len(base) > 40 else f"Preset parameter {field}: {base}. Affects sing-box inbound/outbound wiring."
-    return summary, "Value per operator docs", ""
+        summary = base if len(base) >= 24 else f"{base.rstrip('.')}; applied on inbound/outbound."
+    hint = "Hostname / version string" if lang != "ru" else "Hostname / строка версии"
+    return summary, hint, ""
 
 
 def enrich_locale_file(path: Path, lang: str) -> int:

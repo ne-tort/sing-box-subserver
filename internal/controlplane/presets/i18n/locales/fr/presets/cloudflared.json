@@ -8,15 +8,19 @@
   "param.cloudflared_custom.token.description": "Cloudflare Jeton de tunnel from Zero Trust.",
   "param.cloudflared_custom.token.help.format": "eyJ...",
   "param.cloudflared_custom.token.help.input_hint": "Create a tunnel and copy the token string.",
-  "param.cloudflared_custom.token.help.summary": "Cloudflare Jeton de tunnel from Zero Trust; opens the named tunnel.",
+  "param.cloudflared_custom.token.help.summary": "Cloudflare Jeton de tunnel from Zero Trust → Networks → Tunnels. Ops secret; not a user credential.",
   "param.cloudflared_custom.token.title": "Jeton de tunnel",
+  "param.cloudflared_token.ha_connections.description": "Cloudflared edge HA connection count.",
+  "param.cloudflared_token.ha_connections.title": "HA connections",
+  "param.cloudflared_token.post_quantum.description": "Prefer post-quantum key exchange on the tunnel.",
+  "param.cloudflared_token.post_quantum.title": "Post-quantum",
   "param.cloudflared_token.token.description": "Cloudflare Jeton de tunnel from Zero Trust.",
   "param.cloudflared_token.token.help.format": "eyJ...",
   "param.cloudflared_token.token.help.input_hint": "Create a tunnel and copy the token string.",
-  "param.cloudflared_token.token.help.summary": "Cloudflare Jeton de tunnel from Zero Trust; opens the named tunnel.",
+  "param.cloudflared_token.token.help.summary": "Cloudflare Jeton de tunnel from Zero Trust → Networks → Tunnels. Ops secret; not a user credential.",
   "param.cloudflared_token.token.title": "Jeton de tunnel",
   "preset.cloudflared_custom.description": "Cloudflare Tunnel constructor: token + edge protocol/post_quantum/ha_connections.",
-  "preset.cloudflared_custom.title": "CF Tunnel custom constructor",
+  "preset.cloudflared_custom.title": "Cloudflared constructor",
   "preset.cloudflared_token.description": "Cloudflare Tunnel inbound via token. Bypasses IP blocks; control and trust shift to Cloudflare.",
-  "preset.cloudflared_token.title": "CF Tunnel"
+  "preset.cloudflared_token.title": "Cloudflared token"
 }

@@ -85,8 +85,19 @@
         "ru": "Obfs Host"
       },
       "description": {
-        "en": "Host header for Snell v6 obfs.",
-        "ru": "Host header для Snell v6 obfs."
+        "en": "Host header for Snell HTTP/TLS obfs.",
+        "ru": "Host header для Snell HTTP/TLS obfs."
+      },
+      "help": {
+        "summary": {
+          "en": "Host header used by Snell obfs (http/tls). Match a believable site; unused when obfs_mode=off.",
+          "ru": "Host header для Snell obfs (http/tls). Под реалистичный сайт; не используется при obfs_mode=off."
+        },
+        "input_hint": {
+          "en": "Hostname without scheme",
+          "ru": "Hostname без схемы"
+        },
+        "format": "www.bing.com"
       }
     }
   }

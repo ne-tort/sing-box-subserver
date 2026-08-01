@@ -71,7 +71,8 @@
     "params": "optional bindings[].params overrides: traffic_pattern"
   },
   "optional_param_fields": [
-    "traffic_pattern"
+    "traffic_pattern",
+    "mtu"
   ],
   "param_meta": {
     "traffic_pattern": {
@@ -86,6 +87,32 @@
       "description": {
         "en": "Mieru traffic shaping profile name.",
         "ru": "Имя профиля shaping трафика Mieru."
+      }
+    },
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "1400",
+      "ui_group": "core",
+      "ui_order": 30,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "Mieru path MTU.",
+        "ru": "MTU пути Mieru."
+      },
+      "help": {
+        "summary": {
+          "en": "Mieru MTU. Keep ≤ path MTU; 1280–1400 is typical behind CGNAT/mobile.",
+          "ru": "MTU Mieru. Держите ≤ path MTU; 1280–1400 типично за CGNAT/mobile."
+        },
+        "input_hint": {
+          "en": "576–65535",
+          "ru": "576–65535"
+        },
+        "format": "1400"
       }
     }
   }

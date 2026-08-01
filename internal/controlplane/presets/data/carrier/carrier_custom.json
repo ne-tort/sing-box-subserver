@@ -14,7 +14,7 @@
     },
     "en": {
       "title": "Carrier constructor",
-      "description": "Lab Carrier: pick provider/room/token knobs. Prefer a concrete SFU preset when possible."
+      "description": "Lab Carrier: pick provider (jitsi/telemost/wbstream/jitsi_sei), room URL, optional token/key. Prefer a concrete SFU preset when possible."
     }
   },
   "traits": [
@@ -53,7 +53,8 @@
       "room": "{{param.room}}",
       "transport": "datachannel",
       "password": "{{peer.password}}",
-      "key": "{{param.key}}"
+      "key": "{{param.key}}",
+      "token": "{{param.token}}"
     },
     "lifecycle": {
       "enabled": true,
@@ -74,7 +75,8 @@
       "transport": "datachannel",
       "password": "{{peer.password}}",
       "device_id": "{{user.device_id}}",
-      "key": "{{param.key}}"
+      "key": "{{param.key}}",
+      "token": "{{param.token}}"
     },
     "lifecycle": {
       "enabled": true,
@@ -91,7 +93,9 @@
   },
   "client_notes": {
     "room": "обязателен в bindings[].params.room; self-host = свой Jitsi host в URL",
-    "transport": "datachannel|seichannel (vp8channel запрещён для jitsi)"
+    "provider": "jitsi|telemost|wbstream|jitsi_sei → materialize knobs (SEI = jitsi+seichannel)",
+    "token": "опц.; wbstream guest-register часто требует token",
+    "transport": "ставится knobs по provider (datachannel|seichannel|vp8channel)"
   },
   "peer_secret_fields": {
     "password": "password"
@@ -108,8 +112,8 @@
         "ru": "URL комнаты"
       },
       "description": {
-        "en": "Optional constructor override for room.",
-        "ru": "Опциональный параметр конструктора: room."
+        "en": "SFU room URL (meet.jit.si/Room, Telemost, WB Stream, …).",
+        "ru": "URL комнаты SFU (meet.jit.si/Room, Telemost, WB Stream, …)."
       }
     },
     "token": {
@@ -120,8 +124,8 @@
         "ru": "Токен"
       },
       "description": {
-        "en": "Optional constructor override for token.",
-        "ru": "Опциональный параметр конструктора: token."
+        "en": "Optional SFU join token (WB Stream guest-register).",
+        "ru": "Опциональный join-токен SFU (guest-register WB Stream)."
       }
     },
     "provider": {
@@ -139,8 +143,8 @@
         "ru": "Провайдер"
       },
       "description": {
-        "en": "Carrier SFU provider.",
-        "ru": "SFU-провайдер Carrier."
+        "en": "SFU provider. jitsi_sei → provider=jitsi + transport=seichannel.",
+        "ru": "SFU-провайдер. jitsi_sei → provider=jitsi + transport=seichannel."
       }
     },
     "key": {
@@ -153,8 +157,8 @@
         "ru": "Ключ комнаты"
       },
       "description": {
-        "en": "Optional Carrier room key/token.",
-        "ru": "Опциональный ключ/токен комнаты Carrier."
+        "en": "Optional Carrier room key (link.key).",
+        "ru": "Опциональный ключ комнаты Carrier (link.key)."
       }
     }
   },

@@ -9,7 +9,7 @@ import (
 )
 
 func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[string]string) {
-	applyTuicZeroRTT(ib, preset, params)
+	applyTuicKnobs(ib, preset, params)
 	applyNaiveNetworkKnobs(ib, preset, params)
 	applyHy2CustomKnobs(ib, preset, params)
 	applyVlessLikeCustomKnobs(ib, preset, params)
@@ -24,11 +24,14 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applyMieruCustomKnobs(ib, preset, params)
 	applyDerpCustomKnobs(ib, preset, params, true)
 	applyCloudflaredCustomKnobs(ib, preset, params)
+	applyCarrierCustomKnobs(ib, preset, params)
+	applyShadowQUICKnobs(ib, params)
 	applyStockBandwidthParams(ib, params)
+	applyStockIgnoreClientBandwidth(ib, params)
 }
 
 func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map[string]string) {
-	applyTuicZeroRTT(ob, preset, params)
+	applyTuicKnobs(ob, preset, params)
 	applyNaiveNetworkKnobs(ob, preset, params)
 	applyHy2CustomKnobs(ob, preset, params)
 	applyVlessLikeCustomKnobs(ob, preset, params)
@@ -42,7 +45,10 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applySudokuCustomKnobs(ob, preset, params)
 	applyMieruCustomKnobs(ob, preset, params)
 	applyDerpCustomKnobs(ob, preset, params, false)
+	applyCarrierCustomKnobs(ob, preset, params)
+	applyShadowQUICKnobs(ob, params)
 	applyStockBandwidthParams(ob, params)
+	applyStockIgnoreClientBandwidth(ob, params)
 	stripUTLSForQUICTransport(ob)
 }
 
@@ -64,7 +70,43 @@ func applyStockBandwidthParams(m map[string]any, params map[string]string) {
 	}
 }
 
-func applyTuicZeroRTT(m map[string]any, preset string, params map[string]string) {
+func applyStockIgnoreClientBandwidth(m map[string]any, params map[string]string) {
+	typ, _ := m["type"].(string)
+	if typ != "hysteria2" {
+		return
+	}
+	if strings.TrimSpace(params["ignore_client_bandwidth"]) == "" {
+		return
+	}
+	m["ignore_client_bandwidth"] = strings.EqualFold(strings.TrimSpace(params["ignore_client_bandwidth"]), "true")
+}
+
+func applyShadowQUICKnobs(m map[string]any, params map[string]string) {
+	typ, _ := m["type"].(string)
+	if typ != "shadowquic" {
+		return
+	}
+	if v := strings.TrimSpace(params["congestion_control"]); v != "" {
+		m["congestion_control"] = v
+	}
+	if strings.TrimSpace(params["zero_rtt"]) != "" {
+		m["zero_rtt"] = strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true")
+	}
+}
+
+func applyTuicKnobs(m map[string]any, preset string, params map[string]string) {
+	typ, _ := m["type"].(string)
+	if typ != "tuic" {
+		return
+	}
+	if v := strings.TrimSpace(params["congestion_control"]); v != "" {
+		m["congestion_control"] = v
+	}
+	if _, isInbound := m["listen"]; !isInbound {
+		if v := strings.TrimSpace(params["udp_relay_mode"]); v != "" {
+			m["udp_relay_mode"] = v
+		}
+	}
 	if preset != "tuic_custom" {
 		return
 	}
@@ -351,7 +393,8 @@ func applyAnyTLSCustomKnobs(m map[string]any, preset string, params map[string]s
 }
 
 func applyShadowTLSCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "shadowtls_custom" {
+	typ, _ := m["type"].(string)
+	if typ != "shadowtls" && preset != "shadowtls_custom" {
 		return
 	}
 	if _, ok := m["strict_mode"]; ok || strings.TrimSpace(params["strict_mode"]) != "" {
@@ -372,7 +415,8 @@ func applySudokuCustomKnobs(m map[string]any, preset string, params map[string]s
 }
 
 func applyMieruCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "mieru_custom" {
+	typ, _ := m["type"].(string)
+	if typ != "mieru" && preset != "mieru_custom" {
 		return
 	}
 	if v, ok := parseUintParam(params["mtu"]); ok {
@@ -384,7 +428,8 @@ func applyMieruCustomKnobs(m map[string]any, preset string, params map[string]st
 }
 
 func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
-	if preset != "derp_custom" {
+	typ, _ := m["type"].(string)
+	if typ != "derp" && preset != "derp_custom" {
 		return
 	}
 	if strings.TrimSpace(params["websocket"]) != "" {
@@ -394,7 +439,8 @@ func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]str
 }
 
 func applyCloudflaredCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "cloudflared_custom" {
+	typ, _ := m["type"].(string)
+	if typ != "cloudflared" && preset != "cloudflared_custom" {
 		return
 	}
 	if strings.TrimSpace(params["post_quantum"]) != "" {
@@ -402,6 +448,44 @@ func applyCloudflaredCustomKnobs(m map[string]any, preset string, params map[str
 	}
 	if v, ok := parseUintParam(params["ha_connections"]); ok {
 		m["ha_connections"] = v
+	}
+}
+
+// applyCarrierCustomKnobs maps constructor provider/token onto carrier objects.
+// Enum value jitsi_sei → provider=jitsi + transport=seichannel.
+func applyCarrierCustomKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "carrier_custom" {
+		return
+	}
+	raw := strings.ToLower(strings.TrimSpace(params["provider"]))
+	if raw == "" {
+		raw = "jitsi"
+	}
+	provider := raw
+	transport := "datachannel"
+	switch raw {
+	case "jitsi":
+		transport = "datachannel"
+	case "jitsi_sei":
+		provider = "jitsi"
+		transport = "seichannel"
+	case "telemost", "wbstream":
+		transport = "vp8channel"
+	}
+	m["provider"] = provider
+	link, _ := m["link"].(map[string]any)
+	if link == nil {
+		link = map[string]any{}
+		m["link"] = link
+	}
+	link["transport"] = transport
+	if tok := strings.TrimSpace(params["token"]); tok != "" {
+		link["token"] = tok
+	} else if provider != "wbstream" {
+		delete(link, "token")
+	}
+	if key := strings.TrimSpace(params["key"]); key != "" {
+		link["key"] = key
 	}
 }
 

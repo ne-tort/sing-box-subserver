@@ -8,7 +8,7 @@
   "preset.mixed_auth.description": "HTTP CONNECT + SOCKS5 with auth on one port. Local utility inbound.",
   "preset.mixed_auth.title": "Mixed auth",
   "preset.mixed_custom.description": "Mixed HTTP+SOCKS constructor: plain/TLS inbound; client outbound socks|http.",
-  "preset.mixed_custom.title": "Mixed auth custom constructor",
+  "preset.mixed_custom.title": "Mixed constructor",
   "preset.mixed_tls.description": "Mixed HTTP/SOCKS behind TLS. Utility; not a DPI strategy.",
   "preset.mixed_tls.title": "Mixed TLS"
 }

@@ -30,7 +30,7 @@
       "http/1.1"
     ],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "TLS → HTTP CONNECT",
     "compatible_with_demux": true
   },
   "scores": {

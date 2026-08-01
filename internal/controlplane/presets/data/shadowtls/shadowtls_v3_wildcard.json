@@ -81,7 +81,8 @@
     "params": "optional bindings[].params overrides: handshake_server"
   },
   "optional_param_fields": [
-    "handshake_server"
+    "handshake_server",
+    "strict_mode"
   ],
   "param_meta": {
     "handshake_server": {
@@ -97,6 +98,32 @@
       "description": {
         "en": "ShadowTLS v3 handshake mimic target (SNI).",
         "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    },
+    "strict_mode": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 20,
+      "title": {
+        "en": "Strict mode",
+        "ru": "Strict mode"
+      },
+      "description": {
+        "en": "Reject handshakes that fail ShadowTLS strict checks.",
+        "ru": "Отклонять handshake, не прошедшие strict-проверки ShadowTLS."
+      },
+      "help": {
+        "summary": {
+          "en": "When true, ShadowTLS drops clients that fail strict handshake validation.",
+          "ru": "При true ShadowTLS отбрасывает клиенты, не прошедшие strict handshake validation."
+        },
+        "input_hint": {
+          "en": "true|false",
+          "ru": "true|false"
+        },
+        "format": "true"
       }
     }
   }

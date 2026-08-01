@@ -102,6 +102,12 @@
       "description": {
         "en": "Hy1 upload cap (Mbps).",
         "ru": "Лимит upload Hy1 (Mbps)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "down_mbps": {
@@ -117,6 +123,12 @@
       "description": {
         "en": "Hy1 download cap (Mbps).",
         "ru": "Лимит download Hy1 (Mbps)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     }
   }

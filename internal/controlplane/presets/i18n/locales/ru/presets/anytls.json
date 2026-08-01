@@ -8,9 +8,9 @@
   "param.anytls_custom.fingerprint.title": "uTLS fingerprint",
   "param.anytls_custom.idle_session.description": "Outbound idle_session_* = 30s (warm TLS).",
   "param.anytls_custom.idle_session.title": "Idle session",
-  "preset.anytls.description": "TLS-обёртка с паролем. Типичный второй TCP-слот demux (другой SNI/ALPN рядом с Reality).",
+  "preset.anytls.description": "AnyTLS TCP+TLS с padding_scheme (DPI видит менее регулярные TLS record sizes).",
   "preset.anytls.title": "AnyTLS",
-  "preset.anytls_custom.description": "Lab-конструктор AnyTLS. Для :443-стека обычно хватает инварианта anytls.",
+  "preset.anytls_custom.description": "AnyTLS: uTLS fingerprint, ALPN, опциональные idle_session_* на outbound.",
   "preset.anytls_custom.title": "AnyTLS конструктор",
   "preset.anytls_idle.description": "AnyTLS с рекомендованными idle_session_* на outbound (клиент держит warm TLS).",
   "preset.anytls_idle.title": "AnyTLS + idle session"

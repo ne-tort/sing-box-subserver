@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "hy2_custom",
   "protocol": "hysteria2",
-  "aliases": ["hysteria2-custom", "hy2-constructor"],
+  "aliases": [
+    "hysteria2-custom",
+    "hy2-constructor"
+  ],
   "short_name": "Hy2 custom",
   "status": "lab",
   "custom_preset": true,
@@ -16,11 +19,22 @@
       "description": "Lab Hy2: obfs type, bandwidth caps, masquerade mode via params."
     }
   },
-  "traits": ["udp", "quic", "tls", "obfs", "masquerade", "custom"],
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "obfs",
+    "masquerade",
+    "custom"
+  ],
   "demux_hints": {
-    "network": ["udp"],
+    "network": [
+      "udp"
+    ],
     "looks_like": "quic",
-    "alpn": ["h3"],
+    "alpn": [
+      "h3"
+    ],
     "sni_required": true,
     "first_bytes": "QUIC/H3; obfs may break demux match",
     "compatible_with_demux": true
@@ -31,11 +45,15 @@
     "mobile": 5,
     "setup": 3
   },
-  "cred_fields": ["password"],
+  "cred_fields": [
+    "password"
+  ],
   "peer_secret_fields": {
     "obfs_password": "password"
   },
-  "param_fields": ["obfs_type"],
+  "param_fields": [
+    "obfs_type"
+  ],
   "optional_param_fields": [
     "up_mbps",
     "down_mbps",
@@ -48,7 +66,10 @@
     "obfs_type": {
       "type": "enum",
       "widget": "select",
-      "enum": ["none", "salamander"],
+      "enum": [
+        "none",
+        "salamander"
+      ],
       "default": "none",
       "ui_group": "obfs",
       "ui_order": 1,
@@ -76,6 +97,12 @@
       "description": {
         "en": "Server/client upload bandwidth cap.",
         "ru": "Лимит upload (Mbps)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "down_mbps": {
@@ -93,6 +120,12 @@
       "description": {
         "en": "Server/client download bandwidth cap.",
         "ru": "Лимит download (Mbps)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "ignore_client_bandwidth": {
@@ -113,7 +146,12 @@
     "masquerade_mode": {
       "type": "enum",
       "widget": "select",
-      "enum": ["none", "string", "file", "proxy"],
+      "enum": [
+        "none",
+        "string",
+        "file",
+        "proxy"
+      ],
       "default": "none",
       "ui_group": "advanced",
       "ui_order": 20,
@@ -131,7 +169,12 @@
       "widget": "text",
       "ui_group": "advanced",
       "ui_order": 21,
-      "visible_when": [{"key": "masquerade_mode", "equals": "file"}],
+      "visible_when": [
+        {
+          "key": "masquerade_mode",
+          "equals": "file"
+        }
+      ],
       "title": {
         "en": "Masquerade directory",
         "ru": "Каталог masquerade"
@@ -139,6 +182,12 @@
       "description": {
         "en": "Static files root for file masquerade.",
         "ru": "Корень статики для file masquerade."
+      },
+      "help": {
+        "input_hint": {
+          "en": "Absolute directory path on agent",
+          "ru": "Абсолютный путь к каталогу на агенте"
+        }
       }
     },
     "masquerade_url": {
@@ -146,7 +195,12 @@
       "widget": "text",
       "ui_group": "advanced",
       "ui_order": 22,
-      "visible_when": [{"key": "masquerade_mode", "equals": "proxy"}],
+      "visible_when": [
+        {
+          "key": "masquerade_mode",
+          "equals": "proxy"
+        }
+      ],
       "title": {
         "en": "Masquerade proxy URL",
         "ru": "URL proxy masquerade"
@@ -175,7 +229,9 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": ["h3"]
+      "alpn": [
+        "h3"
+      ]
     },
     "ignore_client_bandwidth": true,
     "up_mbps": 100,
@@ -198,7 +254,9 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": ["h3"]
+      "alpn": [
+        "h3"
+      ]
     },
     "up_mbps": 100,
     "down_mbps": 100

@@ -108,8 +108,8 @@
       },
       "help": {
         "summary": {
-          "en": "Paste the full Telemost room URL.",
-          "ru": "Вставьте полный URL комнаты Телемост."
+          "en": "Full Telemost room URL (https://telemost.yandex.ru/j/<id>). Guest join; no Yandex login on agent.",
+          "ru": "Полный URL комнаты Телемост (https://telemost.yandex.ru/j/<id>). Guest join; логин Яндекса на агенте не нужен."
         },
         "input_hint": {
           "en": "Create a room in Telemost and copy the link.",

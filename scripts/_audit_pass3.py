@@ -25,6 +25,13 @@ MATERIALIZE_APPLIED = {
         "masquerade_url",
     },
     "wireguard": {"mtu", "up_mbps", "down_mbps", "jc", "jmin", "jmax", "listen_port"},
+    "carrier": {"provider", "token", "key"},
+    "tuic": {"congestion_control", "udp_relay_mode", "zero_rtt"},
+    "shadowquic": {"congestion_control", "zero_rtt", "jls_addr", "jls_server_name"},
+    "shadowtls": {"strict_mode"},
+    "mieru": {"mtu"},
+    "derp": {"websocket"},
+    "cloudflared": {"ha_connections", "post_quantum", "protocol"},
 }
 
 

@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "wg_custom",
   "protocol": "wireguard",
-  "aliases": ["wireguard-custom", "wg-constructor"],
+  "aliases": [
+    "wireguard-custom",
+    "wg-constructor"
+  ],
   "short_name": "WG custom",
   "status": "lab",
   "custom_preset": true,
@@ -16,9 +19,17 @@
       "description": "Catalog schema for PUT /v1/controlplane/wg: MTU, listen_port, up/down Mbps, optional jc/jmin/jmax. Not installable via from-presets."
     }
   },
-  "traits": ["udp", "endpoint", "wireguard", "awg", "custom"],
+  "traits": [
+    "udp",
+    "endpoint",
+    "wireguard",
+    "awg",
+    "custom"
+  ],
   "demux_hints": {
-    "network": ["udp"],
+    "network": [
+      "udp"
+    ],
     "looks_like": "raw_udp",
     "compatible_with_demux": false
   },
@@ -28,7 +39,11 @@
     "mobile": 7,
     "setup": 3
   },
-  "cred_fields": ["private_key", "public_key", "wg_host_index"],
+  "cred_fields": [
+    "private_key",
+    "public_key",
+    "wg_host_index"
+  ],
   "cred_generators": {
     "private_key": "curve25519",
     "wg_host_index": "wg_host_index"
@@ -54,7 +69,10 @@
       "ui_order": 1,
       "min": 576,
       "max": 65535,
-      "title": {"en": "MTU", "ru": "MTU"},
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
       "description": {
         "en": "WireGuard interface MTU on the hub endpoint.",
         "ru": "MTU интерфейса WireGuard на hub endpoint."
@@ -66,7 +84,10 @@
       "default": "51820",
       "ui_group": "listen",
       "ui_order": 0,
-      "title": {"en": "Listen port", "ru": "Порт listen"},
+      "title": {
+        "en": "Listen port",
+        "ru": "Порт listen"
+      },
       "description": {
         "en": "UDP listen port on the WG hub (endpoint).",
         "ru": "UDP-порт hub endpoint."
@@ -79,10 +100,19 @@
       "ui_order": 2,
       "min": 1,
       "max": 10000,
-      "title": {"en": "Upload Mbps", "ru": "Upload Mbps"},
+      "title": {
+        "en": "Upload Mbps",
+        "ru": "Upload Mbps"
+      },
       "description": {
         "en": "Optional hub-wide upload Mbps ceiling.",
         "ru": "Опциональный потолок upload (Mbps) на hub."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "down_mbps": {
@@ -92,10 +122,19 @@
       "ui_order": 3,
       "min": 1,
       "max": 10000,
-      "title": {"en": "Download Mbps", "ru": "Download Mbps"},
+      "title": {
+        "en": "Download Mbps",
+        "ru": "Download Mbps"
+      },
       "description": {
         "en": "Optional hub-wide download Mbps ceiling.",
         "ru": "Опциональный потолок download (Mbps) на hub."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "jc": {
@@ -103,7 +142,10 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 10,
-      "title": {"en": "AWG jc", "ru": "AWG jc"},
+      "title": {
+        "en": "AWG jc",
+        "ru": "AWG jc"
+      },
       "description": {
         "en": "Override AmneziaWG junk packet count after profile generate.",
         "ru": "Override числа junk AmneziaWG после generate профиля."
@@ -114,10 +156,19 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 11,
-      "title": {"en": "AWG jmin", "ru": "AWG jmin"},
+      "title": {
+        "en": "AWG jmin",
+        "ru": "AWG jmin"
+      },
       "description": {
         "en": "Lower junk packet size bound (AmneziaWG).",
         "ru": "Нижняя граница размера junk-пакета (AmneziaWG)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "bytes (AWG junk min)",
+          "ru": "байты (AWG junk min)"
+        }
       }
     },
     "jmax": {
@@ -125,10 +176,19 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 12,
-      "title": {"en": "AWG jmax", "ru": "AWG jmax"},
+      "title": {
+        "en": "AWG jmax",
+        "ru": "AWG jmax"
+      },
       "description": {
         "en": "Upper junk packet size; must be >= jmin.",
         "ru": "Верхняя граница junk; должна быть >= jmin."
+      },
+      "help": {
+        "input_hint": {
+          "en": "bytes (AWG junk max)",
+          "ru": "байты (AWG junk max)"
+        }
       }
     }
   },

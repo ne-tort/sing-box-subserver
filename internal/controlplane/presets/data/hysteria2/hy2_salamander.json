@@ -94,7 +94,8 @@
   },
   "optional_param_fields": [
     "up_mbps",
-    "down_mbps"
+    "down_mbps",
+    "ignore_client_bandwidth"
   ],
   "param_meta": {
     "up_mbps": {
@@ -110,6 +111,12 @@
       "description": {
         "en": "Hy2 upload cap.",
         "ru": "Лимит upload Hy2."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
       }
     },
     "down_mbps": {
@@ -125,6 +132,38 @@
       "description": {
         "en": "Hy2 download cap.",
         "ru": "Лимит download Hy2."
+      },
+      "help": {
+        "input_hint": {
+          "en": "1–65535 Mbps",
+          "ru": "1–65535 Mbps"
+        }
+      }
+    },
+    "ignore_client_bandwidth": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 15,
+      "title": {
+        "en": "Ignore client bandwidth",
+        "ru": "Ignore client bandwidth"
+      },
+      "description": {
+        "en": "Ignore client-advertised up/down Mbps; use server caps only.",
+        "ru": "Игнорировать up/down Mbps клиента; брать только серверные caps."
+      },
+      "help": {
+        "summary": {
+          "en": "When true, Hy2 ignores client bandwidth advertisements and uses server up/down caps.",
+          "ru": "При true Hy2 игнорирует bandwidth клиента и использует серверные up/down caps."
+        },
+        "input_hint": {
+          "en": "true|false",
+          "ru": "true|false"
+        },
+        "format": "false"
       }
     }
   }

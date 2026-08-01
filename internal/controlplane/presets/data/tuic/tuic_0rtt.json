@@ -87,5 +87,50 @@
     "tls_profile": true,
     "udp": true,
     "quic": true
+  },
+  "optional_param_fields": [
+    "congestion_control",
+    "udp_relay_mode"
+  ],
+  "param_meta": {
+    "congestion_control": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "cubic",
+        "bbr",
+        "new_reno"
+      ],
+      "default": "bbr",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "Congestion control",
+        "ru": "Congestion control"
+      },
+      "description": {
+        "en": "QUIC congestion algorithm (tuic.congestion_control).",
+        "ru": "Алгоритм congestion QUIC (tuic.congestion_control)."
+      }
+    },
+    "udp_relay_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "native",
+        "quic"
+      ],
+      "default": "native",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "UDP relay mode",
+        "ru": "UDP relay mode"
+      },
+      "description": {
+        "en": "Outbound-only: native full-cone vs QUIC-encapsulated relay.",
+        "ru": "Только outbound: native или relay через QUIC."
+      }
+    }
   }
 }

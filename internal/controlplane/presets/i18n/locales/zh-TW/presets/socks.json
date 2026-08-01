@@ -4,7 +4,7 @@
   "preset.socks.description": "Classic SOCKS5. Utility inbound / demux inject target — not anti-DPI.",
   "preset.socks.title": "SOCKS5",
   "preset.socks_custom.description": "SOCKS5 建構器 with optional UDP-over-TCP on outbound.",
-  "preset.socks_custom.title": "SOCKS5 custom 建構器",
+  "preset.socks_custom.title": "SOCKS 建構器",
   "preset.socks_uot.description": "SOCKS5 with UDP-over-TCP. Utility when UDP associate is blocked.",
-  "preset.socks_uot.title": "SOCKS UoT"
+  "preset.socks_uot.title": "SOCKS5 UoT"
 }

@@ -937,11 +937,26 @@ func finalizeCarrierInbound(ib map[string]any, set domain.InboundSet, p domain.P
 			link["password"] = pw
 		}
 	}
+	if b.Params != nil {
+		for _, k := range []string{"room", "token", "transport", "key", "vk_hash", "wrap_password", "peer", "server"} {
+			if v := strings.TrimSpace(b.Params[k]); v != "" {
+				if cur := strings.TrimSpace(fmt.Sprint(link[k])); cur == "" || strings.Contains(cur, "{{") {
+					link[k] = v
+				}
+			}
+		}
+		if v := strings.TrimSpace(b.Params["server_port"]); v != "" {
+			if sp, _ := toUint16(link["server_port"]); sp == 0 {
+				if n, err := strconv.ParseUint(v, 10, 16); err == nil {
+					link["server_port"] = uint16(n)
+				}
+			}
+		}
+	}
 	if sp, ok := toUint16(link["server_port"]); ok {
 		link["server_port"] = sp
 	}
 	pruneEmptyLinkFields(link)
-	_ = b
 }
 
 func finalizeCarrierOutbound(ob map[string]any, set domain.InboundSet, p domain.ProtocolPreset, creds map[string]any, b domain.SetBinding, publicHost, serverName string) {

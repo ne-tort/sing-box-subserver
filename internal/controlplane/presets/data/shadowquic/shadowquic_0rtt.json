@@ -95,7 +95,9 @@
   },
   "optional_param_fields": [
     "jls_addr",
-    "jls_server_name"
+    "jls_server_name",
+    "congestion_control",
+    "zero_rtt"
   ],
   "param_meta": {
     "jls_addr": {
@@ -126,6 +128,41 @@
       "description": {
         "en": "TLS/QUIC SNI for JLS upstream; align with demux_sni on :443 stacks.",
         "ru": "SNI для JLS upstream; на demux :443 выравнивайте с demux_sni."
+      }
+    },
+    "congestion_control": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "cubic",
+        "bbr",
+        "new_reno"
+      ],
+      "default": "bbr",
+      "ui_group": "core",
+      "ui_order": 20,
+      "title": {
+        "en": "Congestion control",
+        "ru": "Congestion control"
+      },
+      "description": {
+        "en": "QUIC congestion algorithm (shadowquic.congestion_control).",
+        "ru": "Алгоритм congestion QUIC (shadowquic.congestion_control)."
+      }
+    },
+    "zero_rtt": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 21,
+      "title": {
+        "en": "0-RTT",
+        "ru": "0-RTT"
+      },
+      "description": {
+        "en": "Enable QUIC 0-RTT (faster resume, weaker replay resistance).",
+        "ru": "Включить QUIC 0-RTT (быстрее resume, слабее replay resistance)."
       }
     }
   }

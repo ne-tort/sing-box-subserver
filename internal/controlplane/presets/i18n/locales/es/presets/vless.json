@@ -1,7 +1,7 @@
 {
   "param.vless_custom.alpn.description": "Comma-separated ALPN.",
   "param.vless_custom.alpn.help.format": "h2,http/1.1",
-  "param.vless_custom.alpn.help.input_hint": "List",
+  "param.vless_custom.alpn.help.input_hint": "h2,http/1.1 (CSV)",
   "param.vless_custom.alpn.help.summary": "h2,http/1.1 for TCP TLS; h3 for QUIC transports.",
   "param.vless_custom.alpn.title": "ALPN",
   "param.vless_custom.fingerprint.description": "ClientHello uTLS.",
@@ -20,7 +20,7 @@
   "param.vless_custom.packet_encoding.title": "Packet encoding",
   "param.vless_custom.service_name.description": "Gun service_name.",
   "param.vless_custom.service_name.help.format": "GunService",
-  "param.vless_custom.service_name.help.input_hint": "Name",
+  "param.vless_custom.service_name.help.input_hint": "gRPC service name",
   "param.vless_custom.service_name.help.summary": "gRPC Gun service_name marker; change GunService if that string is filtered.",
   "param.vless_custom.service_name.title": "gRPC service",
   "param.vless_custom.tls_mode.description": "none|tls|reality.",

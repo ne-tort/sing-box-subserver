@@ -106,6 +106,17 @@
       "description": {
         "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
         "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      },
+      "help": {
+        "summary": {
+          "en": "HTTP(S) fallback URL shown to probes that fail Sudoku auth.",
+          "ru": "HTTP(S) fallback URL для проб, не прошедших Sudoku auth."
+        },
+        "input_hint": {
+          "en": "http(s)://host[:port]/path]",
+          "ru": "http(s)://host[:port]/path]"
+        },
+        "format": "http://127.0.0.1:80"
       }
     }
   }

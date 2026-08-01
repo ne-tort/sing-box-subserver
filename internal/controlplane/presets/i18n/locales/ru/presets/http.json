@@ -6,7 +6,7 @@
   "preset.http.description": "HTTP CONNECT прокси с логином.",
   "preset.http.title": "HTTP CONNECT",
   "preset.http_custom.description": "Конструктор HTTP CONNECT: plain или TLS + uTLS fingerprint. Утилита, не anti-DPI.",
-  "preset.http_custom.title": "HTTP custom (конструктор)",
+  "preset.http_custom.title": "HTTP конструктор",
   "preset.http_tls.description": "HTTP CONNECT за TLS (DPI видит ClientHello, не plaintext CONNECT).",
   "preset.http_tls.title": "HTTP CONNECT + TLS",
   "preset.http_tls_path.description": "HTTP CONNECT+TLS; outbound path/headers для камуфляжа.",

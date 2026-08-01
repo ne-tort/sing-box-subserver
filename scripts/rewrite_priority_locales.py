@@ -561,9 +561,9 @@ hy2_ru.update(preset("hy2_custom", "Hy2 конструктор",
 
 for tag in ("hy2", "hy2_gecko", "hy2_gecko_compact", "hy2_gecko_masquerade", "hy2_masquerade", "hy2_salamander"):
     hy2_ru.update(param(tag, "up_mbps", "Upload Mbps", "Потолок upload.",
-        "Жёсткий потолок upload под канал.", "Mbps", "100"))
+        "Жёсткий потолок upload под канал.", "1–65535 Mbps", "100"))
     hy2_ru.update(param(tag, "down_mbps", "Download Mbps", "Потолок download.",
-        "Жёсткий потолок download под канал.", "Mbps", "100"))
+        "Жёсткий потолок download под канал.", "1–65535 Mbps", "100"))
 hy2_ru.update(param("hy2_masquerade_file", "masquerade_dir", "Каталог masquerade", "Корень статики.",
     "Каталог, отдаваемый при неверном auth.", "Абсолютный путь", "/var/www/html"))
 hy2_ru.update(param("hy2_realm", "realm_server_url", "Realm URL", "URL realm control.",
@@ -573,9 +573,9 @@ hy2_ru.update(param("hy2_realm", "realm_id", "Realm ID", "Идентификат
 hy2_ru.update(param("hy2_custom", "obfs_type", "Обфускация", "none|salamander.",
     "none — demux-friendly QUIC; salamander — сильнее DPI, ломает demux quic/SNI.", "none|salamander", "none"))
 hy2_ru.update(param("hy2_custom", "up_mbps", "Upload Mbps", "Потолок upload.",
-    "Потолок upload.", "Mbps", "100"))
+    "Потолок upload.", "1–65535 Mbps", "100"))
 hy2_ru.update(param("hy2_custom", "down_mbps", "Download Mbps", "Потолок download.",
-    "Потолок download.", "Mbps", "100"))
+    "Потолок download.", "1–65535 Mbps", "100"))
 hy2_ru.update(param("hy2_custom", "ignore_client_bandwidth", "Игнор bandwidth клиента", "ignore_client_bandwidth.",
     "Сервер игнорирует клиентские up/down — стабильнее на кривых клиентах.", "true|false", "true"))
 hy2_ru.update(param("hy2_custom", "masquerade_mode", "Masquerade", "Режим decoy.",
@@ -607,9 +607,9 @@ hy2_en.update(preset("hy2_custom", "Hy2 constructor",
 
 for tag in ("hy2", "hy2_gecko", "hy2_gecko_compact", "hy2_gecko_masquerade", "hy2_masquerade", "hy2_salamander"):
     hy2_en.update(param(tag, "up_mbps", "Upload Mbps", "Upload Mbps cap.",
-        "Hard upload Mbps cap advertised on the Hy2 link (server/client).", "Mbps", "100"))
+        "Hard upload Mbps cap advertised on the Hy2 link (server/client).", "1–65535 Mbps", "100"))
     hy2_en.update(param(tag, "down_mbps", "Download Mbps", "Download Mbps cap.",
-        "Hard download Mbps cap advertised on the Hy2 link (server/client).", "Mbps", "100"))
+        "Hard download Mbps cap advertised on the Hy2 link (server/client).", "1–65535 Mbps", "100"))
 hy2_en.update(param("hy2_masquerade_file", "masquerade_dir", "Masquerade dir", "Static root for file decoy.",
     "Directory served as HTTP decoy when Hy2 auth fails (file masquerade).", "Absolute path", "/var/www/html"))
 hy2_en.update(param("hy2_realm", "realm_server_url", "Realm URL", "Realm operator control URL.",
@@ -619,9 +619,9 @@ hy2_en.update(param("hy2_realm", "realm_id", "Realm ID", "Realm identifier from 
 hy2_en.update(param("hy2_custom", "obfs_type", "Obfuscation", "none|salamander.",
     "none = demux-friendly QUIC; salamander = stronger DPI, breaks demux quic/SNI.", "none|salamander", "none"))
 hy2_en.update(param("hy2_custom", "up_mbps", "Upload Mbps", "Upload Mbps cap.",
-    "Upload Mbps cap written into Hy2 inbound/outbound templates.", "Mbps", "100"))
+    "Upload Mbps cap written into Hy2 inbound/outbound templates.", "1–65535 Mbps", "100"))
 hy2_en.update(param("hy2_custom", "down_mbps", "Download Mbps", "Download Mbps cap.",
-    "Download Mbps cap written into Hy2 inbound/outbound templates.", "Mbps", "100"))
+    "Download Mbps cap written into Hy2 inbound/outbound templates.", "1–65535 Mbps", "100"))
 hy2_en.update(param("hy2_custom", "ignore_client_bandwidth", "Ignore client bandwidth", "ignore_client_bandwidth.",
     "Server ignores client up/down — stabler with odd clients.", "true|false", "true"))
 hy2_en.update(param("hy2_custom", "masquerade_mode", "Masquerade", "Decoy mode.",
@@ -652,9 +652,9 @@ wg_ru.update(param("wg_custom", "mtu", "MTU", "MTU интерфейса.",
 wg_ru.update(param("wg_custom", "listen_port", "Listen UDP", "Порт hub.",
     "UDP listen hub. Не путать с публичным demux :443.", "1–65535", "51820"))
 wg_ru.update(param("wg_custom", "up_mbps", "Upload Mbps", "Hub up_mbps.",
-    "Опциональный потолок upload (Mbps) на WG endpoint.", "Mbps", ""))
+    "Опциональный потолок upload (Mbps) на WG endpoint.", "1–65535 Mbps", ""))
 wg_ru.update(param("wg_custom", "down_mbps", "Download Mbps", "Hub down_mbps.",
-    "Опциональный потолок download (Mbps) на WG endpoint.", "Mbps", ""))
+    "Опциональный потолок download (Mbps) на WG endpoint.", "1–65535 Mbps", ""))
 wg_ru.update(param("wg_custom", "jc", "AWG jc", "Число junk-пакетов.",
     "Override числа junk после generate профиля. Пусто = оставить сгенерированное.", "Число", "4"))
 wg_ru.update(param("wg_custom", "jmin", "AWG jmin", "Мин. размер junk.",
@@ -682,9 +682,9 @@ wg_en.update(param("wg_custom", "mtu", "MTU", "Interface MTU.",
 wg_en.update(param("wg_custom", "listen_port", "Listen UDP", "Hub port.",
     "UDP hub listen port. Not the public demux :443.", "1–65535", "51820"))
 wg_en.update(param("wg_custom", "up_mbps", "Upload Mbps", "Hub up_mbps.",
-    "Optional hub-wide upload Mbps ceiling on the WG endpoint.", "Mbps", ""))
+    "Optional hub-wide upload Mbps ceiling on the WG endpoint.", "1–65535 Mbps", ""))
 wg_en.update(param("wg_custom", "down_mbps", "Download Mbps", "Hub down_mbps.",
-    "Optional hub-wide download Mbps ceiling on the WG endpoint.", "Mbps", ""))
+    "Optional hub-wide download Mbps ceiling on the WG endpoint.", "1–65535 Mbps", ""))
 wg_en.update(param("wg_custom", "jc", "AWG jc", "Junk packet count.",
     "Override AWG junk packet count after profile generate. Empty keeps generated value.", "Number", "4"))
 wg_en.update(param("wg_custom", "jmin", "AWG jmin", "Min junk size.",

@@ -9,11 +9,11 @@
   "param.trusttunnel_custom.mode.help.summary": "TrustTunnel upstream_protocol: h2 (TCP/TLS), h3 (QUIC), or auto with timed fallback.",
   "param.trusttunnel_custom.mode.title": "Upstream protocol",
   "preset.trusttunnel_auto.description": "TrustTunnel auto H2/H3 selection. Convenient; less predictable demux role — pin h2/h3 when composing stacks.",
-  "preset.trusttunnel_auto.title": "TT auto",
+  "preset.trusttunnel_auto.title": "TrustTunnel auto",
   "preset.trusttunnel_custom.description": "TrustTunnel 构造器: upstream_protocol h2|h3|auto, anti_dpi, protocol fallback.",
-  "preset.trusttunnel_custom.title": "TT auto custom 构造器",
+  "preset.trusttunnel_custom.title": "TrustTunnel 构造器",
   "preset.trusttunnel_h2.description": "TrustTunnel over HTTP/2 TLS. TCP demux TLS substitute; anti-DPI oriented.",
-  "preset.trusttunnel_h2.title": "TT H2",
+  "preset.trusttunnel_h2.title": "TrustTunnel H2",
   "preset.trusttunnel_h3.description": "TrustTunnel over HTTP/3 QUIC. UDP demux substitute next to Hy2/TUIC.",
-  "preset.trusttunnel_h3.title": "TT H3"
+  "preset.trusttunnel_h3.title": "TrustTunnel H3"
 }

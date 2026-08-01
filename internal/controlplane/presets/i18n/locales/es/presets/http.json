@@ -4,11 +4,11 @@
   "param.http_custom.tls_mode.description": "Plain HTTP CONNECT vs TLS-wrapped CONNECT.",
   "param.http_custom.tls_mode.title": "TLS mode",
   "preset.http.description": "Utility HTTP CONNECT proxy. Not anti-DPI; local/service use.",
-  "preset.http.title": "HTTP",
+  "preset.http.title": "HTTP CONNECT",
   "preset.http_custom.description": "HTTP CONNECT constructor: plain or TLS + uTLS huella. Utility only, not anti-DPI.",
-  "preset.http_custom.title": "HTTP custom constructor",
+  "preset.http_custom.title": "HTTP constructor",
   "preset.http_tls.description": "HTTP CONNECT behind TLS. Slightly less obvious than plain CONNECT; still not Reality-class.",
-  "preset.http_tls.title": "HTTP TLS",
+  "preset.http_tls.title": "HTTP CONNECT TLS",
   "preset.http_tls_path.description": "HTTP CONNECT over TLS with path routing. For fronts that split by URL path.",
-  "preset.http_tls_path.title": "HTTP path"
+  "preset.http_tls_path.title": "HTTP CONNECT TLS path"
 }

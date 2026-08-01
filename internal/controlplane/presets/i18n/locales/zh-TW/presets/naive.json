@@ -5,9 +5,9 @@
   "param.naive_custom.network.help.summary": "NaiveProxy network: tcp presents TLS+ALPN h2; udp uses QUIC/H3 camouflage (see naive_quic stock).",
   "param.naive_custom.network.title": "Network",
   "preset.naive_custom.description": "NaiveProxy 建構器: network tcp (TLS/H2) or udp (QUIC/H3).",
-  "preset.naive_custom.title": "Naive TLS custom 建構器",
+  "preset.naive_custom.title": "NaiveProxy 建構器",
   "preset.naive_quic.description": "NaiveProxy over QUIC. Looks like normal H3; good UDP camouflage when TLS path is hot.",
-  "preset.naive_quic.title": "Naive QUIC",
+  "preset.naive_quic.title": "NaiveProxy QUIC",
   "preset.naive_tls.description": "NaiveProxy over TLS/H2. Strong HTTPS camouflage; heavy Chromium/cronet stack.",
-  "preset.naive_tls.title": "Naive TLS"
+  "preset.naive_tls.title": "NaiveProxy TLS"
 }

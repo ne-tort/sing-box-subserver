@@ -27,7 +27,7 @@
     "looks_like": "raw_tcp",
     "alpn": [],
     "sni_required": false,
-    "first_bytes": "",
+    "first_bytes": "AEAD stream (SS)",
     "compatible_with_demux": true
   },
   "scores": {

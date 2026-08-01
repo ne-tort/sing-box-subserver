@@ -4,7 +4,7 @@
   "preset.socks.description": "SOCKS5 с логином/паролем (plaintext).",
   "preset.socks.title": "SOCKS5",
   "preset.socks_custom.description": "Конструктор SOCKS5 с опциональным UDP-over-TCP на outbound.",
-  "preset.socks_custom.title": "SOCKS5 custom (конструктор)",
+  "preset.socks_custom.title": "SOCKS конструктор",
   "preset.socks_uot.description": "SOCKS5 auth; outbound включает udp_over_tcp (клиентский UDP через TCP).",
   "preset.socks_uot.title": "SOCKS + UDP-over-TCP"
 }

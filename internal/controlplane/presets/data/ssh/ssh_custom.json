@@ -82,8 +82,19 @@
         "ru": "SSH banner"
       },
       "description": {
-        "en": "SSH version string shown to clients.",
-        "ru": "Строка версии SSH для клиентов."
+        "en": "SSH version banner shown to clients.",
+        "ru": "SSH version banner для клиентов."
+      },
+      "help": {
+        "summary": {
+          "en": "SSH identification string (banner) returned on connect. Keep OpenSSH-like unless you need a specific fingerprint.",
+          "ru": "Строка идентификации SSH (banner) при connect. Держите OpenSSH-like, если не нужен особый fingerprint."
+        },
+        "input_hint": {
+          "en": "SSH-2.0-…",
+          "ru": "SSH-2.0-…"
+        },
+        "format": "SSH-2.0-OpenSSH_8.9"
       }
     },
     "client_version": {

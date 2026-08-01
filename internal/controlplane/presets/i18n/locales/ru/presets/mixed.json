@@ -8,7 +8,7 @@
   "preset.mixed_auth.description": "Один порт: HTTP CONNECT и SOCKS5 с auth (plaintext, DPI=1).",
   "preset.mixed_auth.title": "Mixed HTTP+SOCKS",
   "preset.mixed_custom.description": "Конструктор mixed HTTP+SOCKS: plain/TLS inbound; outbound клиента socks|http.",
-  "preset.mixed_custom.title": "Mixed auth custom (конструктор)",
+  "preset.mixed_custom.title": "Mixed конструктор",
   "preset.mixed_tls.description": "HTTP+SOCKS за TLS (DPI видит ClientHello).",
   "preset.mixed_tls.title": "Mixed + TLS"
 }

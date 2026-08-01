@@ -1,4 +1,12 @@
 {
+  "param.tuic.congestion_control.description": "Алгоритм congestion QUIC (tuic.congestion_control).",
+  "param.tuic.congestion_control.title": "Congestion control",
+  "param.tuic.udp_relay_mode.description": "Только outbound: native или relay через QUIC.",
+  "param.tuic.udp_relay_mode.title": "UDP relay mode",
+  "param.tuic_0rtt.congestion_control.description": "Алгоритм congestion QUIC (tuic.congestion_control).",
+  "param.tuic_0rtt.congestion_control.title": "Congestion control",
+  "param.tuic_0rtt.udp_relay_mode.description": "Только outbound: native или relay через QUIC.",
+  "param.tuic_0rtt.udp_relay_mode.title": "UDP relay mode",
   "param.tuic_custom.congestion_control.description": "Алгоритм congestion QUIC (tuic.congestion_control).",
   "param.tuic_custom.congestion_control.help.format": "bbr",
   "param.tuic_custom.congestion_control.help.input_hint": "cubic|bbr|new_reno",

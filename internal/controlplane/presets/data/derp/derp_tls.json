@@ -114,7 +114,8 @@
     "params": "optional bindings[].params overrides: path"
   },
   "optional_param_fields": [
-    "path"
+    "path",
+    "websocket"
   ],
   "param_meta": {
     "path": {
@@ -130,6 +131,32 @@
       "description": {
         "en": "HTTP/WebSocket path (DERP, etc.).",
         "ru": "HTTP/WebSocket path (DERP и др.)."
+      }
+    },
+    "websocket": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "core",
+      "ui_order": 25,
+      "title": {
+        "en": "WebSocket",
+        "ru": "WebSocket"
+      },
+      "description": {
+        "en": "Serve DERP over WebSocket (HTTP upgrade path).",
+        "ru": "DERP поверх WebSocket (HTTP upgrade path)."
+      },
+      "help": {
+        "summary": {
+          "en": "Enable WebSocket transport for DERP. derp_ws defaults true; other profiles default false.",
+          "ru": "Включить WebSocket transport для DERP. derp_ws по умолчанию true; остальные — false."
+        },
+        "input_hint": {
+          "en": "true|false",
+          "ru": "true|false"
+        },
+        "format": "true"
       }
     }
   }

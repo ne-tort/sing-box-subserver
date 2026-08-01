@@ -1,4 +1,12 @@
 {
+  "param.tuic.congestion_control.description": "QUIC congestion algorithm (tuic.congestion_control).",
+  "param.tuic.congestion_control.title": "Congestion control",
+  "param.tuic.udp_relay_mode.description": "Outbound-only: native full-cone vs QUIC-encapsulated relay.",
+  "param.tuic.udp_relay_mode.title": "UDP relay mode",
+  "param.tuic_0rtt.congestion_control.description": "QUIC congestion algorithm (tuic.congestion_control).",
+  "param.tuic_0rtt.congestion_control.title": "Congestion control",
+  "param.tuic_0rtt.udp_relay_mode.description": "Outbound-only: native full-cone vs QUIC-encapsulated relay.",
+  "param.tuic_0rtt.udp_relay_mode.title": "UDP relay mode",
   "param.tuic_custom.congestion_control.description": "QUIC congestion algorithm (sing-box tuic.congestion_control).",
   "param.tuic_custom.congestion_control.help.format": "bbr",
   "param.tuic_custom.congestion_control.help.input_hint": "cubic|bbr|new_reno",
@@ -19,5 +27,5 @@
   "preset.tuic_0rtt.description": "TUIC with 0-RTT. Faster resume; accept the 0-RTT security tradeoff.",
   "preset.tuic_0rtt.title": "TUIC 0-RTT",
   "preset.tuic_custom.description": "TUIC 构造器: congestion_control, udp_relay_mode, optional 0-RTT handshake.",
-  "preset.tuic_custom.title": "TUIC custom 构造器"
+  "preset.tuic_custom.title": "TUIC 构造器"
 }

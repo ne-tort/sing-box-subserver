@@ -75,8 +75,8 @@
       },
       "help": {
         "summary": {
-          "en": "Paste the tunnel token from Cloudflare.",
-          "ru": "Вставьте токен туннеля из Cloudflare."
+          "en": "Cloudflare Tunnel token from Zero Trust → Networks → Tunnels. Ops secret; not a user credential.",
+          "ru": "Токен Cloudflare Tunnel из Zero Trust → Networks → Tunnels. Ops-секрет, не user credential."
         },
         "input_hint": {
           "en": "Create a tunnel and copy the token string.",

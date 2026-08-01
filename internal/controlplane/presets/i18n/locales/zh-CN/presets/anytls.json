@@ -8,9 +8,9 @@
   "param.anytls_custom.fingerprint.title": "uTLS 指纹",
   "param.anytls_custom.idle_session.description": "Outbound idle_session_check_interval/timeout=30s (warm TLS).",
   "param.anytls_custom.idle_session.title": "Idle session",
-  "preset.anytls.description": "Password TLS wrapper. Typical second TCP demux slot (other SNI/ALPN next to Reality).",
+  "preset.anytls.description": "AnyTLS TCP+TLS с padding_scheme (DPI видит менее регулярные TLS record sizes).",
   "preset.anytls.title": "AnyTLS",
-  "preset.anytls_custom.description": "Lab AnyTLS 构造器. Stock anytls is enough for most :443 stacks.",
+  "preset.anytls_custom.description": "AnyTLS: uTLS 指纹, ALPN, optional idle_session_* on outbound.",
   "preset.anytls_custom.title": "AnyTLS 构造器",
   "preset.anytls_idle.description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy.",
   "preset.anytls_idle.title": "AnyTLS idle"

@@ -57,7 +57,17 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.trojan_custom.title": "Trojan constructor",
         "preset.trojan_custom.description": "Lab Trojan: transport × tls/reality/plain + path/host/service_name + uTLS.",
     },
-    "presets/vmess.json": {
+    "presets/vless.json": {
+        "param.vless_custom.alpn.help.input_hint": "h2,http/1.1 (CSV)",
+        "param.vless_custom.service_name.help.input_hint": "gRPC service name",
+    },
+    "presets/wireguard.json": {
+        "param.wg_custom.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.wg_custom.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.wg_custom.jmin.help.input_hint": "bytes (AWG junk min)",
+        "param.wg_custom.jmax.help.input_hint": "bytes (AWG junk max)",
+    },
+        "presets/vmess.json": {
         "preset.vmess_http_reality.description": "VMess + Reality + HTTP/2 transport. Prefer VLESS+Reality for new TCP:443 stacks.",
         "preset.vmess_httpupgrade_reality.description": "VMess + Reality + HTTPUpgrade. Path/Host after Reality termination.",
         "preset.vmess_quic_tls.description": "VMess + TLS + QUIC transport (UDP). Not Hy2 — separate V2Ray QUIC stack.",
@@ -83,6 +93,21 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.cloudflared_custom.description": "Cloudflare Tunnel constructor: token + edge protocol/post_quantum/ha_connections.",
     },
     "presets/hysteria2.json": {
+        "param.hy2.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.masquerade_dir.help.input_hint": "Absolute directory path on agent",
+        "param.hy2_gecko.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_compact.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_compact.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_masquerade.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_masquerade.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_masquerade.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_masquerade.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_salamander.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_salamander.down_mbps.help.input_hint": "1–65535 Mbps",
         "preset.hy2_gecko_masquerade.description": "Hy2 + gecko obfs + HTTP decoy on failed auth. Obfs breaks demux quic/SNI match.",
     },
     "presets/derp.json": {
@@ -116,7 +141,8 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
     "presets/carrier.json": {
         "preset.carrier_peer_users.description": "Peer underlay with per-user credentials. Needs peer endpoint params.",
         "preset.carrier_telemost_users.description": "Yandex Telemost underlay with per-user credentials. Needs full room URL.",
-        "preset.carrier_vk_users.description": "VK underlay with per-user credentials. Needs VK link params.",
+        "preset.carrier_vk_users.description": "VK WRAP/DTLS underlay with per-user secrets. Set vk_hash / wrap_password from the join flow; not vk.ru/call cloud.",
+        "preset.carrier_custom.description": "Lab Carrier: provider (jitsi/telemost/wbstream/jitsi_sei), room URL, optional token/key. Prefer a concrete SFU preset when possible.",
     },
 }
 
@@ -364,8 +390,8 @@ def build_en_ru_masters(rw) -> tuple[dict[str, dict[str, str]], dict[str, dict[s
         en_presets[proto] = prune_protocol_keys(
             proto,
             merge_dict(
-                presets_en.get(proto, {}),
                 disk_en,
+                presets_en.get(proto, {}),
                 priority_en.get(proto, {}),
             ),
             tags,
@@ -374,8 +400,8 @@ def build_en_ru_masters(rw) -> tuple[dict[str, dict[str, str]], dict[str, dict[s
         ru_presets[proto] = prune_protocol_keys(
             proto,
             merge_dict(
-                presets_ru.get(proto, {}),
                 disk_ru,
+                presets_ru.get(proto, {}),
                 priority_ru.get(proto, {}),
             ),
             tags,
@@ -423,9 +449,25 @@ RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
     "presets/carrier.json": {
         "preset.carrier_peer_users.description": "Peer underlay с per-user credentials. Нужны параметры peer endpoint.",
         "preset.carrier_telemost_users.description": "Underlay Яндекс Телемост с per-user credentials. Нужен полный URL комнаты.",
-        "preset.carrier_vk_users.description": "VK underlay с per-user credentials. Нужны параметры VK link.",
+        "preset.carrier_vk_users.description": "VK WRAP/DTLS underlay с per-user secrets. vk_hash/wrap_password из join flow; не облако vk.ru/call.",
+        "preset.carrier_custom.description": "Lab Carrier: provider (jitsi/telemost/wbstream/jitsi_sei), URL комнаты, опц. token/key. Предпочтительнее конкретный SFU-пресет.",
     },
     "presets/hysteria2.json": {
+        "param.hy2.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_custom.masquerade_dir.help.input_hint": "Absolute directory path on agent",
+        "param.hy2_gecko.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_compact.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_compact.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_masquerade.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_gecko_masquerade.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_masquerade.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_masquerade.down_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_salamander.up_mbps.help.input_hint": "1–65535 Mbps",
+        "param.hy2_salamander.down_mbps.help.input_hint": "1–65535 Mbps",
         "preset.hy2_gecko_masquerade.description": "Hy2 + gecko obfs + HTTP-приманка при неверном auth. Obfs ломает demux quic/SNI match.",
     },
     "presets/wireguard.json": {

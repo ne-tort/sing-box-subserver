@@ -112,8 +112,8 @@
       },
       "help": {
         "summary": {
-          "en": "Paste the full URL of a Jitsi room.",
-          "ru": "Вставьте полный URL комнаты Jitsi."
+          "en": "Full Jitsi room URL (https://host/Room). Self-host host must match the SFU you control.",
+          "ru": "Полный URL комнаты Jitsi (https://host/Room). Host self-host должен совпадать с вашим SFU."
         },
         "input_hint": {
           "en": "Create a room on meet.jit.si and copy the link.",

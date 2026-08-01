@@ -110,8 +110,8 @@
       },
       "help": {
         "summary": {
-          "en": "Paste the full WB Stream room URL.",
-          "ru": "Вставьте полный URL комнаты WB Stream."
+          "en": "Full WB Stream room URL. Often needs token for guest-register; leave token empty only if the flow allows.",
+          "ru": "Полный URL комнаты WB Stream. Часто нужен token для guest-register; пустой token — только если flow позволяет."
         },
         "input_hint": {
           "en": "Copy the room URL from the browser address bar.",

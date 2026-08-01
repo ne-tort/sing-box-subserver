@@ -25,7 +25,7 @@
     "looks_like": "tls_clienthello",
     "alpn": [],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "TLS ClientHello → Trojan+mux",
     "compatible_with_demux": true
   },
   "scores": {

@@ -2,7 +2,10 @@
   "schema_version": 1,
   "tag": "vless_custom",
   "protocol": "vless",
-  "aliases": ["vless-custom", "vless-constructor"],
+  "aliases": [
+    "vless-custom",
+    "vless-constructor"
+  ],
   "short_name": "VLESS custom",
   "status": "lab",
   "custom_preset": true,
@@ -16,11 +19,23 @@
       "description": "Lab constructor: pick transport, TLS mode, flow, and transport-specific params."
     }
   },
-  "traits": ["tcp", "udp", "tls", "custom"],
+  "traits": [
+    "tcp",
+    "udp",
+    "tls",
+    "custom"
+  ],
   "demux_hints": {
-    "network": ["tcp", "udp"],
+    "network": [
+      "tcp",
+      "udp"
+    ],
     "looks_like": "tls_clienthello",
-    "alpn": ["h2", "http/1.1", "h3"],
+    "alpn": [
+      "h2",
+      "http/1.1",
+      "h3"
+    ],
     "sni_required": true,
     "first_bytes": "Depends on transport/tls_mode params",
     "compatible_with_demux": true
@@ -31,10 +46,21 @@
     "mobile": 6,
     "setup": 3
   },
-  "cred_fields": ["uuid", "uuid_xtls", "uuid_udp"],
-  "default_user_variants": ["flow-none"],
-  "default_client_profiles": ["pkt-xudp"],
-  "param_fields": ["transport", "tls_mode"],
+  "cred_fields": [
+    "uuid",
+    "uuid_xtls",
+    "uuid_udp"
+  ],
+  "default_user_variants": [
+    "flow-none"
+  ],
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "param_fields": [
+    "transport",
+    "tls_mode"
+  ],
   "optional_param_fields": [
     "flow",
     "packet_encoding",
@@ -48,7 +74,15 @@
     "transport": {
       "type": "enum",
       "widget": "select",
-      "enum": ["tcp", "ws", "grpc", "http", "httpupgrade", "quic", "hysteria"],
+      "enum": [
+        "tcp",
+        "ws",
+        "grpc",
+        "http",
+        "httpupgrade",
+        "quic",
+        "hysteria"
+      ],
       "default": "tcp",
       "ui_group": "transport",
       "ui_order": 1,
@@ -64,7 +98,11 @@
     "tls_mode": {
       "type": "enum",
       "widget": "select",
-      "enum": ["none", "tls", "reality"],
+      "enum": [
+        "none",
+        "tls",
+        "reality"
+      ],
       "default": "tls",
       "ui_group": "tls",
       "ui_order": 2,
@@ -81,13 +119,25 @@
     "flow": {
       "type": "enum",
       "widget": "select",
-      "enum": ["", "xtls-rprx-vision"],
+      "enum": [
+        "",
+        "xtls-rprx-vision"
+      ],
       "default": "",
       "ui_group": "core",
       "ui_order": 10,
       "visible_when": [
-        {"key": "transport", "equals": "tcp"},
-        {"key": "tls_mode", "in": ["tls", "reality"]}
+        {
+          "key": "transport",
+          "equals": "tcp"
+        },
+        {
+          "key": "tls_mode",
+          "in": [
+            "tls",
+            "reality"
+          ]
+        }
       ],
       "title": {
         "en": "Flow",
@@ -101,7 +151,11 @@
     "packet_encoding": {
       "type": "enum",
       "widget": "select",
-      "enum": ["", "xudp", "packetaddr"],
+      "enum": [
+        "",
+        "xudp",
+        "packetaddr"
+      ],
       "default": "xudp",
       "ui_group": "core",
       "ui_order": 11,
@@ -120,7 +174,12 @@
       "default": "chrome",
       "ui_group": "tls",
       "ui_order": 20,
-      "visible_when": [{"key": "tls_mode", "equals": "tls"}],
+      "visible_when": [
+        {
+          "key": "tls_mode",
+          "equals": "tls"
+        }
+      ],
       "title": {
         "en": "uTLS fingerprint",
         "ru": "uTLS fingerprint"
@@ -137,7 +196,14 @@
       "ui_group": "transport",
       "ui_order": 30,
       "visible_when": [
-        {"key": "transport", "in": ["ws", "http", "httpupgrade"]}
+        {
+          "key": "transport",
+          "in": [
+            "ws",
+            "http",
+            "httpupgrade"
+          ]
+        }
       ],
       "title": {
         "en": "Path",
@@ -154,7 +220,14 @@
       "ui_group": "transport",
       "ui_order": 31,
       "visible_when": [
-        {"key": "transport", "in": ["ws", "http", "httpupgrade"]}
+        {
+          "key": "transport",
+          "in": [
+            "ws",
+            "http",
+            "httpupgrade"
+          ]
+        }
       ],
       "title": {
         "en": "Host header",
@@ -171,7 +244,12 @@
       "default": "GunService",
       "ui_group": "transport",
       "ui_order": 32,
-      "visible_when": [{"key": "transport", "equals": "grpc"}],
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "grpc"
+        }
+      ],
       "title": {
         "en": "gRPC service name",
         "ru": "gRPC service name"
@@ -179,6 +257,12 @@
       "description": {
         "en": "gRPC Gun service_name.",
         "ru": "gRPC Gun service_name."
+      },
+      "help": {
+        "input_hint": {
+          "en": "gRPC service name",
+          "ru": "имя gRPC service"
+        }
       }
     },
     "alpn": {
@@ -187,7 +271,15 @@
       "default": "h2,http/1.1",
       "ui_group": "tls",
       "ui_order": 21,
-      "visible_when": [{"key": "tls_mode", "in": ["tls", "reality"]}],
+      "visible_when": [
+        {
+          "key": "tls_mode",
+          "in": [
+            "tls",
+            "reality"
+          ]
+        }
+      ],
       "title": {
         "en": "ALPN list",
         "ru": "Список ALPN"
@@ -195,6 +287,12 @@
       "description": {
         "en": "Comma-separated ALPN values (h3 for QUIC transports).",
         "ru": "ALPN через запятую (h3 для QUIC-транспортов)."
+      },
+      "help": {
+        "input_hint": {
+          "en": "h2,http/1.1 (CSV)",
+          "ru": "h2,http/1.1 (CSV)"
+        }
       }
     }
   },
@@ -216,7 +314,10 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": ["h2", "http/1.1"]
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
     },
     "transport": {
       "type": "{{param.transport}}",
@@ -224,7 +325,9 @@
       "host": "{{param.transport_host}}",
       "service_name": "{{param.service_name}}",
       "headers": {
-        "Host": ["{{param.transport_host}}"]
+        "Host": [
+          "{{param.transport_host}}"
+        ]
       },
       "password": "{{peer.hy_auth}}",
       "version": 2
@@ -240,7 +343,10 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": ["h2", "http/1.1"],
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
       "utls": {
         "enabled": true,
         "fingerprint": "{{param.fingerprint}}"
@@ -252,7 +358,9 @@
       "host": "{{param.transport_host}}",
       "service_name": "{{param.service_name}}",
       "headers": {
-        "Host": ["{{param.transport_host}}"]
+        "Host": [
+          "{{param.transport_host}}"
+        ]
       },
       "password": "{{peer.hy_auth}}",
       "version": 2

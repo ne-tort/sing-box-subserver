@@ -27,7 +27,7 @@
     "looks_like": "raw_tcp",
     "alpn": [],
     "sni_required": false,
-    "first_bytes": "",
+    "first_bytes": "raw TCP VMess (no TLS)",
     "compatible_with_demux": true
   },
   "scores": {

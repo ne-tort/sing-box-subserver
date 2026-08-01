@@ -1,7 +1,7 @@
 {
   "param.trojan_custom.alpn.description": "Comma-separated ALPN (h3 for QUIC transport).",
   "param.trojan_custom.alpn.title": "ALPN list",
-  "param.trojan_custom.fingerprint.description": "Client uTLS 指纹 on outbound.",
+  "param.trojan_custom.fingerprint.description": "Client uTLS 指纹 (ignored for QUIC transport).",
   "param.trojan_custom.fingerprint.help.format": "chrome",
   "param.trojan_custom.fingerprint.help.input_hint": "chrome|firefox|safari|…",
   "param.trojan_custom.fingerprint.help.summary": "uTLS ClientHello 指纹 on TCP+TLS outbounds; useless on raw QUIC/Hy2 transports.",
