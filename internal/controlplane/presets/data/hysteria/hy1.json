@@ -83,5 +83,41 @@
   },
   "client_notes": {
     "auth_str": "user_symmetric: inbound users[].auth_str <-> outbound auth_str"
+  },
+  "optional_param_fields": [
+    "up_mbps",
+    "down_mbps"
+  ],
+  "param_meta": {
+    "up_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 10,
+      "title": {
+        "en": "Upload Mbps",
+        "ru": "Upload Mbps"
+      },
+      "description": {
+        "en": "Hy1 upload cap (Mbps).",
+        "ru": "Лимит upload Hy1 (Mbps)."
+      }
+    },
+    "down_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 11,
+      "title": {
+        "en": "Download Mbps",
+        "ru": "Download Mbps"
+      },
+      "description": {
+        "en": "Hy1 download cap (Mbps).",
+        "ru": "Лимит download Hy1 (Mbps)."
+      }
+    }
   }
 }

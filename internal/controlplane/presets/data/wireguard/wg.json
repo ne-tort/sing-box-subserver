@@ -67,7 +67,8 @@
     ]
   },
   "client_notes": {
-    "singleton": "один hub на агент; profile через PUT /v1/controlplane/wg"
+    "singleton": "один hub на агент; profile через PUT /v1/controlplane/wg",
+    "mtu": "hub field: body.mtu на PUT /v1/controlplane/wg (не binding {{param.mtu}})"
   },
   "optional_param_fields": [
     "mtu"
@@ -83,8 +84,8 @@
         "ru": "MTU"
       },
       "description": {
-        "en": "WireGuard MTU override.",
-        "ru": "Переопределение MTU WireGuard."
+        "en": "Hub endpoint MTU via PUT /wg body.mtu.",
+        "ru": "MTU hub-endpoint через PUT /wg body.mtu."
       },
       "default": "1408"
     }

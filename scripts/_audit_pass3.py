@@ -11,6 +11,22 @@ DATA = ROOT / "internal/controlplane/presets/data"
 LOC = ROOT / "internal/controlplane/presets/i18n/locales"
 PARAM_RE = re.compile(r"\{\{param\.([a-zA-Z0-9_]+)\}\}")
 
+# Declared in param_meta but applied outside JSON templates.
+# - Hy2/Hy1 bandwidth: materialize.applyStockBandwidthParams / applyHy*CustomKnobs
+# - WireGuard mtu: PUT /v1/controlplane/wg body (hub singleton)
+MATERIALIZE_APPLIED = {
+    "hysteria": {"up_mbps", "down_mbps", "obfs"},
+    "hysteria2": {
+        "up_mbps",
+        "down_mbps",
+        "ignore_client_bandwidth",
+        "obfs_type",
+        "masquerade_mode",
+        "masquerade_url",
+    },
+    "wireguard": {"mtu", "up_mbps", "down_mbps", "jc", "jmin", "jmax", "listen_port"},
+}
+
 
 def load_lang(lang: str) -> dict[str, str]:
     keys: dict[str, str] = {}
@@ -30,7 +46,9 @@ def main() -> None:
     thin = [
         (k, v)
         for k, v in en.items()
-        if k.startswith("preset.") and k.endswith(".description") and ("minimal" in v.lower() or "based on" in v.lower() or len(v) < 45)
+        if k.startswith("preset.")
+        and k.endswith(".description")
+        and ("minimal" in v.lower() or "based on" in v.lower() or len(v) < 45)
     ]
     print("thin_desc", len(thin))
     for k, v in thin[:15]:
@@ -39,22 +57,20 @@ def main() -> None:
     print("\n=== template vs param_meta ===")
     issues = 0
     for p in sorted(DATA.rglob("*.json")):
-        if p.name == "protocol.json" or p.parent.name.startswith("_"):
+        if p.name == "protocol.json" or p.parent.name.startswith("_") or p.name == "index.json":
             continue
         raw = json.loads(p.read_text(encoding="utf-8"))
         tag = raw.get("tag") or p.stem
+        proto = raw.get("protocol") or p.parent.name
         meta = set((raw.get("param_meta") or {}).keys())
         declared = set(raw.get("param_fields") or []) | set(raw.get("optional_param_fields") or []) | meta
         used = set(PARAM_RE.findall(json.dumps(raw)))
-        # Custom knobs may be applied in Go without {{param}} — note only for non-custom gaps
         unused_meta = sorted(meta - used)
         undeclared_used = sorted(used - declared)
+        mat = MATERIALIZE_APPLIED.get(proto, set())
+        unused_meta = [f for f in unused_meta if f not in mat]
         if unused_meta or undeclared_used:
-            # filter known materialize-only knobs
             custom = bool(raw.get("custom_preset"))
-            if custom and unused_meta:
-                # expected for knobs applied in custom_knobs.go
-                pass
             if undeclared_used or (unused_meta and not custom):
                 issues += 1
                 print(f"{p.parent.name}/{p.name}:")
@@ -67,7 +83,7 @@ def main() -> None:
 
     print("\n=== scores gaps ===")
     for p in sorted(DATA.rglob("*.json")):
-        if p.name == "protocol.json":
+        if p.name in ("protocol.json", "index.json"):
             continue
         raw = json.loads(p.read_text(encoding="utf-8"))
         sc = raw.get("scores")
@@ -81,9 +97,9 @@ def main() -> None:
         if st == "stable" and sc.get("setup", 0) <= 2:
             print("SUSPICIOUS_SETUP", p.name, sc)
 
-    print("\n=== demux_hints missing (non-wg/carrier) ===")
+    print("\n=== demux_hints missing (non-wg/carrier/cloudflared) ===")
     for p in sorted(DATA.rglob("*.json")):
-        if p.name == "protocol.json":
+        if p.name in ("protocol.json", "index.json"):
             continue
         raw = json.loads(p.read_text(encoding="utf-8"))
         proto = raw.get("protocol") or p.parent.name

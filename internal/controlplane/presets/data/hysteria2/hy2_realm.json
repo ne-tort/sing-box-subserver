@@ -104,7 +104,41 @@
   "client_notes": {
     "realm": "params.realm_server_url + realm_id; peer_secrets realm_token"
   },
+  "optional_param_fields": [
+    "up_mbps",
+    "down_mbps"
+  ],
   "param_meta": {
+    "up_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 20,
+      "title": {
+        "en": "Upload Mbps",
+        "ru": "Upload Mbps"
+      },
+      "description": {
+        "en": "Hy2 upload cap (Mbps).",
+        "ru": "Лимит upload Hy2 (Mbps)."
+      }
+    },
+    "down_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 21,
+      "title": {
+        "en": "Download Mbps",
+        "ru": "Download Mbps"
+      },
+      "description": {
+        "en": "Hy2 download cap (Mbps).",
+        "ru": "Лимит download Hy2 (Mbps)."
+      }
+    },
     "realm_server_url": {
       "title": {
         "en": "Realm server URL",
