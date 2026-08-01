@@ -55,7 +55,68 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.trojan_ws_tls.title": "Trojan WS",
         "preset.trojan_ws_tls.description": "Trojan + TLS + WebSocket. CDN-like post-TLS fingerprint; set ws_path/ws_host.",
         "preset.trojan_custom.title": "Trojan constructor",
-        "preset.trojan_custom.description": "Lab TLS Trojan with optional uTLS fingerprint. Prefer trojan_tls for demux TLS slots.",
+        "preset.trojan_custom.description": "Lab Trojan: transport × tls/reality/plain + path/host/service_name + uTLS.",
+    },
+    "presets/vmess.json": {
+        "preset.vmess_http_reality.description": "VMess + Reality + HTTP/2 transport. Prefer VLESS+Reality for new TCP:443 stacks.",
+        "preset.vmess_httpupgrade_reality.description": "VMess + Reality + HTTPUpgrade. Path/Host after Reality termination.",
+        "preset.vmess_quic_tls.description": "VMess + TLS + QUIC transport (UDP). Not Hy2 — separate V2Ray QUIC stack.",
+        "preset.vmess_custom.description": "Lab VMess constructor: transport × tls/reality/plain. Prefer VLESS for new Reality stacks.",
+    },
+    "presets/http.json": {
+        "preset.http_custom.description": "HTTP CONNECT constructor: plain or TLS + uTLS fingerprint. Utility only, not anti-DPI.",
+    },
+    "presets/socks.json": {
+        "preset.socks_custom.description": "SOCKS5 constructor with optional UDP-over-TCP on outbound.",
+    },
+    "presets/mixed.json": {
+        "preset.mixed_custom.description": "Mixed HTTP+SOCKS constructor: plain/TLS inbound; client outbound socks|http.",
+    },
+    "presets/snell.json": {
+        "preset.snell_custom.description": "Snell constructor: obfs_mode (off|http|tls) + obfs_host. Inbound v5 / outbound v4 wire.",
+    },
+    "presets/ssh.json": {
+        "preset.ssh_custom.description": "SSH constructor: server_version banner + outbound client_version.",
+        "preset.ssh_uot.description": "SSH with UDP-over-TCP helper on the client path when UDP associate is blocked.",
+    },
+    "presets/cloudflared.json": {
+        "preset.cloudflared_custom.description": "Cloudflare Tunnel constructor: token + edge protocol/post_quantum/ha_connections.",
+    },
+    "presets/hysteria2.json": {
+        "preset.hy2_gecko_masquerade.description": "Hy2 + gecko obfs + HTTP decoy on failed auth. Obfs breaks demux quic/SNI match.",
+    },
+    "presets/derp.json": {
+        "preset.derp_custom.description": "DERP constructor: path, websocket, udp mode, uTLS fingerprint.",
+    },
+    "presets/hysteria.json": {
+        "preset.hysteria_custom.description": "Legacy Hy1 constructor: bandwidth caps + optional obfs. Prefer hy2_custom for new stacks.",
+    },
+    "presets/naive.json": {
+        "preset.naive_custom.description": "NaiveProxy constructor: network tcp (TLS/H2) or udp (QUIC/H3).",
+    },
+    "presets/shadowquic.json": {
+        "preset.shadowquic_custom.description": "ShadowQUIC constructor: JLS addr/SNI overrides for demux-aligned camouflage.",
+    },
+    "presets/shadowsocks.json": {
+        "preset.ss_2022_aes128_mux.description": "SS2022 AES-128-GCM with multiplex. Still no TLS camouflage — DPI class stays AEAD stream.",
+        "preset.shadowsocks_custom.description": "Shadowsocks constructor: AEAD/2022 method, network, optional UDP-over-TCP.",
+    },
+    "presets/shadowtls.json": {
+        "preset.shadowtls_custom.description": "ShadowTLS v3 constructor: handshake_server, strict_mode, wildcard_sni, uTLS fingerprint.",
+    },
+    "presets/sudoku.json": {
+        "preset.sudoku_custom.description": "Sudoku constructor: AEAD method, multiplex, padding bounds, fallback URL.",
+    },
+    "presets/trusttunnel.json": {
+        "preset.trusttunnel_custom.description": "TrustTunnel constructor: upstream_protocol h2|h3|auto, anti_dpi, protocol fallback.",
+    },
+    "presets/tuic.json": {
+        "preset.tuic_custom.description": "TUIC constructor: congestion_control, udp_relay_mode, optional 0-RTT handshake.",
+    },
+    "presets/carrier.json": {
+        "preset.carrier_peer_users.description": "Peer underlay with per-user credentials. Needs peer endpoint params.",
+        "preset.carrier_telemost_users.description": "Yandex Telemost underlay with per-user credentials. Needs full room URL.",
+        "preset.carrier_vk_users.description": "VK underlay with per-user credentials. Needs VK link params.",
     },
 }
 
@@ -119,6 +180,54 @@ def merge_dict(*layers: dict[str, str]) -> dict[str, str]:
                     continue
             out[k] = v.strip()
     return out
+
+
+def protocol_catalog() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Return tags_by_proto and param_keys as '{tag}.{field}'."""
+    tags_by: dict[str, set[str]] = {}
+    params: set[str] = set()
+    for d in DATA.iterdir():
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        tags: set[str] = set()
+        for path in d.glob("*.json"):
+            if path.name == "protocol.json":
+                continue
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            tag = str(raw.get("tag") or path.stem)
+            tags.add(tag)
+            pm = raw.get("param_meta")
+            if isinstance(pm, dict):
+                for field in pm:
+                    params.add(f"{tag}.{field}")
+            for field in raw.get("param_fields") or []:
+                params.add(f"{tag}.{field}")
+            for field in raw.get("optional_param_fields") or []:
+                params.add(f"{tag}.{field}")
+        tags_by[d.name] = tags
+    return tags_by, params
+
+
+def prune_protocol_keys(proto: str, blob: dict[str, str], tags: set[str], param_keys: set[str]) -> dict[str, str]:
+    """Keep only preset./param. keys belonging to this protocol."""
+    keep: dict[str, str] = {}
+    for k, v in blob.items():
+        if k.startswith("preset."):
+            rest = k[len("preset.") :]
+            tag = rest.split(".", 1)[0]
+            if tag in tags:
+                keep[k] = v
+            continue
+        if k.startswith("param."):
+            rest = k[len("param.") :]
+            parts = rest.split(".", 2)
+            if len(parts) < 2:
+                continue
+            tag, field = parts[0], parts[1]
+            if f"{tag}.{field}" in param_keys and tag in tags:
+                keep[k] = v
+            continue
+    return keep
 
 
 def extract_from_data() -> tuple[dict[str, str], dict[str, str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
@@ -247,25 +356,106 @@ def build_en_ru_masters(rw) -> tuple[dict[str, dict[str, str]], dict[str, dict[s
     ru_presets: dict[str, dict[str, str]] = {}
 
     all_protocols = sorted(set(presets_en) | set(presets_ru) | set(priority_en))
+    tags_by_proto, param_keys = protocol_catalog()
     for proto in all_protocols:
         disk_en = read_json(LOCALES / "en" / "presets" / f"{proto}.json")
         disk_ru = read_json(LOCALES / "ru" / "presets" / f"{proto}.json")
-        en_presets[proto] = merge_dict(
-            presets_en.get(proto, {}),
-            disk_en,
-            priority_en.get(proto, {}),
+        tags = tags_by_proto.get(proto, set())
+        en_presets[proto] = prune_protocol_keys(
+            proto,
+            merge_dict(
+                presets_en.get(proto, {}),
+                disk_en,
+                priority_en.get(proto, {}),
+            ),
+            tags,
+            param_keys,
         )
-        ru_presets[proto] = merge_dict(
-            presets_ru.get(proto, {}),
-            disk_ru,
-            priority_ru.get(proto, {}),
+        ru_presets[proto] = prune_protocol_keys(
+            proto,
+            merge_dict(
+                presets_ru.get(proto, {}),
+                disk_ru,
+                priority_ru.get(proto, {}),
+            ),
+            tags,
+            param_keys,
         )
 
     en_files = {**en_top, **{f"presets/{k}.json": v for k, v in en_presets.items()}}
     ru_files = {**ru_top, **{f"presets/{k}.json": v for k, v in ru_presets.items()}}
     for rel, patch in EN_PRESET_PATCHES.items():
         en_files[rel] = merge_dict(en_files.get(rel, {}), patch)
+    for rel, patch in RU_PRESET_PATCHES.items():
+        ru_files[rel] = merge_dict(ru_files.get(rel, {}), patch)
     return en_files, ru_files
+
+
+RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
+    "presets/vmess.json": {
+        "preset.vmess_http_reality.description": "VMess + Reality + HTTP/2 transport. Для новых TCP:443 стеков предпочтительнее VLESS+Reality.",
+        "preset.vmess_httpupgrade_reality.description": "VMess + Reality + HTTPUpgrade. Path/Host видны после Reality termination.",
+        "preset.vmess_quic_tls.description": "VMess + TLS + QUIC transport (UDP). Не Hy2 — отдельный V2Ray QUIC stack.",
+        "preset.vmess_custom.description": "Lab конструктор VMess: transport × tls/reality/plain. Для Reality лучше VLESS.",
+    },
+    "presets/http.json": {
+        "preset.http_custom.description": "Конструктор HTTP CONNECT: plain или TLS + uTLS fingerprint. Утилита, не anti-DPI.",
+    },
+    "presets/socks.json": {
+        "preset.socks_custom.description": "Конструктор SOCKS5 с опциональным UDP-over-TCP на outbound.",
+    },
+    "presets/mixed.json": {
+        "preset.mixed_custom.description": "Конструктор mixed HTTP+SOCKS: plain/TLS inbound; outbound клиента socks|http.",
+    },
+    "presets/snell.json": {
+        "preset.snell_custom.description": "Конструктор Snell: obfs_mode (off|http|tls) + obfs_host. Inbound v5 / outbound v4 wire.",
+    },
+    "presets/ssh.json": {
+        "preset.ssh_custom.description": "Конструктор SSH: banner server_version + client_version на outbound.",
+        "preset.ssh_uot.description": "SSH с UDP-over-TCP helper на клиенте, если UDP associate режется.",
+    },
+    "presets/cloudflared.json": {
+        "preset.cloudflared_custom.description": "Конструктор Cloudflare Tunnel: token + protocol/post_quantum/ha_connections.",
+    },
+    "presets/shadowsocks.json": {
+        "preset.ss_2022_aes128_mux.description": "SS2022 AES-128-GCM с multiplex. Без TLS-камуфляжа — DPI-класс остаётся AEAD stream.",
+    },
+    "presets/carrier.json": {
+        "preset.carrier_peer_users.description": "Peer underlay с per-user credentials. Нужны параметры peer endpoint.",
+        "preset.carrier_telemost_users.description": "Underlay Яндекс Телемост с per-user credentials. Нужен полный URL комнаты.",
+        "preset.carrier_vk_users.description": "VK underlay с per-user credentials. Нужны параметры VK link.",
+    },
+    "presets/hysteria2.json": {
+        "preset.hy2_gecko_masquerade.description": "Hy2 + gecko obfs + HTTP-приманка при неверном auth. Obfs ломает demux quic/SNI match.",
+    },
+    "presets/wireguard.json": {
+        "preset.wg_custom.description": "Схема каталога для PUT /v1/controlplane/wg: MTU, listen_port, up/down Mbps, опциональные jc/jmin/jmax. Не ставится через from-presets.",
+    },
+    "presets/derp.json": {
+        "preset.derp_custom.description": "Конструктор DERP: path, websocket, udp mode, uTLS fingerprint.",
+    },
+    "presets/hysteria.json": {
+        "preset.hysteria_custom.description": "Legacy конструктор Hy1: bandwidth + optional obfs. Для новых стеков — hy2_custom.",
+    },
+    "presets/naive.json": {
+        "preset.naive_custom.description": "Конструктор NaiveProxy: network tcp (TLS/H2) или udp (QUIC/H3).",
+    },
+    "presets/shadowquic.json": {
+        "preset.shadowquic_custom.description": "Конструктор ShadowQUIC: JLS addr/SNI для demux-aligned camouflage.",
+    },
+    "presets/shadowtls.json": {
+        "preset.shadowtls_custom.description": "Конструктор ShadowTLS v3: handshake_server, strict_mode, wildcard_sni, uTLS fingerprint.",
+    },
+    "presets/sudoku.json": {
+        "preset.sudoku_custom.description": "Конструктор Sudoku: AEAD method, multiplex, padding, fallback URL.",
+    },
+    "presets/trusttunnel.json": {
+        "preset.trusttunnel_custom.description": "Конструктор TrustTunnel: upstream_protocol h2|h3|auto, anti_dpi, protocol fallback.",
+    },
+    "presets/tuic.json": {
+        "preset.tuic_custom.description": "Конструктор TUIC: congestion_control, udp_relay_mode, опциональный 0-RTT.",
+    },
+}
 
 
 # Phrase-level translation helpers (en → target). Longer phrases first.

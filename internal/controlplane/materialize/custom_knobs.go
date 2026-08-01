@@ -24,6 +24,7 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applyMieruCustomKnobs(ib, preset, params)
 	applyDerpCustomKnobs(ib, preset, params, true)
 	applyCloudflaredCustomKnobs(ib, preset, params)
+	applyStockBandwidthParams(ib, params)
 }
 
 func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map[string]string) {
@@ -41,7 +42,26 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applySudokuCustomKnobs(ob, preset, params)
 	applyMieruCustomKnobs(ob, preset, params)
 	applyDerpCustomKnobs(ob, preset, params, false)
+	applyStockBandwidthParams(ob, params)
 	stripUTLSForQUICTransport(ob)
+}
+
+// applyStockBandwidthParams writes up_mbps/down_mbps from binding params onto
+// hysteria / hysteria2 objects (stock presets keep numeric defaults in JSON;
+// without this, optional_param_fields are ignored).
+func applyStockBandwidthParams(m map[string]any, params map[string]string) {
+	typ, _ := m["type"].(string)
+	switch typ {
+	case "hysteria", "hysteria2":
+	default:
+		return
+	}
+	if v, ok := parseUintParam(params["up_mbps"]); ok {
+		m["up_mbps"] = v
+	}
+	if v, ok := parseUintParam(params["down_mbps"]); ok {
+		m["down_mbps"] = v
+	}
 }
 
 func applyTuicZeroRTT(m map[string]any, preset string, params map[string]string) {

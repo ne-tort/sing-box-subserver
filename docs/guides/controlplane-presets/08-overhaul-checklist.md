@@ -4,11 +4,11 @@
 
 | Protocol | A catalog | B params | C meta | D custom | E i18n | F demux | Notes |
 |----------|-----------|----------|--------|----------|--------|---------|-------|
-| vless | [x] | [x] | [x] | [x] | [x] | [x] | эталон; materialize knobs для transport/tls_mode |
+| vless | [x] | [x] | [x] | [x] | [x] | [x] | эталон; materialize knobs transport/tls_mode |
 | hysteria2 | [x] | [x] | [x] | [x] | [x] | [x] | hy2_custom: obfs/bandwidth/masquerade wiring |
-| wireguard | [x] | [x] | [x] | [~] | [x] | n/a | AWG knobs в meta; hub apply через WG API |
+| wireguard | [x] | [x] | [x] | [x] | [x] | n/a | hub PUT + jc/jmin/jmax overrides; i1–i5 removed |
 | trojan | [x] | [x] | [x] | [x] | [x] | [x] | constructor = transport + tls_mode |
-| anytls | [x] | [x] | [x] | [x] | [x] | [x] | custom: fingerprint/ALPN/idle_session |
+| anytls | [x] | [x] | [x] | [x] | [x] | [x] | fingerprint/ALPN/idle_session |
 | trusttunnel | [x] | [x] | [x] | [x] | [x] | [x] | mode + anti_dpi + fallback |
 | shadowquic | [x] | [x] | [x] | [x] | [x] | [x] | JLS params |
 | sudoku | [x] | [x] | [x] | [x] | [x] | [x] | AEAD/multiplex/padding/fallback |
@@ -26,23 +26,26 @@
 | hysteria1 | [x] | [x] | [x] | [x] | [x] | n/a | bandwidth + obfs; legacy |
 | cloudflared | [x] | [x] | [x] | [x] | [x] | n/a | token + protocol/PQ/HA |
 
-**Materialize (custom):** `tls_mode` для конструкторов учитывается через `domain.BindingUsesReality` / `BindingTLSMode` (не статический trait `reality`). Knobs: hy2 / vless-like transport / SS / socks UoT / http|mixed / TT / tuic 0-RTT / naive network.
+**Materialize (custom):** `tls_mode` через `domain.BindingUsesReality` / `BindingTLSMode`. Knobs: hy2 / vless-like / SS / socks / http|mixed / TT / tuic / naive / lite customs.
 
-**Примечание:** Docker/invariant smoke matrix по всем тегам end-to-end в этой итерации не прогонялся — каталог/schema/locales/materialize unit tests закрыты; matrix — по мере CI.
+**WG hub:** `PUT /v1/controlplane/wg` принимает `jc|jmin|jmax` или `awg{}` поверх generate; `i1–i5` отвергаются. `wg_custom` — schema каталога, не from-presets.
+
+**i18n:** locale files prune по протоколу/param_meta (убран кросс-мусор). ru+en приоритет; остальные 9 langs заполнены; API fallback → en.
+
+**Примечание:** Docker/invariant smoke matrix end-to-end по всем тегам не прогонялся — unit tests controlplane закрыты.
 
 ## Foundation
 
 - [x] params_schema v2
-- [x] locales: 11 языков Hiddify; fallback → en
+- [x] locales: 11 языков Hiddify; fallback → en; prune orphans
 - [x] ADR + custom arch + demux fullstack
 - [x] materialize wiring для custom constructors
-- [x] `inject_optional_param_meta.py` / `generate_all_catalog_locales.py` / `strengthen_weak_help.py`
+- [x] WG hub AWG overrides
+- [x] `generate_all_catalog_locales.py` / `rewrite_priority_locales.py`
 
 ## Scripts
 
 ```bash
-python scripts/inject_optional_param_meta.py
 python scripts/generate_all_catalog_locales.py
-python scripts/strengthen_weak_help.py
 go test -tags with_controlplane ./internal/controlplane/...
 ```

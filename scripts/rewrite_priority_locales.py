@@ -510,14 +510,14 @@ for tag in ("vless_ws_tls", "vless_ws_reality"):
         "Must match front/SNI (Reality materialize often aligns).", "Hostname", "cdn.example.com"))
 for tag in ("vless_http_tls", "vless_http_reality"):
     vless_en.update(param(tag, "http_path", "HTTP path", "HTTP transport path.",
-        "H2 path; tune for your front.", "Path with /", "/h2"))
+        "HTTP/2 path after TLS/Reality; tune to match the front route.", "Path with /", "/h2"))
     vless_en.update(param(tag, "http_host", "HTTP Host", "HTTP transport Host.",
-        "H2 Host; often = SNI.", "Hostname", "www.example.com"))
+        "HTTP/2 Host after TLS/Reality; usually equals SNI/front.", "Hostname", "www.example.com"))
 for tag in ("vless_httpupgrade_tls", "vless_httpupgrade_reality"):
     vless_en.update(param(tag, "hu_path", "HTTPUpgrade path", "Upgrade path.",
         "Single Upgrade; path visible after TLS termination.", "Path with /", "/upgrade"))
     vless_en.update(param(tag, "hu_host", "HTTPUpgrade Host", "Upgrade Host.",
-        "Align with SNI/front.", "Hostname", "cdn.example.com"))
+        "HTTPUpgrade Host; align with SNI/front after TLS/Reality.", "Hostname", "cdn.example.com"))
 
 vless_en.update(param("vless_custom", "transport", "Transport", "transport.type.",
     "tcp for Vision/Reality; ws/grpc/http/httpupgrade for CDN/H2; quic/hysteria for UDP.", "tcp|ws|grpc|http|httpupgrade|quic|hysteria", "tcp"))
@@ -526,15 +526,15 @@ vless_en.update(param("vless_custom", "tls_mode", "TLS mode", "none|tls|reality.
 vless_en.update(param("vless_custom", "flow", "Flow", "XTLS Vision.",
     "Only tcp + tls/reality. Breaks WS/gRPC/HTTP/HUp.", "empty or xtls-rprx-vision", ""))
 vless_en.update(param("vless_custom", "packet_encoding", "Packet encoding", "Outbound UDP encoding.",
-    "xudp default. Almost no DPI impact.", "xudp|packetaddr|empty", "xudp"))
+    "Outbound UDP encoding; xudp is the default full-cone choice.", "xudp|packetaddr|empty", "xudp"))
 vless_en.update(param("vless_custom", "fingerprint", "uTLS fingerprint", "ClientHello uTLS.",
     "chrome default. Not for quic/hysteria transport.", "chrome|firefox|…", "chrome"))
 vless_en.update(param("vless_custom", "transport_path", "Path", "WS/HTTP/HUp path.",
-    "Post-TLS path. Avoid stock /ws,/vless.", "Path with /", "/api/connect"))
+    "Post-TLS path for WS/HTTP; avoid stock /ws and /vless defaults.", "Path with /", "/api/connect"))
 vless_en.update(param("vless_custom", "transport_host", "Host", "WS/HTTP/HUp Host.",
-    "Often = SNI/front.", "Hostname", "cdn.example.com"))
+    "Host/:authority for WS/HTTP transports; usually matches SNI/front.", "Hostname", "cdn.example.com"))
 vless_en.update(param("vless_custom", "service_name", "gRPC service", "Gun service_name.",
-    "gRPC marker. Change GunService if filtered.", "Name", "GunService"))
+    "gRPC Gun service_name marker; change GunService if that string is filtered.", "Name", "GunService"))
 vless_en.update(param("vless_custom", "alpn", "ALPN", "Comma-separated ALPN.",
     "h2,http/1.1 for TCP TLS; h3 for QUIC transports.", "List", "h2,http/1.1"))
 
@@ -606,28 +606,30 @@ hy2_en.update(preset("hy2_custom", "Hy2 constructor",
     "Obfs × bandwidth × masquerade. Salamander breaks demux quic-match — mind :443 stacks."))
 
 for tag in ("hy2", "hy2_gecko", "hy2_gecko_compact", "hy2_gecko_masquerade", "hy2_masquerade", "hy2_salamander"):
-    hy2_en.update(param(tag, "up_mbps", "Upload Mbps", "Upload cap.",
-        "Hard upload cap for the link.", "Mbps", "100"))
-    hy2_en.update(param(tag, "down_mbps", "Download Mbps", "Download cap.",
-        "Hard download cap for the link.", "Mbps", "100"))
-hy2_en.update(param("hy2_masquerade_file", "masquerade_dir", "Masquerade dir", "Static root.",
-    "Directory served on bad auth.", "Absolute path", "/var/www/html"))
-hy2_en.update(param("hy2_realm", "realm_server_url", "Realm URL", "Realm control URL.",
-    "Operator HTTPS control URL.", "https URL", "https://realm.example.com"))
-hy2_en.update(param("hy2_realm", "realm_id", "Realm ID", "Realm identifier.",
-    "ID from the realm operator.", "Opaque id", "my-realm"))
+    hy2_en.update(param(tag, "up_mbps", "Upload Mbps", "Upload Mbps cap.",
+        "Hard upload Mbps cap advertised on the Hy2 link (server/client).", "Mbps", "100"))
+    hy2_en.update(param(tag, "down_mbps", "Download Mbps", "Download Mbps cap.",
+        "Hard download Mbps cap advertised on the Hy2 link (server/client).", "Mbps", "100"))
+hy2_en.update(param("hy2_masquerade_file", "masquerade_dir", "Masquerade dir", "Static root for file decoy.",
+    "Directory served as HTTP decoy when Hy2 auth fails (file masquerade).", "Absolute path", "/var/www/html"))
+hy2_en.update(param("hy2_realm", "realm_server_url", "Realm URL", "Realm operator control URL.",
+    "Operator HTTPS control URL used to register this Hy2 realm node.", "https URL", "https://realm.example.com"))
+hy2_en.update(param("hy2_realm", "realm_id", "Realm ID", "Realm identifier from operator.",
+    "Realm identifier issued by the Hy2 realm operator control plane.", "Opaque id", "my-realm"))
 hy2_en.update(param("hy2_custom", "obfs_type", "Obfuscation", "none|salamander.",
     "none = demux-friendly QUIC; salamander = stronger DPI, breaks demux quic/SNI.", "none|salamander", "none"))
-hy2_en.update(param("hy2_custom", "up_mbps", "Upload Mbps", "Upload cap.", "Upload cap.", "Mbps", "100"))
-hy2_en.update(param("hy2_custom", "down_mbps", "Download Mbps", "Download cap.", "Download cap.", "Mbps", "100"))
+hy2_en.update(param("hy2_custom", "up_mbps", "Upload Mbps", "Upload Mbps cap.",
+    "Upload Mbps cap written into Hy2 inbound/outbound templates.", "Mbps", "100"))
+hy2_en.update(param("hy2_custom", "down_mbps", "Download Mbps", "Download Mbps cap.",
+    "Download Mbps cap written into Hy2 inbound/outbound templates.", "Mbps", "100"))
 hy2_en.update(param("hy2_custom", "ignore_client_bandwidth", "Ignore client bandwidth", "ignore_client_bandwidth.",
     "Server ignores client up/down — stabler with odd clients.", "true|false", "true"))
 hy2_en.update(param("hy2_custom", "masquerade_mode", "Masquerade", "Decoy mode.",
     "HTTP response on bad auth. Does not hide QUIC first-bytes.", "none|proxy|file|string", "none"))
 hy2_en.update(param("hy2_custom", "masquerade_dir", "Directory", "File masquerade root.",
-    "Required when masquerade_mode=file.", "Path", "/var/www/html"))
+    "Filesystem root for file masquerade; required when masquerade_mode=file.", "Path", "/var/www/html"))
 hy2_en.update(param("hy2_custom", "masquerade_url", "Proxy URL", "Upstream for proxy masquerade.",
-    "Where to proxy fail-auth HTTP.", "https URL", "https://www.cloudflare.com"))
+    "Upstream HTTPS URL for proxy masquerade on failed Hy2 auth.", "https URL", "https://www.cloudflare.com"))
 
 
 wg_ru: dict = {}
@@ -638,23 +640,27 @@ wg_ru.update(preset("wg_awg2", "AmneziaWG 2",
 wg_ru.update(preset("wg_awg3", "AmneziaWG 3",
     "AWG3 timings/HP/CPA + AWG2. Максимальная устойчивость сигнатуры среди WG-семейства."))
 wg_ru.update(preset("wg_custom", "WG / AWG конструктор",
-    "MTU + опциональные AWG jc/jmin/jmax/i1–i5. Пустые AWG-поля = обычный WG."))
+    "Схема каталога для PUT /v1/controlplane/wg: MTU, listen_port, up/down Mbps, опциональные jc/jmin/jmax. Не ставится через from-presets. AWG i1–i5 этим стеком не используются."))
 wg_ru.update(param("wg", "mtu", "MTU", "MTU интерфейса.",
     "1280–1420 за мобильным/CGNAT; 1500 часто режется.", "576–65535", "1408"))
-wg_ru.update(param("wg_awg2", "mtu", "MTU", "MTU.", "Под канал/NAT.", "Число", "1408"))
-wg_ru.update(param("wg_awg3", "mtu", "MTU", "MTU.", "Под канал/NAT.", "Число", "1408"))
-wg_ru.update(param("wg_custom", "mtu", "MTU", "MTU.", "Под канал/NAT.", "Число", "1408"))
+wg_ru.update(param("wg_awg2", "mtu", "MTU", "MTU интерфейса.",
+    "MTU интерфейса WireGuard; согласуйте с path MTU и NAT.", "576–65535", "1408"))
+wg_ru.update(param("wg_awg3", "mtu", "MTU", "MTU интерфейса.",
+    "MTU интерфейса WireGuard; согласуйте с path MTU и NAT.", "576–65535", "1408"))
+wg_ru.update(param("wg_custom", "mtu", "MTU", "MTU интерфейса.",
+    "MTU интерфейса WireGuard на hub endpoint (PUT /wg).", "576–65535", "1408"))
 wg_ru.update(param("wg_custom", "listen_port", "Listen UDP", "Порт hub.",
     "UDP listen hub. Не путать с публичным demux :443.", "1–65535", "51820"))
+wg_ru.update(param("wg_custom", "up_mbps", "Upload Mbps", "Hub up_mbps.",
+    "Опциональный потолок upload (Mbps) на WG endpoint.", "Mbps", ""))
+wg_ru.update(param("wg_custom", "down_mbps", "Download Mbps", "Hub down_mbps.",
+    "Опциональный потолок download (Mbps) на WG endpoint.", "Mbps", ""))
 wg_ru.update(param("wg_custom", "jc", "AWG jc", "Число junk-пакетов.",
-    "Сколько junk до handshake. 0/пусто = без AWG junk.", "Число", "4"))
+    "Override числа junk после generate профиля. Пусто = оставить сгенерированное.", "Число", "4"))
 wg_ru.update(param("wg_custom", "jmin", "AWG jmin", "Мин. размер junk.",
-    "Нижняя граница размера junk-пакета.", "Байты", "40"))
+    "AWG jmin: нижняя граница размера junk-пакета AmneziaWG.", "Байты", "40"))
 wg_ru.update(param("wg_custom", "jmax", "AWG jmax", "Макс. размер junk.",
-    "Верхняя граница; jmax ≥ jmin.", "Байты", "70"))
-for i in range(1, 6):
-    wg_ru.update(param("wg_custom", f"i{i}", f"AWG i{i}", f"Спец. пакет i{i}.",
-        f"Опциональный init-пакет AWG i{i}. Пусто = выкл.", "Hex/строка по профилю AWG", ""))
+    "AWG jmax: верхняя граница junk; должна быть >= jmin.", "Байты", "70"))
 
 wg_en: dict = {}
 wg_en.update(preset("wg", "WireGuard",
@@ -664,23 +670,27 @@ wg_en.update(preset("wg_awg2", "AmneziaWG 2",
 wg_en.update(preset("wg_awg3", "AmneziaWG 3",
     "AWG3 timings/HP/CPA + AWG2. Strongest signature hardening in the WG family."))
 wg_en.update(preset("wg_custom", "WG / AWG constructor",
-    "MTU + optional AWG jc/jmin/jmax/i1–i5. Empty AWG fields = plain WG."))
+    "Catalog schema for PUT /v1/controlplane/wg: MTU, listen_port, up/down Mbps, optional jc/jmin/jmax overrides. Not installable via from-presets. AWG i1–i5 are not used by this stack."))
 wg_en.update(param("wg", "mtu", "MTU", "Interface MTU.",
     "1280–1420 behind mobile/CGNAT; 1500 often clamped.", "576–65535", "1408"))
-wg_en.update(param("wg_awg2", "mtu", "MTU", "MTU.", "Match link/NAT.", "Number", "1408"))
-wg_en.update(param("wg_awg3", "mtu", "MTU", "MTU.", "Match link/NAT.", "Number", "1408"))
-wg_en.update(param("wg_custom", "mtu", "MTU", "MTU.", "Match link/NAT.", "Number", "1408"))
+wg_en.update(param("wg_awg2", "mtu", "MTU", "Interface MTU.",
+    "WireGuard interface MTU; match path MTU and NAT expectations.", "576–65535", "1408"))
+wg_en.update(param("wg_awg3", "mtu", "MTU", "Interface MTU.",
+    "WireGuard interface MTU; match path MTU and NAT expectations.", "576–65535", "1408"))
+wg_en.update(param("wg_custom", "mtu", "MTU", "Interface MTU.",
+    "WireGuard interface MTU on the hub endpoint (PUT /wg).", "576–65535", "1408"))
 wg_en.update(param("wg_custom", "listen_port", "Listen UDP", "Hub port.",
-    "UDP hub listen. Not the public demux :443.", "1–65535", "51820"))
+    "UDP hub listen port. Not the public demux :443.", "1–65535", "51820"))
+wg_en.update(param("wg_custom", "up_mbps", "Upload Mbps", "Hub up_mbps.",
+    "Optional hub-wide upload Mbps ceiling on the WG endpoint.", "Mbps", ""))
+wg_en.update(param("wg_custom", "down_mbps", "Download Mbps", "Hub down_mbps.",
+    "Optional hub-wide download Mbps ceiling on the WG endpoint.", "Mbps", ""))
 wg_en.update(param("wg_custom", "jc", "AWG jc", "Junk packet count.",
-    "Junk packets before handshake. 0/empty = no AWG junk.", "Number", "4"))
+    "Override AWG junk packet count after profile generate. Empty keeps generated value.", "Number", "4"))
 wg_en.update(param("wg_custom", "jmin", "AWG jmin", "Min junk size.",
-    "Lower bound of junk packet size.", "Bytes", "40"))
+    "AWG jmin: lower junk packet size bound for AmneziaWG.", "Bytes", "40"))
 wg_en.update(param("wg_custom", "jmax", "AWG jmax", "Max junk size.",
-    "Upper bound; jmax ≥ jmin.", "Bytes", "70"))
-for i in range(1, 6):
-    wg_en.update(param("wg_custom", f"i{i}", f"AWG i{i}", f"Special packet i{i}.",
-        f"Optional AWG init packet i{i}. Empty = off.", "Hex/string per AWG profile", ""))
+    "AWG jmax: upper junk packet size; must be >= jmin.", "Bytes", "70"))
 
 
 demux_ru = {
