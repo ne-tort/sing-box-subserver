@@ -2,37 +2,27 @@
   "schema_version": 1,
   "tag": "hysteria_custom",
   "protocol": "hysteria",
-  "aliases": [
-    "hysteria-custom"
-  ],
+  "aliases": ["hysteria-custom", "hy1-constructor"],
   "short_name": "Hy1 custom",
   "status": "lab",
+  "custom_preset": true,
   "i18n": {
     "ru": {
-      "title": "Hy1 custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе hy1.json."
+      "title": "Hy1 конструктор",
+      "description": "Legacy Hysteria1: bandwidth + optional obfs. Для новых стеков — hy2_custom."
     },
     "en": {
       "title": "Hysteria1 constructor",
-      "description": "Lab hy1 constructor. Prefer hy2_custom for new stacks."
+      "description": "Legacy Hy1: bandwidth caps and optional obfs string. Prefer hy2_custom for new stacks."
     }
   },
-  "traits": [
-    "udp",
-    "quic",
-    "tls",
-    "custom"
-  ],
+  "traits": ["udp", "quic", "tls", "custom"],
   "demux_hints": {
-    "network": [
-      "udp"
-    ],
+    "network": ["udp"],
     "looks_like": "quic",
-    "alpn": [
-      "hysteria"
-    ],
+    "alpn": ["hysteria"],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "QUIC/Hy1",
     "compatible_with_demux": true
   },
   "scores": {
@@ -41,9 +31,55 @@
     "mobile": 4,
     "setup": 3
   },
-  "cred_fields": [
-    "auth_str"
-  ],
+  "cred_fields": ["auth_str"],
+  "optional_param_fields": ["up_mbps", "down_mbps", "obfs"],
+  "param_meta": {
+    "up_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 1,
+      "min": 1,
+      "max": 10000,
+      "title": {"en": "Upload Mbps", "ru": "Upload Mbps"},
+      "description": {
+        "en": "Hy1 up_mbps cap.",
+        "ru": "Лимит up_mbps."
+      }
+    },
+    "down_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 2,
+      "min": 1,
+      "max": 10000,
+      "title": {"en": "Download Mbps", "ru": "Download Mbps"},
+      "description": {
+        "en": "Hy1 down_mbps cap.",
+        "ru": "Лимит down_mbps."
+      }
+    },
+    "obfs": {
+      "type": "string",
+      "widget": "text",
+      "default": "",
+      "ui_group": "obfs",
+      "ui_order": 10,
+      "title": {"en": "Obfs string", "ru": "Obfs string"},
+      "description": {
+        "en": "Symmetric Hy1 obfs; empty = no obfuscation.",
+        "ru": "Симметричный Hy1 obfs; пусто = без obfuscation."
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
   "inbound_template": {
     "type": "hysteria",
     "tag": "{{tag}}",
@@ -55,9 +91,7 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": [
-        "h3"
-      ]
+      "alpn": ["h3"]
     }
   },
   "outbound_template": {
@@ -71,20 +105,11 @@
     "tls": {
       "enabled": true,
       "server_name": "{{server}}",
-      "alpn": [
-        "h3"
-      ]
+      "alpn": ["h3"]
     }
   },
-  "requirements": {
-    "tls_profile": true,
-    "udp": true,
-    "quic": true
-  },
   "client_notes": {
-    "auth_str": "user_symmetric: inbound users[].auth_str <-> outbound auth_str"
-  },
-  "custom_preset": true,
-  "optional_param_fields": [],
-  "param_meta": {}
+    "auth_str": "user_symmetric: inbound users[].auth_str <-> outbound auth_str",
+    "obfs": "set bindings[].params.obfs for peer-symmetric obfuscation"
+  }
 }

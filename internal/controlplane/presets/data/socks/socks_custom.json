@@ -2,29 +2,23 @@
   "schema_version": 1,
   "tag": "socks_custom",
   "protocol": "socks",
-  "aliases": [
-    "socks-custom"
-  ],
-  "short_name": "SOCKS5 custom",
+  "aliases": ["socks-custom", "socks-constructor"],
+  "short_name": "SOCKS custom",
   "status": "lab",
+  "custom_preset": true,
   "i18n": {
     "ru": {
-      "title": "SOCKS5 custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе socks.json."
+      "title": "SOCKS конструктор",
+      "description": "SOCKS5 auth; опционально UDP-over-TCP на outbound."
     },
     "en": {
       "title": "SOCKS constructor",
-      "description": "Lab SOCKS5 constructor."
+      "description": "SOCKS5 auth; optional UDP-over-TCP on outbound."
     }
   },
-  "traits": [
-    "tcp",
-    "custom"
-  ],
+  "traits": ["tcp", "custom"],
   "demux_hints": {
-    "network": [
-      "tcp"
-    ],
+    "network": ["tcp"],
     "looks_like": "raw_tcp",
     "alpn": [],
     "sni_required": false,
@@ -37,10 +31,22 @@
     "mobile": 7,
     "setup": 3
   },
-  "cred_fields": [
-    "username",
-    "password"
-  ],
+  "cred_fields": ["username", "password"],
+  "optional_param_fields": ["udp_over_tcp"],
+  "param_meta": {
+    "udp_over_tcp": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {"en": "UDP-over-TCP", "ru": "UDP-over-TCP"},
+      "description": {
+        "en": "Outbound udp_over_tcp v2 when UDP associate is blocked.",
+        "ru": "Outbound udp_over_tcp v2, если UDP associate режется."
+      }
+    }
+  },
   "inbound_template": {
     "type": "socks",
     "tag": "{{tag}}",
@@ -55,8 +61,5 @@
     "server_port": 0,
     "username": "{{user.username}}",
     "password": "{{user.password}}"
-  },
-  "custom_preset": true,
-  "optional_param_fields": [],
-  "param_meta": {}
+  }
 }

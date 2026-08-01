@@ -249,6 +249,14 @@ func applyHTTPMixedCustomKnobs(m map[string]any, preset string, params map[strin
 	default:
 		return
 	}
+	if preset == "mixed_custom" {
+		if ot := strings.ToLower(strings.TrimSpace(params["outbound_type"])); ot == "http" || ot == "socks" {
+			// Only rewrite subscription outbounds (no listen field).
+			if _, isIn := m["listen"]; !isIn {
+				m["type"] = ot
+			}
+		}
+	}
 	mode := strings.ToLower(strings.TrimSpace(params["tls_mode"]))
 	if mode == "" {
 		mode = "none"

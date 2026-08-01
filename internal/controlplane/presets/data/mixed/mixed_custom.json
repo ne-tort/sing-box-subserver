@@ -2,33 +2,27 @@
   "schema_version": 1,
   "tag": "mixed_custom",
   "protocol": "mixed",
-  "aliases": [
-    "mixed-custom"
-  ],
-  "short_name": "Mixed auth custom",
+  "aliases": ["mixed-custom", "mixed-constructor"],
+  "short_name": "Mixed custom",
   "status": "lab",
+  "custom_preset": true,
   "i18n": {
     "ru": {
-      "title": "Mixed auth custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе mixed_auth.json."
+      "title": "Mixed конструктор",
+      "description": "HTTP+SOCKS inbound; outbound как SOCKS/HTTP. Plain или TLS."
     },
     "en": {
       "title": "Mixed constructor",
-      "description": "Lab mixed inbound constructor."
+      "description": "HTTP+SOCKS inbound; client outbound SOCKS/HTTP. Plain or TLS."
     }
   },
-  "traits": [
-    "tcp",
-    "custom"
-  ],
+  "traits": ["tcp", "custom"],
   "demux_hints": {
-    "network": [
-      "tcp"
-    ],
+    "network": ["tcp"],
     "looks_like": "http",
     "alpn": [],
     "sni_required": false,
-    "first_bytes": "HTTP methods or SOCKS5",
+    "first_bytes": "HTTP methods, SOCKS5, or TLS",
     "compatible_with_demux": true
   },
   "scores": {
@@ -37,16 +31,64 @@
     "mobile": 7,
     "setup": 3
   },
-  "cred_fields": [
-    "username",
-    "password"
-  ],
+  "cred_fields": ["username", "password"],
+  "param_fields": ["tls_mode"],
+  "optional_param_fields": ["fingerprint", "outbound_type"],
+  "param_meta": {
+    "tls_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": ["none", "tls"],
+      "default": "none",
+      "ui_group": "tls",
+      "ui_order": 1,
+      "title": {"en": "TLS mode", "ru": "Режим TLS"},
+      "description": {
+        "en": "Plain mixed vs TLS-wrapped mixed inbound.",
+        "ru": "Plain mixed или mixed за TLS."
+      }
+    },
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "visible_when": [{"key": "tls_mode", "equals": "tls"}],
+      "title": {"en": "uTLS fingerprint", "ru": "uTLS fingerprint"},
+      "description": {
+        "en": "Outbound uTLS when tls_mode=tls.",
+        "ru": "uTLS на outbound при tls_mode=tls."
+      }
+    },
+    "outbound_type": {
+      "type": "enum",
+      "widget": "select",
+      "enum": ["socks", "http"],
+      "default": "socks",
+      "ui_group": "core",
+      "ui_order": 10,
+      "title": {"en": "Client outbound type", "ru": "Тип outbound клиента"},
+      "description": {
+        "en": "Subscription outbound type against mixed inbound.",
+        "ru": "Тип outbound в подписке к mixed inbound."
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
   "inbound_template": {
     "type": "mixed",
     "tag": "{{tag}}",
     "listen": "{{listen}}",
     "listen_port": 0,
-    "users": []
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": ["h2", "http/1.1"]
+    }
   },
   "outbound_template": {
     "type": "socks",
@@ -54,12 +96,18 @@
     "server": "{{server}}",
     "server_port": 0,
     "username": "{{user.username}}",
-    "password": "{{user.password}}"
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": ["h2", "http/1.1"],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    }
   },
   "client_notes": {
-    "outbound": "клиент подключается как SOCKS5 к mixed inbound"
-  },
-  "custom_preset": true,
-  "optional_param_fields": [],
-  "param_meta": {}
+    "outbound": "outbound_type socks|http rewritten at materialize; client talks to mixed inbound"
+  }
 }
