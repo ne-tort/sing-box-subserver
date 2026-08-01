@@ -1,7 +1,11 @@
 {
   "param.trusttunnel_custom.anti_dpi.description": "transport.anti_dpi — hardening потоков TrustTunnel.",
+  "param.trusttunnel_custom.anti_dpi.help.input_hint": "значение по docs протокола",
+  "param.trusttunnel_custom.anti_dpi.help.summary": "transport.anti_dpi — hardening потоков TrustTunnel.",
   "param.trusttunnel_custom.anti_dpi.title": "Anti-DPI",
   "param.trusttunnel_custom.enable_protocol_fallback.description": "При mode=auto: enable_protocol_fallback между h2/h3.",
+  "param.trusttunnel_custom.enable_protocol_fallback.help.input_hint": "значение по docs протокола",
+  "param.trusttunnel_custom.enable_protocol_fallback.help.summary": "При mode=auto: enable_protocol_fallback между h2/h3.",
   "param.trusttunnel_custom.enable_protocol_fallback.title": "Protocol fallback",
   "param.trusttunnel_custom.mode.description": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto).",
   "param.trusttunnel_custom.mode.help.format": "auto",

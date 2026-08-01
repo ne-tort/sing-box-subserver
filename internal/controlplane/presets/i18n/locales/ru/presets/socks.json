@@ -1,5 +1,7 @@
 {
   "param.socks_custom.udp_over_tcp.description": "Outbound udp_over_tcp v2, если UDP associate режется.",
+  "param.socks_custom.udp_over_tcp.help.input_hint": "значение по docs протокола",
+  "param.socks_custom.udp_over_tcp.help.summary": "Outbound udp_over_tcp v2, если UDP associate режется.",
   "param.socks_custom.udp_over_tcp.title": "UDP-over-TCP",
   "preset.socks.description": "SOCKS5 с логином/паролем (plaintext).",
   "preset.socks.title": "SOCKS5",

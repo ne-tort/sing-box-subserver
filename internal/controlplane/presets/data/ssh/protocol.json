@@ -16,5 +16,39 @@
   },
   "default_cred_fields": [
     "password"
-  ]
+  ],
+  "optional_param_fields": [
+    "client_version"
+  ],
+  "param_meta": {
+    "client_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 44,
+      "title": {
+        "en": "Client version",
+        "ru": "Client version"
+      },
+      "description": {
+        "en": "SSH client identification string on outbound.",
+        "ru": "Строка идентификации SSH-клиента на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound SSH client banner. Can differ from server_version when probing mixed OpenSSH fingerprints.",
+          "ru": "Banner SSH-клиента на outbound. Может отличаться от server_version при смешанных OpenSSH fingerprint."
+        },
+        "input_hint": {
+          "en": "SSH-2.0-…",
+          "ru": "SSH-2.0-…"
+        },
+        "format": "SSH-2.0-OpenSSH_8.9"
+      }
+    }
+  },
+  "client_notes": {
+    "params": "optional: server_version (inbound banner), client_version (outbound)"
+  }
 }

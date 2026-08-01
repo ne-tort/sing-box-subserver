@@ -1,7 +1,11 @@
 {
   "param.http_custom.fingerprint.description": "uTLS fingerprint на outbound при tls_mode=tls.",
+  "param.http_custom.fingerprint.help.input_hint": "значение по docs протокола",
+  "param.http_custom.fingerprint.help.summary": "uTLS fingerprint на outbound при tls_mode=tls.",
   "param.http_custom.fingerprint.title": "uTLS fingerprint",
   "param.http_custom.tls_mode.description": "Plain HTTP CONNECT или CONNECT за TLS.",
+  "param.http_custom.tls_mode.help.input_hint": "значение по docs протокола",
+  "param.http_custom.tls_mode.help.summary": "Plain HTTP CONNECT или CONNECT за TLS — параметр inbound/outbound.",
   "param.http_custom.tls_mode.title": "Режим TLS",
   "preset.http.description": "HTTP CONNECT прокси с логином.",
   "preset.http.title": "HTTP CONNECT",

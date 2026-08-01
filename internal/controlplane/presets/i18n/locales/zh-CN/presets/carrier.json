@@ -128,6 +128,6 @@
   "preset.carrier_vk_users.title": "Carrier VK users",
   "preset.carrier_wbstream_shared.description": "Wildberries stream SFU underlay (shared). Needs room + often token/key params.",
   "preset.carrier_wbstream_shared.title": "Carrier WB Stream shared",
-  "preset.carrier_wbstream_users.description": "WB stream underlay with per-user credentials.",
+  "preset.carrier_wbstream_users.description": "WB Stream underlay with per-user secrets. 房间 URL + often token; users_auth path.",
   "preset.carrier_wbstream_users.title": "Carrier WB Stream users"
 }

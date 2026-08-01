@@ -1,5 +1,7 @@
 {
   "param.socks_custom.udp_over_tcp.description": "Outbound udp_over_tcp v2 when UDP associate is blocked.",
+  "param.socks_custom.udp_over_tcp.help.input_hint": "protocol-specific value",
+  "param.socks_custom.udp_over_tcp.help.summary": "Outbound udp_over_tcp v2 when UDP associate is blocked.",
   "param.socks_custom.udp_over_tcp.title": "UDP-over-TCP",
   "preset.socks.description": "Classic SOCKS5. Utility inbound / demux inject target — not anti-DPI.",
   "preset.socks.title": "SOCKS5",

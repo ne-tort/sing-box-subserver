@@ -128,6 +128,6 @@
   "preset.carrier_vk_users.title": "Carrier VK users",
   "preset.carrier_wbstream_shared.description": "WB Stream: guest-register join. params.room=URL комнаты; опц. params.token.",
   "preset.carrier_wbstream_shared.title": "Carrier WB Stream",
-  "preset.carrier_wbstream_users.description": "WB Stream + auth=users; params.room обязателен.",
+  "preset.carrier_wbstream_users.description": "WB Stream underlay с per-user secrets. URL комнаты + часто token; путь users_auth.",
   "preset.carrier_wbstream_users.title": "Carrier WB users"
 }

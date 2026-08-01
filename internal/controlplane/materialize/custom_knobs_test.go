@@ -130,6 +130,29 @@ func TestApplyStockShadowQUICAndShadowTLS(t *testing.T) {
 	}
 }
 
+func TestApplyAnyTLSAndDerpStockKnobs(t *testing.T) {
+	t.Parallel()
+	ob := map[string]any{
+		"type": "anytls",
+		"tls":  map[string]any{"enabled": true, "alpn": []any{"h2"}},
+	}
+	applyAnyTLSCustomKnobs(ob, "anytls", map[string]string{"alpn": "http/1.1", "fingerprint": "firefox"}, false)
+	tls := ob["tls"].(map[string]any)
+	alpn := tls["alpn"].([]any)
+	if len(alpn) != 1 || alpn[0] != "http/1.1" {
+		t.Fatalf("alpn=%#v", alpn)
+	}
+	utls := tls["utls"].(map[string]any)
+	if utls["fingerprint"] != "firefox" {
+		t.Fatalf("utls=%#v", utls)
+	}
+	derp := map[string]any{"type": "derp", "udp": "native", "websocket": false}
+	applyDerpCustomKnobs(derp, "derp_tls", map[string]string{"udp": "disabled", "websocket": "true"}, true)
+	if derp["udp"] != "disabled" || derp["websocket"] != true {
+		t.Fatalf("derp=%#v", derp)
+	}
+}
+
 func TestCleanupV2RayTransportTCP(t *testing.T) {
 	t.Parallel()
 	m := map[string]any{

@@ -63,17 +63,18 @@
     "private_key": [
       "{{user.private_key}}"
     ],
-    "client_version": "{{param.server_version}}"
+    "client_version": "{{param.client_version}}"
   },
   "requirements": {
     "build_tag": "with_ssh"
   },
   "client_notes": {
     "keys": "ensureCreds генерирует ed25519 PEM + authorized_keys; inbound users[].public_key",
-    "params": "optional bindings[].params overrides: server_version"
+    "params": "optional: server_version (inbound banner), client_version (outbound)"
   },
   "optional_param_fields": [
-    "server_version"
+    "server_version",
+    "client_version"
   ],
   "param_meta": {
     "server_version": {
@@ -94,6 +95,32 @@
         "summary": {
           "en": "SSH identification string (banner) returned on connect. Keep OpenSSH-like unless you need a specific fingerprint.",
           "ru": "Строка идентификации SSH (banner) при connect. Держите OpenSSH-like, если не нужен особый fingerprint."
+        },
+        "input_hint": {
+          "en": "SSH-2.0-…",
+          "ru": "SSH-2.0-…"
+        },
+        "format": "SSH-2.0-OpenSSH_8.9"
+      }
+    },
+    "client_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 44,
+      "title": {
+        "en": "Client version",
+        "ru": "Client version"
+      },
+      "description": {
+        "en": "SSH client identification string on outbound.",
+        "ru": "Строка идентификации SSH-клиента на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound SSH client banner. Can differ from server_version when probing mixed OpenSSH fingerprints.",
+          "ru": "Banner SSH-клиента на outbound. Может отличаться от server_version при смешанных OpenSSH fingerprint."
         },
         "input_hint": {
           "en": "SSH-2.0-…",

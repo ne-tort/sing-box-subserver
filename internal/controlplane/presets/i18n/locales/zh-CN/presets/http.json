@@ -1,7 +1,11 @@
 {
   "param.http_custom.fingerprint.description": "Outbound uTLS 指纹 when tls_mode=tls.",
+  "param.http_custom.fingerprint.help.input_hint": "protocol-specific value",
+  "param.http_custom.fingerprint.help.summary": "Outbound uTLS 指纹 when tls_mode=tls; applied on inbound/outbound.",
   "param.http_custom.fingerprint.title": "uTLS 指纹",
   "param.http_custom.tls_mode.description": "Plain HTTP CONNECT vs TLS-wrapped CONNECT.",
+  "param.http_custom.tls_mode.help.input_hint": "protocol-specific value",
+  "param.http_custom.tls_mode.help.summary": "Plain HTTP CONNECT vs TLS-wrapped CONNECT; applied on inbound/outbound.",
   "param.http_custom.tls_mode.title": "TLS mode",
   "preset.http.description": "Utility HTTP CONNECT proxy. Not anti-DPI; local/service use.",
   "preset.http.title": "HTTP CONNECT",

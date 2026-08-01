@@ -123,6 +123,8 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.shadowquic_custom.description": "ShadowQUIC constructor: JLS addr/SNI overrides for demux-aligned camouflage.",
     },
     "presets/shadowsocks.json": {
+        "preset.ss_2022_chacha.description": "Shadowsocks 2022 ChaCha20-Poly1305. Prefer on ARM/mobile where AES is weaker.",
+        "preset.ss_aes128_uot.description": "SS AES-128 with UDP-over-TCP helper when native UDP SS is filtered.",
         "preset.ss_2022_aes128_mux.description": "SS2022 AES-128-GCM with multiplex. Still no TLS camouflage — DPI class stays AEAD stream.",
         "preset.shadowsocks_custom.description": "Shadowsocks constructor: AEAD/2022 method, network, optional UDP-over-TCP.",
     },
@@ -141,6 +143,7 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
     "presets/carrier.json": {
         "preset.carrier_peer_users.description": "Peer underlay with per-user credentials. Needs peer endpoint params.",
         "preset.carrier_telemost_users.description": "Yandex Telemost underlay with per-user credentials. Needs full room URL.",
+        "preset.carrier_wbstream_users.description": "WB Stream underlay with per-user secrets. Room URL + often token; users_auth path.",
         "preset.carrier_vk_users.description": "VK WRAP/DTLS underlay with per-user secrets. Set vk_hash / wrap_password from the join flow; not vk.ru/call cloud.",
         "preset.carrier_custom.description": "Lab Carrier: provider (jitsi/telemost/wbstream/jitsi_sei), room URL, optional token/key. Prefer a concrete SFU preset when possible.",
     },
@@ -444,11 +447,14 @@ RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.cloudflared_custom.description": "Конструктор Cloudflare Tunnel: token + protocol/post_quantum/ha_connections.",
     },
     "presets/shadowsocks.json": {
+        "preset.ss_2022_chacha.description": "Shadowsocks 2022 ChaCha20-Poly1305. Предпочтительнее на ARM/mobile, где AES слабее.",
+        "preset.ss_aes128_uot.description": "SS AES-128 с UDP-over-TCP helper, когда native UDP SS режется.",
         "preset.ss_2022_aes128_mux.description": "SS2022 AES-128-GCM с multiplex. Без TLS-камуфляжа — DPI-класс остаётся AEAD stream.",
     },
     "presets/carrier.json": {
         "preset.carrier_peer_users.description": "Peer underlay с per-user credentials. Нужны параметры peer endpoint.",
         "preset.carrier_telemost_users.description": "Underlay Яндекс Телемост с per-user credentials. Нужен полный URL комнаты.",
+        "preset.carrier_wbstream_users.description": "WB Stream underlay с per-user secrets. URL комнаты + часто token; путь users_auth.",
         "preset.carrier_vk_users.description": "VK WRAP/DTLS underlay с per-user secrets. vk_hash/wrap_password из join flow; не облако vk.ru/call.",
         "preset.carrier_custom.description": "Lab Carrier: provider (jitsi/telemost/wbstream/jitsi_sei), URL комнаты, опц. token/key. Предпочтительнее конкретный SFU-пресет.",
     },

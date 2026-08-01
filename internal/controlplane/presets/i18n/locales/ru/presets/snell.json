@@ -4,6 +4,8 @@
   "param.snell_custom.obfs_host.help.summary": "Host header для Snell obfs (http/tls). Под реалистичный сайт; не используется при obfs_mode=off.",
   "param.snell_custom.obfs_host.title": "Obfs Host",
   "param.snell_custom.obfs_mode.description": "obfs_mode Snell на inbound/outbound.",
+  "param.snell_custom.obfs_mode.help.input_hint": "значение по docs протокола",
+  "param.snell_custom.obfs_mode.help.summary": "obfs_mode Snell на inbound/outbound — параметр inbound/outbound.",
   "param.snell_custom.obfs_mode.title": "Obfs mode",
   "param.snell_v5.obfs_host.description": "Host header для Snell HTTP/TLS obfs.",
   "param.snell_v5.obfs_host.help.input_hint": "Hostname без схемы",
