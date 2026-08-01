@@ -1,4 +1,8 @@
 {
+  "param.trusttunnel_custom.anti_dpi.description": "transport.anti_dpi — padding/timing hardening on TrustTunnel streams.",
+  "param.trusttunnel_custom.anti_dpi.title": "Anti-DPI",
+  "param.trusttunnel_custom.enable_protocol_fallback.description": "When mode=auto: enable_protocol_fallback between h2/h3.",
+  "param.trusttunnel_custom.enable_protocol_fallback.title": "Protocol fallback",
   "param.trusttunnel_custom.mode.description": "TrustTunnel transport.upstream_protocol (h2 TCP/TLS, h3 QUIC, auto fallback).",
   "param.trusttunnel_custom.mode.help.format": "auto",
   "param.trusttunnel_custom.mode.help.input_hint": "h2|h3|auto",

@@ -1,4 +1,6 @@
 {
+  "param.ssh_custom.client_version.description": "Outbound SSH client_version string.",
+  "param.ssh_custom.client_version.title": "Client version",
   "param.ssh_custom.server_version.description": "SSH version string shown to clients.",
   "param.ssh_custom.server_version.help.input_hint": "Value per operator docs",
   "param.ssh_custom.server_version.help.summary": "Preset parameter server_version: SSH version string shown to clients.. Affects sing-box inbound/outbound wiring.",

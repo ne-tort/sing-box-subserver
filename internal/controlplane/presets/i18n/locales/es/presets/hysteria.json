@@ -1,4 +1,10 @@
 {
+  "param.hysteria_custom.down_mbps.description": "Hy1 down_mbps cap.",
+  "param.hysteria_custom.down_mbps.title": "Download Mbps",
+  "param.hysteria_custom.obfs.description": "Symmetric Hy1 obfs; empty = no obfuscation.",
+  "param.hysteria_custom.obfs.title": "Obfs string",
+  "param.hysteria_custom.up_mbps.description": "Hy1 up_mbps cap.",
+  "param.hysteria_custom.up_mbps.title": "Upload Mbps",
   "preset.anytls_custom.description": "Lab AnyTLS with optional uTLS huella. Stock anytls is enough for demux TLS slots.",
   "preset.anytls_custom.title": "AnyTLS constructor",
   "preset.anytls_idle.description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy.",

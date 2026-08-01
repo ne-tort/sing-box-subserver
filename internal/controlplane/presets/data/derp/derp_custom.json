@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "DERP TLS custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе derp_tls.json."
+      "title": "DERP конструктор",
+      "description": "DERP: path, websocket, udp mode, uTLS fingerprint."
     },
     "en": {
       "title": "DERP constructor",
-      "description": "Lab DERP with path overrides. Prefer derp_tls for standard relay."
+      "description": "DERP: path, websocket, udp mode, uTLS fingerprint."
     }
   },
   "traits": [
@@ -61,7 +61,7 @@
     "private_key": "{{peer.private_key}}",
     "users": [],
     "require_users": true,
-    "udp": "native",
+    "udp": "{{param.udp}}",
     "tailscale_relay": false,
     "path": "{{param.path}}",
     "websocket": false,
@@ -84,7 +84,7 @@
     "server_port": 0,
     "private_key": "{{user.private_key}}",
     "peer_public_key": "{{peer.public_key}}",
-    "udp": "native",
+    "udp": "{{param.udp}}",
     "path": "{{param.path}}",
     "host": "{{server}}",
     "websocket": false,
@@ -100,7 +100,7 @@
       ],
       "utls": {
         "enabled": true,
-        "fingerprint": "chrome"
+        "fingerprint": "{{param.fingerprint}}"
       }
     }
   },
@@ -115,7 +115,10 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
-    "path"
+    "path",
+    "websocket",
+    "udp",
+    "fingerprint"
   ],
   "param_meta": {
     "path": {
@@ -131,6 +134,55 @@
       "description": {
         "en": "HTTP/WebSocket path (DERP, etc.).",
         "ru": "HTTP/WebSocket path (DERP и др.)."
+      }
+    },
+    "websocket": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "transport",
+      "ui_order": 43,
+      "title": {
+        "en": "WebSocket",
+        "ru": "WebSocket"
+      },
+      "description": {
+        "en": "DERP websocket upgrade.",
+        "ru": "DERP websocket upgrade."
+      }
+    },
+    "udp": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "native",
+        "disabled"
+      ],
+      "default": "native",
+      "ui_group": "transport",
+      "ui_order": 44,
+      "title": {
+        "en": "UDP mode",
+        "ru": "UDP mode"
+      },
+      "description": {
+        "en": "DERP udp: native|disabled.",
+        "ru": "DERP udp: native|disabled."
+      }
+    },
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 45,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS fingerprint.",
+        "ru": "uTLS fingerprint на outbound."
       }
     }
   }

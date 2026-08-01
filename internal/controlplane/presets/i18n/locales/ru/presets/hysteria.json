@@ -1,4 +1,10 @@
 {
+  "param.hysteria_custom.down_mbps.description": "Лимит down_mbps.",
+  "param.hysteria_custom.down_mbps.title": "Download Mbps",
+  "param.hysteria_custom.obfs.description": "Симметричный Hy1 obfs; пусто = без obfuscation.",
+  "param.hysteria_custom.obfs.title": "Obfs string",
+  "param.hysteria_custom.up_mbps.description": "Лимит up_mbps.",
+  "param.hysteria_custom.up_mbps.title": "Upload Mbps",
   "preset.anytls_custom.description": "Lab AnyTLS с опциональным uTLS fingerprint. Для demux TLS-слота обычно хватает anytls.",
   "preset.anytls_custom.title": "AnyTLS конструктор",
   "preset.anytls_idle.description": "AnyTLS с настройкой idle timeout. Та же TLS-обёртка; для клиентов с долгим простоем.",

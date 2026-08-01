@@ -1,4 +1,6 @@
 {
+  "param.socks_custom.udp_over_tcp.description": "Outbound udp_over_tcp v2 when UDP associate is blocked.",
+  "param.socks_custom.udp_over_tcp.title": "UDP-over-TCP",
   "preset.anytls_custom.description": "Lab AnyTLS with optional uTLS fingerprint. Stock anytls is enough for demux TLS slots.",
   "preset.anytls_custom.title": "AnyTLS constructor",
   "preset.anytls_idle.description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy.",

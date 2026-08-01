@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "ShadowTLS v3 custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе shadowtls_v3.json."
+      "title": "ShadowTLS конструктор",
+      "description": "ShadowTLS v3: handshake_server, strict_mode, wildcard_sni, uTLS fingerprint."
     },
     "en": {
       "title": "ShadowTLS constructor",
-      "description": "Lab ShadowTLS with handshake_server override. Prefer shadowtls_v3."
+      "description": "ShadowTLS v3: handshake_server, strict_mode, wildcard_sni, uTLS fingerprint."
     }
   },
   "traits": [
@@ -53,7 +53,7 @@
       "server": "{{param.handshake_server}}",
       "server_port": 443
     },
-    "wildcard_sni": "off"
+    "wildcard_sni": "{{param.wildcard_sni}}"
   },
   "outbound_template": {
     "type": "shadowtls",
@@ -67,7 +67,7 @@
       "server_name": "{{param.handshake_server}}",
       "utls": {
         "enabled": true,
-        "fingerprint": "chrome"
+        "fingerprint": "{{param.fingerprint}}"
       },
       "alpn": [
         "h2",
@@ -82,7 +82,9 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
-    "handshake_server"
+    "strict_mode",
+    "wildcard_sni",
+    "fingerprint"
   ],
   "param_meta": {
     "handshake_server": {
@@ -99,6 +101,59 @@
         "en": "ShadowTLS v3 handshake mimic target (SNI).",
         "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
       }
+    },
+    "strict_mode": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 21,
+      "title": {
+        "en": "Strict mode",
+        "ru": "Strict mode"
+      },
+      "description": {
+        "en": "ShadowTLS v3 strict_mode on inbound.",
+        "ru": "strict_mode на inbound ShadowTLS v3."
+      }
+    },
+    "wildcard_sni": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "authed",
+        "all"
+      ],
+      "default": "off",
+      "ui_group": "core",
+      "ui_order": 22,
+      "title": {
+        "en": "Wildcard SNI",
+        "ru": "Wildcard SNI"
+      },
+      "description": {
+        "en": "Inbound wildcard_sni: off|authed|all.",
+        "ru": "Inbound wildcard_sni: off|authed|all."
+      }
+    },
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 23,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS fingerprint.",
+        "ru": "uTLS fingerprint на outbound."
+      }
     }
-  }
+  },
+  "param_fields": [
+    "handshake_server"
+  ]
 }

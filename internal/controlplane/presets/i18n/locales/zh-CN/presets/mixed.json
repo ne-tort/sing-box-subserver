@@ -1,4 +1,10 @@
 {
+  "param.mixed_custom.fingerprint.description": "Outbound uTLS when tls_mode=tls.",
+  "param.mixed_custom.fingerprint.title": "uTLS 指纹",
+  "param.mixed_custom.outbound_type.description": "Subscription outbound type against mixed inbound.",
+  "param.mixed_custom.outbound_type.title": "Client outbound type",
+  "param.mixed_custom.tls_mode.description": "Plain mixed vs TLS-wrapped mixed inbound.",
+  "param.mixed_custom.tls_mode.title": "TLS mode",
   "preset.anytls_custom.description": "Lab AnyTLS with optional uTLS 指纹. Stock anytls is enough for demux TLS slots.",
   "preset.anytls_custom.title": "AnyTLS 构造器",
   "preset.anytls_idle.description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy.",

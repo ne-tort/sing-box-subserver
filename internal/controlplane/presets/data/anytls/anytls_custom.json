@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "AnyTLS custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе anytls.json."
+      "title": "AnyTLS конструктор",
+      "description": "AnyTLS: uTLS fingerprint, ALPN, опциональные idle_session_* на outbound."
     },
     "en": {
       "title": "AnyTLS constructor",
-      "description": "Lab AnyTLS with optional uTLS fingerprint. Stock anytls is enough for demux TLS slots."
+      "description": "AnyTLS: uTLS fingerprint, ALPN, optional idle_session_* on outbound."
     }
   },
   "traits": [
@@ -95,7 +95,9 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
-    "fingerprint"
+    "fingerprint",
+    "alpn",
+    "idle_session"
   ],
   "param_meta": {
     "fingerprint": {
@@ -103,7 +105,7 @@
       "widget": "text",
       "default": "chrome",
       "ui_group": "tls",
-      "ui_order": 21,
+      "ui_order": 1,
       "title": {
         "en": "uTLS fingerprint",
         "ru": "uTLS fingerprint"
@@ -111,6 +113,36 @@
       "description": {
         "en": "Client uTLS fingerprint on outbound.",
         "ru": "uTLS fingerprint клиента на outbound."
+      }
+    },
+    "alpn": {
+      "type": "string",
+      "widget": "text",
+      "default": "h2,http/1.1",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "title": {
+        "en": "ALPN list",
+        "ru": "Список ALPN"
+      },
+      "description": {
+        "en": "Comma-separated ALPN for AnyTLS TLS.",
+        "ru": "ALPN через запятую для AnyTLS TLS."
+      }
+    },
+    "idle_session": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "advanced",
+      "ui_order": 10,
+      "title": {
+        "en": "Idle session",
+        "ru": "Idle session"
+      },
+      "description": {
+        "en": "Outbound idle_session_check_interval/timeout=30s (warm TLS).",
+        "ru": "Outbound idle_session_* = 30s (warm TLS)."
       }
     }
   }

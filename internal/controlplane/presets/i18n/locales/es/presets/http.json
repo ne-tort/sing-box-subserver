@@ -1,4 +1,8 @@
 {
+  "param.http_custom.fingerprint.description": "Outbound uTLS huella when tls_mode=tls.",
+  "param.http_custom.fingerprint.title": "uTLS huella",
+  "param.http_custom.tls_mode.description": "Plain HTTP CONNECT vs TLS-wrapped CONNECT.",
+  "param.http_custom.tls_mode.title": "TLS mode",
   "preset.anytls_custom.description": "Lab AnyTLS with optional uTLS huella. Stock anytls is enough for demux TLS slots.",
   "preset.anytls_custom.title": "AnyTLS constructor",
   "preset.anytls_idle.description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy.",

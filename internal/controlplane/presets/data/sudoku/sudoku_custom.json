@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "Sudoku AES custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе sudoku_aes.json."
+      "title": "Sudoku конструктор",
+      "description": "Sudoku: AEAD method, multiplex, padding, fallback URL."
     },
     "en": {
       "title": "Sudoku constructor",
-      "description": "Lab Sudoku. Prefer sudoku_pad for demux plain slots."
+      "description": "Sudoku: AEAD method, multiplex, padding bounds, fallback URL."
     }
   },
   "traits": [
@@ -50,7 +50,7 @@
     "listen": "{{listen}}",
     "listen_port": 0,
     "key": "{{peer.key}}",
-    "aead_method": "aes-128-gcm",
+    "aead_method": "{{param.aead_method}}",
     "padding_min": 3,
     "padding_max": 12,
     "table_type": "prefer_entropy",
@@ -58,7 +58,7 @@
     "handshake_timeout": 5,
     "fallback": "{{param.fallback}}",
     "suspicious_action": "fallback",
-    "multiplex": "off"
+    "multiplex": "{{param.multiplex}}"
   },
   "outbound_template": {
     "type": "sudoku",
@@ -66,12 +66,12 @@
     "server": "{{server}}",
     "server_port": 0,
     "key": "{{peer.key}}",
-    "aead_method": "aes-128-gcm",
+    "aead_method": "{{param.aead_method}}",
     "padding_min": 3,
     "padding_max": 12,
     "table_type": "prefer_entropy",
     "enable_pure_downlink": true,
-    "multiplex": "off"
+    "multiplex": "{{param.multiplex}}"
   },
   "requirements": {
     "build_tag": "with_sudoku"
@@ -81,9 +81,83 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
-    "fallback"
+    "fallback",
+    "multiplex",
+    "padding_min",
+    "padding_max"
   ],
   "param_meta": {
+    "aead_method": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "aes-128-gcm",
+        "aes-256-gcm",
+        "chacha20-ietf-poly1305"
+      ],
+      "default": "aes-128-gcm",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "AEAD method",
+        "ru": "AEAD method"
+      },
+      "description": {
+        "en": "Sudoku aead_method (peer-symmetric).",
+        "ru": "Sudoku aead_method (симметрично)."
+      }
+    },
+    "multiplex": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "h2mux",
+        "smux",
+        "yamux"
+      ],
+      "default": "off",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "Multiplex",
+        "ru": "Multiplex"
+      },
+      "description": {
+        "en": "Sudoku multiplex mode.",
+        "ru": "Режим multiplex Sudoku."
+      }
+    },
+    "padding_min": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "3",
+      "ui_group": "advanced",
+      "ui_order": 10,
+      "title": {
+        "en": "Padding min",
+        "ru": "Padding min"
+      },
+      "description": {
+        "en": "padding_min.",
+        "ru": "padding_min."
+      }
+    },
+    "padding_max": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "12",
+      "ui_group": "advanced",
+      "ui_order": 11,
+      "title": {
+        "en": "Padding max",
+        "ru": "Padding max"
+      },
+      "description": {
+        "en": "padding_max (≥ min).",
+        "ru": "padding_max (≥ min)."
+      }
+    },
     "fallback": {
       "type": "string",
       "widget": "text",
@@ -99,5 +173,8 @@
         "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
       }
     }
-  }
+  },
+  "param_fields": [
+    "aead_method"
+  ]
 }

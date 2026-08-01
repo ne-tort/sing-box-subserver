@@ -18,6 +18,12 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applySocksCustomKnobs(ib, preset, params, true)
 	applyHTTPMixedCustomKnobs(ib, preset, params)
 	applyTrustTunnelCustomKnobs(ib, preset, params)
+	applyAnyTLSCustomKnobs(ib, preset, params, true)
+	applyShadowTLSCustomKnobs(ib, preset, params)
+	applySudokuCustomKnobs(ib, preset, params)
+	applyMieruCustomKnobs(ib, preset, params)
+	applyDerpCustomKnobs(ib, preset, params, true)
+	applyCloudflaredCustomKnobs(ib, preset, params)
 }
 
 func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map[string]string) {
@@ -30,6 +36,11 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applySocksCustomKnobs(ob, preset, params, false)
 	applyHTTPMixedCustomKnobs(ob, preset, params)
 	applyTrustTunnelCustomKnobs(ob, preset, params)
+	applyAnyTLSCustomKnobs(ob, preset, params, false)
+	applyShadowTLSCustomKnobs(ob, preset, params)
+	applySudokuCustomKnobs(ob, preset, params)
+	applyMieruCustomKnobs(ob, preset, params)
+	applyDerpCustomKnobs(ob, preset, params, false)
 	stripUTLSForQUICTransport(ob)
 }
 
@@ -293,6 +304,84 @@ func applyTrustTunnelCustomKnobs(m map[string]any, preset string, params map[str
 	}
 	if strings.TrimSpace(params["enable_protocol_fallback"]) != "" {
 		tr["enable_protocol_fallback"] = strings.EqualFold(strings.TrimSpace(params["enable_protocol_fallback"]), "true")
+	}
+}
+
+func applyAnyTLSCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
+	if preset != "anytls_custom" {
+		return
+	}
+	if alpn := strings.TrimSpace(params["alpn"]); alpn != "" {
+		if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
+			tls["alpn"] = splitCSV(alpn)
+		}
+	}
+	if inbound {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(params["idle_session"]), "true") {
+		m["idle_session_check_interval"] = "30s"
+		m["idle_session_timeout"] = "30s"
+		m["min_idle_session"] = 0
+	} else {
+		delete(m, "idle_session_check_interval")
+		delete(m, "idle_session_timeout")
+		delete(m, "min_idle_session")
+	}
+}
+
+func applyShadowTLSCustomKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "shadowtls_custom" {
+		return
+	}
+	if _, ok := m["strict_mode"]; ok || strings.TrimSpace(params["strict_mode"]) != "" {
+		m["strict_mode"] = !strings.EqualFold(strings.TrimSpace(params["strict_mode"]), "false")
+	}
+}
+
+func applySudokuCustomKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "sudoku_custom" {
+		return
+	}
+	if v, ok := parseUintParam(params["padding_min"]); ok {
+		m["padding_min"] = v
+	}
+	if v, ok := parseUintParam(params["padding_max"]); ok {
+		m["padding_max"] = v
+	}
+}
+
+func applyMieruCustomKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "mieru_custom" {
+		return
+	}
+	if v, ok := parseUintParam(params["mtu"]); ok {
+		m["mtu"] = v
+	}
+	if strings.TrimSpace(fmt.Sprint(m["traffic_pattern"])) == "" {
+		delete(m, "traffic_pattern")
+	}
+}
+
+func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
+	if preset != "derp_custom" {
+		return
+	}
+	if strings.TrimSpace(params["websocket"]) != "" {
+		m["websocket"] = strings.EqualFold(strings.TrimSpace(params["websocket"]), "true")
+	}
+	_ = inbound
+}
+
+func applyCloudflaredCustomKnobs(m map[string]any, preset string, params map[string]string) {
+	if preset != "cloudflared_custom" {
+		return
+	}
+	if strings.TrimSpace(params["post_quantum"]) != "" {
+		m["post_quantum"] = !strings.EqualFold(strings.TrimSpace(params["post_quantum"]), "false")
+	}
+	if v, ok := parseUintParam(params["ha_connections"]); ok {
+		m["ha_connections"] = v
 	}
 }
 

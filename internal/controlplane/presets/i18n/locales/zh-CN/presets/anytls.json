@@ -1,9 +1,13 @@
 {
+  "param.anytls_custom.alpn.description": "Comma-separated ALPN for AnyTLS TLS.",
+  "param.anytls_custom.alpn.title": "ALPN list",
   "param.anytls_custom.fingerprint.description": "Client uTLS 指纹 on outbound.",
   "param.anytls_custom.fingerprint.help.format": "chrome",
   "param.anytls_custom.fingerprint.help.input_hint": "chrome|firefox|safari|…",
   "param.anytls_custom.fingerprint.help.summary": "uTLS ClientHello 指纹 on TCP+TLS outbounds; useless on raw QUIC/Hy2 transports.",
   "param.anytls_custom.fingerprint.title": "uTLS 指纹",
+  "param.anytls_custom.idle_session.description": "Outbound idle_session_check_interval/timeout=30s (warm TLS).",
+  "param.anytls_custom.idle_session.title": "Idle session",
   "preset.anytls.description": "Password TLS wrapper. Typical second TCP demux slot (other SNI/ALPN next to Reality).",
   "preset.anytls.title": "AnyTLS",
   "preset.anytls_custom.description": "Lab AnyTLS 构造器. Stock anytls is enough for most :443 stacks.",

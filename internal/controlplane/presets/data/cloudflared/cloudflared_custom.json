@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "CF Tunnel custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе cloudflared_token.json."
+      "title": "Cloudflared конструктор",
+      "description": "Cloudflare Tunnel: token, protocol, post_quantum, ha_connections."
     },
     "en": {
       "title": "Cloudflared constructor",
-      "description": "Minimal token constructor for Cloudflare Tunnel."
+      "description": "Cloudflare Tunnel: token, protocol, post_quantum, ha_connections."
     }
   },
   "traits": [
@@ -49,7 +49,7 @@
     "tag": "{{tag}}",
     "token": "{{param.token}}",
     "ha_connections": 4,
-    "protocol": "http2",
+    "protocol": "{{param.protocol}}",
     "post_quantum": true,
     "edge_ip_version": 0,
     "datagram_version": "quic",
@@ -123,8 +123,64 @@
           }
         ]
       }
+    },
+    "protocol": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "auto",
+        "http2",
+        "quic"
+      ],
+      "default": "http2",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "Edge protocol",
+        "ru": "Edge protocol"
+      },
+      "description": {
+        "en": "cloudflared protocol to Cloudflare edge.",
+        "ru": "protocol cloudflared к edge Cloudflare."
+      }
+    },
+    "post_quantum": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 3,
+      "title": {
+        "en": "Post-quantum",
+        "ru": "Post-quantum"
+      },
+      "description": {
+        "en": "post_quantum key exchange with Cloudflare edge.",
+        "ru": "post_quantum обмен ключами с edge Cloudflare."
+      }
+    },
+    "ha_connections": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "4",
+      "ui_group": "core",
+      "ui_order": 4,
+      "min": 1,
+      "max": 16,
+      "title": {
+        "en": "HA connections",
+        "ru": "HA connections"
+      },
+      "description": {
+        "en": "ha_connections to Cloudflare edge.",
+        "ru": "ha_connections к edge Cloudflare."
+      }
     }
   },
   "custom_preset": true,
-  "optional_param_fields": []
+  "optional_param_fields": [
+    "protocol",
+    "post_quantum",
+    "ha_connections"
+  ]
 }

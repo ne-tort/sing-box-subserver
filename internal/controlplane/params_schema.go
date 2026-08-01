@@ -308,6 +308,15 @@ func uiGroupsForPreset(pp domain.ProtocolPreset, lang string) []any {
 }
 
 func supportsAcmeSNI(pp domain.ProtocolPreset) bool {
+	if meta, ok := pp.ParamMeta["tls_mode"]; ok && pp.CustomPreset {
+		for _, v := range meta.Enum {
+			if strings.EqualFold(strings.TrimSpace(v), "tls") {
+				return true
+			}
+		}
+		mode, _ := domain.BindingTLSMode(pp, nil)
+		return mode == "tls"
+	}
 	if hasTrait(pp.Traits, "reality") {
 		return false
 	}

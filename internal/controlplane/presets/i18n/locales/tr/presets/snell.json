@@ -3,6 +3,8 @@
   "param.snell_custom.obfs_host.help.input_hint": "Value per operator docs",
   "param.snell_custom.obfs_host.help.summary": "Preset parameter obfs_host: Host header for Snell v6 obfs.. Affects sing-box inbound/outbound wiring.",
   "param.snell_custom.obfs_host.title": "Obfs Host",
+  "param.snell_custom.obfs_mode.description": "Snell obfs_mode on inbound/outbound.",
+  "param.snell_custom.obfs_mode.title": "Obfs mode",
   "param.snell_v5.obfs_host.description": "Host header for Snell v6 obfs.",
   "param.snell_v5.obfs_host.help.input_hint": "Value per operator docs",
   "param.snell_v5.obfs_host.help.summary": "Preset parameter obfs_host: Host header for Snell v6 obfs.. Affects sing-box inbound/outbound wiring.",

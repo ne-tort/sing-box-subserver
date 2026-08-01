@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "SSH pass custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе ssh_password.json."
+      "title": "SSH конструктор",
+      "description": "SSH: server_version (banner) и client_version на outbound."
     },
     "en": {
       "title": "SSH constructor",
-      "description": "Lab SSH with server_version banner override."
+      "description": "SSH: server_version banner and outbound client_version."
     }
   },
   "traits": [
@@ -56,7 +56,7 @@
     "server_port": 0,
     "user": "{{user.username}}",
     "password": "{{user.password}}",
-    "client_version": "{{param.server_version}}"
+    "client_version": "{{param.client_version}}"
   },
   "requirements": {
     "build_tag": "with_ssh"
@@ -67,7 +67,8 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
-    "server_version"
+    "server_version",
+    "client_version"
   ],
   "param_meta": {
     "server_version": {
@@ -83,6 +84,21 @@
       "description": {
         "en": "SSH version string shown to clients.",
         "ru": "Строка версии SSH для клиентов."
+      }
+    },
+    "client_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 44,
+      "title": {
+        "en": "Client version",
+        "ru": "Client version"
+      },
+      "description": {
+        "en": "Outbound SSH client_version string.",
+        "ru": "Строка client_version на outbound."
       }
     }
   }

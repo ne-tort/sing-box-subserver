@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "Mieru TCP custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе mieru_tcp.json."
+      "title": "Mieru конструктор",
+      "description": "Mieru: transport TCP/UDP, multiplexing, MTU, traffic_pattern."
     },
     "en": {
       "title": "Mieru constructor",
-      "description": "Lab Mieru. Use mieru_tcp as demux always_plain slot."
+      "description": "Mieru: TCP/UDP transport, multiplexing, MTU, traffic_pattern."
     }
   },
   "traits": [
@@ -45,7 +45,7 @@
     "tag": "{{tag}}",
     "listen": "{{listen}}",
     "listen_port": 0,
-    "transport": "TCP",
+    "transport": "{{param.transport}}",
     "users": [],
     "mtu": 1400,
     "user_hint_is_mandatory": false,
@@ -56,10 +56,10 @@
     "tag": "{{tag}}",
     "server": "{{server}}",
     "server_port": 0,
-    "transport": "TCP",
+    "transport": "{{param.transport}}",
     "username": "{{user.name}}",
     "password": "{{user.password}}",
-    "multiplexing": "MULTIPLEXING_HIGH",
+    "multiplexing": "{{param.multiplexing}}",
     "handshake_mode": "HANDSHAKE_STANDARD",
     "mtu": 1400,
     "traffic_pattern": "{{param.traffic_pattern}}"
@@ -72,9 +72,66 @@
   },
   "custom_preset": true,
   "optional_param_fields": [
+    "multiplexing",
+    "mtu",
     "traffic_pattern"
   ],
   "param_meta": {
+    "transport": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "TCP",
+        "UDP"
+      ],
+      "default": "TCP",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {
+        "en": "Transport",
+        "ru": "Транспорт"
+      },
+      "description": {
+        "en": "Mieru transport TCP|UDP.",
+        "ru": "Транспорт Mieru TCP|UDP."
+      }
+    },
+    "multiplexing": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "MULTIPLEXING_OFF",
+        "MULTIPLEXING_LOW",
+        "MULTIPLEXING_MIDDLE",
+        "MULTIPLEXING_HIGH"
+      ],
+      "default": "MULTIPLEXING_HIGH",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "Multiplexing",
+        "ru": "Multiplexing"
+      },
+      "description": {
+        "en": "Outbound multiplexing profile.",
+        "ru": "Профиль multiplexing на outbound."
+      }
+    },
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "1400",
+      "ui_group": "core",
+      "ui_order": 3,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "Mieru MTU.",
+        "ru": "MTU Mieru."
+      }
+    },
     "traffic_pattern": {
       "type": "string",
       "widget": "text",
@@ -89,5 +146,8 @@
         "ru": "Имя профиля shaping трафика Mieru."
       }
     }
-  }
+  },
+  "param_fields": [
+    "transport"
+  ]
 }

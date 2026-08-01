@@ -1,4 +1,10 @@
 {
+  "param.mixed_custom.fingerprint.description": "uTLS на outbound при tls_mode=tls.",
+  "param.mixed_custom.fingerprint.title": "uTLS fingerprint",
+  "param.mixed_custom.outbound_type.description": "Тип outbound в подписке к mixed inbound.",
+  "param.mixed_custom.outbound_type.title": "Тип outbound клиента",
+  "param.mixed_custom.tls_mode.description": "Plain mixed или mixed за TLS.",
+  "param.mixed_custom.tls_mode.title": "Режим TLS",
   "preset.anytls_custom.description": "Lab AnyTLS с опциональным uTLS fingerprint. Для demux TLS-слота обычно хватает anytls.",
   "preset.anytls_custom.title": "AnyTLS конструктор",
   "preset.anytls_idle.description": "AnyTLS с настройкой idle timeout. Та же TLS-обёртка; для клиентов с долгим простоем.",

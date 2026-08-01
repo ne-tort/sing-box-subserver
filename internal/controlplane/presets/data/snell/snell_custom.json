@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "Snell v5 custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе snell_v5.json."
+      "title": "Snell конструктор",
+      "description": "Snell: obfs_mode, obfs_host. Inbound v5 / outbound v4 wire."
     },
     "en": {
       "title": "Snell constructor",
-      "description": "Lab Snell with obfs_host/fallback knobs."
+      "description": "Snell: obfs_mode and obfs_host. Inbound v5 / outbound v4 wire."
     }
   },
   "traits": [
@@ -51,7 +51,7 @@
     "version": 5,
     "psk": "{{peer.psk}}",
     "users": [],
-    "obfs_mode": "http"
+    "obfs_mode": "{{param.obfs_mode}}"
   },
   "outbound_template": {
     "type": "snell",
@@ -61,7 +61,7 @@
     "version": 4,
     "psk": "{{peer.psk}}",
     "userkey": "{{user.userkey}}",
-    "obfs_mode": "http",
+    "obfs_mode": "{{param.obfs_mode}}",
     "obfs_host": "{{param.obfs_host}}"
   },
   "client_notes": {
@@ -75,6 +75,26 @@
     "obfs_host"
   ],
   "param_meta": {
+    "obfs_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "http",
+        "tls"
+      ],
+      "default": "http",
+      "ui_group": "obfs",
+      "ui_order": 1,
+      "title": {
+        "en": "Obfs mode",
+        "ru": "Obfs mode"
+      },
+      "description": {
+        "en": "Snell obfs_mode on inbound/outbound.",
+        "ru": "obfs_mode Snell на inbound/outbound."
+      }
+    },
     "obfs_host": {
       "type": "string",
       "widget": "text",
@@ -86,9 +106,21 @@
         "ru": "Obfs Host"
       },
       "description": {
-        "en": "Host header for Snell v6 obfs.",
-        "ru": "Host header для Snell v6 obfs."
-      }
+        "en": "Host header for HTTP/TLS obfs.",
+        "ru": "Host header для HTTP/TLS obfs."
+      },
+      "visible_when": [
+        {
+          "key": "obfs_mode",
+          "in": [
+            "http",
+            "tls"
+          ]
+        }
+      ]
     }
-  }
+  },
+  "param_fields": [
+    "obfs_mode"
+  ]
 }

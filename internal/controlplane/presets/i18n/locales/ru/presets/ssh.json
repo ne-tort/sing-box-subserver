@@ -1,4 +1,6 @@
 {
+  "param.ssh_custom.client_version.description": "Строка client_version на outbound.",
+  "param.ssh_custom.client_version.title": "Client version",
   "param.ssh_custom.server_version.description": "Строка версии SSH для клиентов.",
   "param.ssh_custom.server_version.help.input_hint": "Value per operator docs",
   "param.ssh_custom.server_version.help.summary": "Параметр server_version: Строка версии SSH для клиентов.. Влияет на sing-box конфиг inbound/outbound.",

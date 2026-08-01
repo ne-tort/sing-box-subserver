@@ -1,4 +1,8 @@
 {
+  "param.http_custom.fingerprint.description": "uTLS fingerprint на outbound при tls_mode=tls.",
+  "param.http_custom.fingerprint.title": "uTLS fingerprint",
+  "param.http_custom.tls_mode.description": "Plain HTTP CONNECT или CONNECT за TLS.",
+  "param.http_custom.tls_mode.title": "Режим TLS",
   "preset.anytls_custom.description": "Lab AnyTLS с опциональным uTLS fingerprint. Для demux TLS-слота обычно хватает anytls.",
   "preset.anytls_custom.title": "AnyTLS конструктор",
   "preset.anytls_idle.description": "AnyTLS с настройкой idle timeout. Та же TLS-обёртка; для клиентов с долгим простоем.",

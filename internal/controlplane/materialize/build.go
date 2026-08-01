@@ -794,6 +794,12 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		"mode": "auto", "method": "aes-128-gcm", "network": "tcp",
 		"udp_over_tcp": "false", "anti_dpi": "true", "enable_protocol_fallback": "true",
 		"outbound_type": "socks",
+		"idle_session": "false", "strict_mode": "true", "wildcard_sni": "off",
+		"aead_method": "aes-128-gcm", "multiplex": "off", "padding_min": "3", "padding_max": "12",
+		"multiplexing": "MULTIPLEXING_HIGH", "obfs_mode": "http",
+		"websocket": "false", "udp": "native",
+		"protocol": "http2", "post_quantum": "true", "ha_connections": "4",
+		"client_version": "SSH-2.0-OpenSSH_8.9",
 	}
 	for k, v := range presetDefaults {
 		if strings.TrimSpace(v) != "" {
