@@ -72,8 +72,8 @@
     ]
   },
   "client_notes": {
-    "masquerade": "всегда; параметры генерируются на хабе",
-    "mtu": "hub field: body.mtu на PUT /v1/controlplane/wg"
+    "masquerade": "always on; parameters are generated on the hub",
+    "mtu": "hub field: body.mtu on PUT /v1/controlplane/wg"
   },
   "optional_param_fields": [
     "mtu"

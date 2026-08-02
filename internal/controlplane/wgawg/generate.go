@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 // DeviceParams is AWG2 junk/padding/headers (no i1–i5).
@@ -201,12 +202,14 @@ func Bundle(awg3 bool) (map[string]any, error) {
 	return out, nil
 }
 
-// ApplyToEndpoint copies AWG map onto a wireguard endpoint object (no i1–i5).
+// ApplyToEndpoint copies AWG map onto a wireguard endpoint object.
+// Masquerade sugar (id/ip/ib) and explicit CPS (i1–i5) are mutually exclusive:
+// if any iN is set, sugar is omitted; otherwise sugar is applied and iN cleared.
 func ApplyToEndpoint(ep map[string]any, awg map[string]any, profile string) {
 	if ep == nil || len(awg) == 0 {
 		return
 	}
-	keys := []string{"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4", "id", "ip", "ib"}
+	keys := []string{"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"}
 	if profile == "wg_awg3" || profile == "awg3" {
 		keys = append(keys,
 			"header_protection_key", "content_padding_addition",
@@ -219,7 +222,31 @@ func ApplyToEndpoint(ep map[string]any, awg map[string]any, profile string) {
 			ep[k] = v
 		}
 	}
-	// strip any leftover CPS
+	manualCPS := false
+	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+		if v, ok := awg[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+			manualCPS = true
+			break
+		}
+	}
+	if manualCPS {
+		for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+			if v, ok := awg[k]; ok {
+				ep[k] = v
+			} else {
+				delete(ep, k)
+			}
+		}
+		for _, k := range []string{"id", "ip", "ib"} {
+			delete(ep, k)
+		}
+		return
+	}
+	for _, k := range []string{"id", "ip", "ib"} {
+		if v, ok := awg[k]; ok {
+			ep[k] = v
+		}
+	}
 	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
 		delete(ep, k)
 	}

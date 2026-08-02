@@ -5,7 +5,11 @@
   "i18n": {
     "ru": {
       "title": "WireGuard",
-      "description": "Singleton WireGuard / AmneziaWG endpoint (не inbound)."
+      "description": "UDP endpoint (singleton hub). Максимальная скорость, слабый DPI-профиль. AWG2/3 + masquerade усложняют сигнатуру WG."
+    },
+    "en": {
+      "title": "WireGuard",
+      "description": "UDP endpoint (singleton hub). Top speed, weak DPI profile. AWG2/3 + masquerade harden the WG signature."
     }
   }
 }

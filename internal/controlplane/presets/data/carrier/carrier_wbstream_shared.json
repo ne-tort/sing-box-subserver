@@ -93,7 +93,7 @@
     "build_tag": "with_carrier"
   },
   "client_notes": {
-    "token": "опц. bindings[].params.token; без token — guest-register path"
+    "token": "optional bindings[].params.token; without token — guest-register path"
   },
   "peer_secret_fields": {
     "password": "password"

@@ -95,9 +95,9 @@
     "pkt-xudp"
   ],
   "client_notes": {
-    "flow": "Vision/XTLS несовместим с hysteria transport — только flow-none",
+    "flow": "Vision/XTLS is incompatible with hysteria transport — use flow-none only",
     "hy_auth": "peer_symmetric: set.peer_secrets[preset/hy_auth] (Xray hysteriaSettings.auth)",
-    "vs_hy2": "не type:hysteria2; нет up_mbps/obfs/salamander — только password+version=2",
-    "utls": "uTLS несовместим с transport quic/hysteria"
+    "vs_hy2": "not type:hysteria2; no up_mbps/obfs/salamander — password+version=2 only",
+    "utls": "uTLS is incompatible with transport quic/hysteria"
   }
 }

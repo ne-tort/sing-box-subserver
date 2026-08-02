@@ -29,7 +29,7 @@
     "looks_like": "tls_clienthello",
     "alpn": [],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "TLS ClientHello (password TLS wrapper; depends on ALPN/fingerprint)",
     "compatible_with_demux": true
   },
   "scores": {
@@ -91,7 +91,7 @@
   },
   "client_notes": {
     "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
-    "idle": "outbound idle_* — отдельный инвариант anytls_idle"
+    "idle": "outbound idle_* — separate invariant anytls_idle"
   },
   "custom_preset": true,
   "optional_param_fields": [
@@ -113,6 +113,12 @@
       "description": {
         "en": "Client uTLS fingerprint on outbound.",
         "ru": "uTLS fingerprint клиента на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS ClientHello fingerprint. Match a common browser unless you need a specific class.",
+          "ru": "uTLS fingerprint на outbound. Обычно browser-like, если не нужен особый ClientHello."
+        }
       }
     },
     "alpn": {
@@ -128,6 +134,12 @@
       "description": {
         "en": "Comma-separated ALPN for AnyTLS TLS.",
         "ru": "ALPN через запятую для AnyTLS TLS."
+      },
+      "help": {
+        "summary": {
+          "en": "Comma-separated TLS ALPN. Keep h2,http/1.1 unless the front requires a single ALPN.",
+          "ru": "TLS ALPN через запятую. Обычно h2,http/1.1, если front не требует один ALPN."
+        }
       }
     },
     "idle_session": {
@@ -143,6 +155,12 @@
       "description": {
         "en": "Outbound idle_session_check_interval/timeout=30s (warm TLS).",
         "ru": "Outbound idle_session_* = 30s (warm TLS)."
+      },
+      "help": {
+        "summary": {
+          "en": "When true, outbound keeps idle_session_* timers (same idea as anytls_idle). Off = stock anytls without idle pool.",
+          "ru": "true — outbound с idle_session_* (как anytls_idle). Off — stock anytls без idle pool."
+        }
       }
     }
   }

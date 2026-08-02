@@ -30,7 +30,7 @@
     "looks_like": "quic",
     "alpn": [],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "QUIC ClientHello (TUIC v5; congestion/0-RTT vary)",
     "compatible_with_demux": true
   },
   "scores": {

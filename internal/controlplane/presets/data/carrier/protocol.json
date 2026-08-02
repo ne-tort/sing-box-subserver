@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Carrier",
-      "description": "WG-star поверх underlay: peer/VK self-host + SFU (jitsi/telemost/wbstream) без регистрации на join."
+      "description": "WG-star в underlay легитимного SFU (Jitsi/Telemost/…). Нужен room URL. Не demux-priority."
     },
     "en": {
       "title": "Carrier",
-      "description": "WG-star underlay: peer/VK + SFU join-without-account."
+      "description": "WG-star inside a real SFU call (Jitsi/Telemost/…). Needs room URL. Not demux-priority."
     }
   },
   "default_cred_fields": [
@@ -20,6 +20,6 @@
   ],
   "notes": {
     "params": "SFU presets require bindings[].params.room (meeting URL). Optional: token, transport, key.",
-    "auth": "shared_auth → inbound без users; users_auth → users[]{device_id,secret}, outbound password=secret."
+    "auth": "shared_auth → inbound without users; users_auth → users[]{device_id,secret}, outbound password=secret."
   }
 }

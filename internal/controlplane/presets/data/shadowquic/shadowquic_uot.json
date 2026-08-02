@@ -99,7 +99,7 @@
     "build_tag": "with_shadowquic"
   },
   "client_notes": {
-    "jls_upstream": "должен быть доступен с edge; SNI outbound обычно совпадает",
+    "jls_upstream": "must be reachable from the edge; outbound SNI usually matches",
     "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
   },
   "optional_param_fields": [

@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "ShadowQUIC",
-      "description": "ShadowQUIC + JLS SNI camouflage (with_shadowquic)."
+      "description": "QUIC + JLS SNI-камуфляж. Альтернатива Hy2/TUIC на UDP; JLS SNI должен совпадать с demux_sni."
     },
     "en": {
       "title": "ShadowQUIC",
-      "description": "ShadowQUIC + JLS (with_shadowquic)."
+      "description": "QUIC + JLS SNI camouflage. Hy2/TUIC alternative on UDP; JLS SNI must match demux_sni."
     }
   },
   "default_cred_fields": [

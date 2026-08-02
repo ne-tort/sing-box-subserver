@@ -4,45 +4,48 @@
 
 | Protocol | A catalog | B params | C meta | D custom | E i18n | F demux | Notes |
 |----------|-----------|----------|--------|----------|--------|---------|-------|
-| vless | [x] | [x] | [x] | [x] | [x] | [x] | эталон; materialize knobs transport/tls_mode |
-| hysteria2 | [x] | [x] | [x] | [x] | [x] | [x] | bandwidth + ignore_client_bandwidth knobs; first_bytes |
-| wireguard | [x] | [x] | [x] | [x] | [x] | n/a | hub PUT mtu/awg; i1–i5 rejected; wg_custom schema-only |
+| vless | [x] | [x] | [x] | [x] | [x] | [x] | эталон; flow/packet_encoding enum = none|… |
+| hysteria2 | [x] | [x] | [x] | [x] | [x] | [x] | bandwidth + ignore_client_bandwidth; first_bytes |
+| wireguard | [x] | [x] | [x] | [x] | [x] | n/a | hub PUT mtu/awg/s/h + masquerade or manual i1–i5; wg_custom schema-only |
 | trojan | [x] | [x] | [x] | [x] | [x] | [x] | constructor = transport + tls_mode |
-| anytls | [x] | [x] | [x] | [x] | [x] | [x] | fingerprint/ALPN/idle_session |
-| trusttunnel | [x] | [x] | [x] | [x] | [x] | [x] | mode + anti_dpi + fallback |
-| shadowquic | [x] | [x] | [x] | [x] | [x] | [x] | JLS + stock congestion/0-RTT knobs |
+| anytls | [x] | [x] | [x] | [x] | [x] | [x] | stock ALPN/fingerprint; idle = anytls_idle |
+| trusttunnel | [x] | [x] | [x] | [x] | [x] | [x] | mode h2/h3→http2/http3; anti_dpi + UDP + fallback + force_http1 |
+| shadowquic | [x] | [x] | [x] | [x] | [x] | [x] | JLS + congestion/0-RTT/udp_over_stream |
 | sudoku | [x] | [x] | [x] | [x] | [x] | [x] | AEAD/multiplex/padding/fallback |
 | mieru | [x] | [x] | [x] | [x] | [x] | [x] | stock MTU + pattern; custom multiplexing |
-| carrier | [x] | [x] | [x] | [x] | [x] | n/a | carrier_custom: provider/token/transport knobs |
-| vmess | [x] | [x] | [x] | [x] | [x] | [~] | demux defaults = VLESS; vmess_* substitute, не primary |
-| tuic | [x] | [x] | [x] | [x] | [x] | [x] | stock congestion / udp_relay / 0-RTT knobs |
-| shadowsocks | [x] | [x] | [x] | [x] | [x] | n/a | method + network + UoT |
-| shadowtls | [x] | [x] | [x] | [x] | [x] | n/a | stock strict_mode + handshake + uTLS |
-| naive | [x] | [x] | [x] | [x] | [x] | n/a | network tcp/udp + ALPN switch |
+| carrier | [x] | [x] | [x] | [x] | [x] | n/a | carrier_custom: provider/token/transport |
+| vmess | [x] | [x] | [x] | [x] | [x] | [~] | demux defaults = VLESS; vmess_* substitute |
+| tuic | [x] | [x] | [x] | [x] | [x] | [x] | stock congestion / udp_relay / 0-RTT |
+| shadowsocks | [x] | [x] | [x] | [x] | [x] | n/a | method + network + UoT (identity presets) |
+| shadowtls | [x] | [x] | [x] | [x] | [x] | n/a | strict_mode + fingerprint; wildcard = отдельные пресеты |
+| naive | [x] | [x] | [x] | [x] | [x] | n/a | network = naive_tls / naive_quic |
 | snell | [x] | [x] | [x] | [x] | [x] | [x] | obfs_mode + obfs_host |
-| ssh | [x] | [x] | [x] | [x] | [x] | [x] | server_version + client_version |
-| derp | [x] | [x] | [x] | [x] | [x] | n/a | path + websocket knobs |
-| http/socks/mixed | [x] | [x] | [x] | [x] | [x] | n/a | tls_mode / UoT / outbound_type |
+| ssh | [x] | [x] | [x] | [x] | [x] | [x] | server_version + client_version раздельно |
+| derp | [x] | [x] | [x] | [x] | [x] | n/a | path + websocket; udp native\|uot (не disabled) |
+| http/socks/mixed | [x] | [x] | [x] | [x] | [x] | n/a | fingerprint на TLS; tls_mode/UoT = custom/identity |
 | hysteria1 | [x] | [x] | [x] | [x] | [x] | n/a | bandwidth knobs + obfs; legacy |
-| cloudflared | [x] | [x] | [x] | [x] | [x] | n/a | token + PQ/HA на stock+custom |
+| cloudflared | [x] | [x] | [x] | [x] | [x] | n/a | status=deferred — hidden from subserver catalog (inbound_only; client outbound TBD) |
 
-**Materialize:** stock knobs для hy2 bandwidth/ignore, shadowquic cc/0rtt, shadowtls strict, mieru mtu, derp websocket, cloudflared PQ/HA, tuic, carrier provider map. Customs через `custom_knobs.go`.
+**Materialize:** stock knobs + `applyStockUTLSFingerprint`; customs в `custom_knobs.go`. flow/packet_encoding: `none` снимает поле.
 
-**WG hub:** `PUT /v1/controlplane/wg` — `mtu`, `jc|jmin|jmax` или `awg{}`; `i1–i5` отвергаются. `wg_custom` — schema каталога, не from-presets.
+**WG hub:** `PUT /v1/controlplane/wg` — `mtu`, `awg{}` (`jc/jmin/jmax`, `s1–s4`, `h1–h4`, masquerade `id/ip/ib` or manual `i1–i5`), optional `masquerade_mode`/`masquerade_url`/`manual_init`. `wg_custom` — schema каталога, не from-presets.
 
-**i18n:** locale prune; ru+en приоритет; 11 langs; API fallback → en. Pass3/5: META_UNUSED=0, empty first_bytes stable=0.
+**i18n:** locale prune; ru+en приоритет; 11 langs; API fallback → en (`i18n.Get`, `ResolveI18n`/`PickLocalized`: lang→en). Pass3–11: META_UNUSED=0 (knobs), empty enum=0, demux refs; EN purity; TT h2→http2; DERP udp native|uot; SQ udp_over_stream.
 
-**Примечание:** Docker/invariant smoke matrix end-to-end по всем тегам не прогонялся — unit tests controlplane закрыты.
+**Protocol gate:** каталог A–F закрыт; оставшиеся custom-only — identity/constructor (не пробелы). UI клиента — следующий этап после вашего OK.
+
+**Примечание:** `cp_matrix_docker` API smoke прогнан (TLS self_signed, SS+Trojan set, sub insecure, cert regenerate). Полный invariant matrix по всем тегам — отдельно / опционально.
 
 ## Foundation
 
 - [x] params_schema v2
 - [x] locales: 11 языков Hiddify; fallback → en; prune orphans
 - [x] ADR + custom arch + demux fullstack
-- [x] materialize wiring для custom constructors
+- [x] materialize wiring для custom + stock knobs
 - [x] WG hub AWG overrides
 - [x] `generate_all_catalog_locales.py` / `rewrite_priority_locales.py`
-- [x] Pass5: stock optional params + demux first_bytes
+- [x] Pass5–11: stock params, help, fingerprint, enum none, demux refs, EN purity, wire mappings (TT/DERP/SQ)
+- [x] Pass9–11: structural EN; smoke; first_bytes; TT/DERP/SQ capability fixes
 
 ## Scripts
 

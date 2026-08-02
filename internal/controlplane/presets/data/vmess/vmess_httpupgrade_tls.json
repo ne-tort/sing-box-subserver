@@ -103,13 +103,14 @@
     "tls_profile": true
   },
   "client_notes": {
-    "security": "outbound-only: sec-auto / sec-aes128 / sec-chacha / pkt-xudp через enabled_client_profiles",
+    "security": "outbound-only: sec-auto / sec-aes128 / sec-chacha / pkt-xudp via enabled_client_profiles",
     "params": "optional bindings[].params overrides: hu_host, hu_path",
     "hu_path_default": "/vmess-hu"
   },
   "optional_param_fields": [
     "hu_host",
-    "hu_path"
+    "hu_path",
+    "fingerprint"
   ],
   "param_meta": {
     "hu_host": {
@@ -139,6 +140,41 @@
       "description": {
         "en": "Single HTTP Upgrade path (no WS framing).",
         "ru": "Path одного HTTP Upgrade (без WS framing)."
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
       }
     }
   }

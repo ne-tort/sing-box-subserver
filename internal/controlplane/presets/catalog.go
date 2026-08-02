@@ -18,13 +18,13 @@ func AllInvariants() []domain.InvariantPreset {
 }
 
 // All returns stable+lab invariants as ProtocolPreset (compat), lang=ru descriptions.
-// Planned protocols without invariants are omitted.
+// Planned/deferred presets are omitted from the catalog (not materialize-listed).
 func All() []domain.ProtocolPreset {
 	ensureLoaded()
 	mustOK()
 	out := make([]domain.ProtocolPreset, 0, len(invariants))
 	for _, inv := range invariants {
-		if inv.Status == "planned" {
+		if inv.Status == "planned" || inv.Status == "deferred" {
 			continue
 		}
 		endpoint := false
@@ -110,12 +110,17 @@ func AliasesOf(canonical string) []string {
 	return append([]string{}, inv.Aliases...)
 }
 
-// Protocols returns protocol metadata in index order.
+// Protocols returns protocol metadata in index order (planned/deferred omitted).
 func Protocols() []domain.ProtocolMeta {
 	ensureLoaded()
 	mustOK()
-	out := make([]domain.ProtocolMeta, len(protocols))
-	copy(out, protocols)
+	out := make([]domain.ProtocolMeta, 0, len(protocols))
+	for _, p := range protocols {
+		if p.Status == "planned" || p.Status == "deferred" {
+			continue
+		}
+		out = append(out, p)
+	}
 	return out
 }
 

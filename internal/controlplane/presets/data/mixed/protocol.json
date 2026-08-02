@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Mixed",
-      "description": "HTTP CONNECT + SOCKS на одном порту."
+      "description": "HTTP CONNECT + SOCKS на одном порту. Служебный локальный вход."
     },
     "en": {
       "title": "Mixed",
-      "description": "HTTP CONNECT + SOCKS on one port."
+      "description": "HTTP CONNECT + SOCKS on one port. Local utility inbound."
     }
   },
   "default_cred_fields": [

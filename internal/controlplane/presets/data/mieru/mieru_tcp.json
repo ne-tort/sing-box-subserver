@@ -12,6 +12,10 @@
     "ru": {
       "title": "Mieru TCP",
       "description": "Mieru TCP transport (DPI: нестандартный TCP stream)."
+    },
+    "en": {
+      "title": "Mieru TCP",
+      "description": "Mieru TCP transport (DPI: non-standard TCP stream)."
     }
   },
   "traits": [

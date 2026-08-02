@@ -57,6 +57,6 @@
     "password": "{{user.password}}"
   },
   "client_notes": {
-    "outbound": "клиент подключается как SOCKS5 к mixed inbound"
+    "outbound": "client connects as SOCKS5 to the mixed inbound"
   }
 }

@@ -95,7 +95,7 @@
     "build_tag": "with_carrier"
   },
   "client_notes": {
-    "vk": "userspace WRAP inbound; params.vk_hash = user:pass@turn-host:port (опц.)"
+    "vk": "userspace WRAP inbound; params.vk_hash = user:pass@turn-host:port (optional)"
   },
   "peer_secret_fields": {
     "password": "password"

@@ -40,7 +40,16 @@ func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
 	}
 	if len(h.AWG) > 0 {
 		awgView := map[string]any{}
-		for _, k := range []string{"jc", "jmin", "jmax"} {
+		for _, k := range []string{
+			"jc", "jmin", "jmax",
+			"s1", "s2", "s3", "s4",
+			"h1", "h2", "h3", "h4",
+			"id", "ip", "ib",
+			"i1", "i2", "i3", "i4", "i5",
+			"header_protection_key", "content_padding_addition",
+			"rekey_after_time", "rekey_timeout", "reject_after_time",
+			"keepalive_timeout", "max_handshake_attempts",
+		} {
 			if v, ok := h.AWG[k]; ok {
 				awgView[k] = v
 			}
@@ -187,8 +196,9 @@ func (s *Service) handleWgRegenerateAWG(w http.ResponseWriter, r *http.Request) 
 	okJSON(w, 200, s.wgPublicView(h))
 }
 
-// mergeWgAWGOverrides applies operator jc/jmin/jmax (or nested awg{}) onto a generated AWG bundle.
-// i1–i5 are rejected — this stack strips CPS slots in materialize.
+// mergeWgAWGOverrides applies operator overrides onto a generated AWG bundle.
+// Allows jc/jmin/jmax, s1–s4, h1–h4, masquerade id/ip/ib, and optional i1–i5
+// (manual CPS). Setting any iN clears id/ip/ib; setting id/ip/ib clears i1–i5.
 func mergeWgAWGOverrides(h *domain.WgHub, body map[string]any) error {
 	if h == nil || h.Profile == domain.WgProfilePlain {
 		return nil
@@ -223,28 +233,118 @@ func mergeWgAWGOverrides(h *domain.WgHub, body map[string]any) error {
 		}
 		return nil
 	}
-	allowed := map[string]struct{}{"jc": {}, "jmin": {}, "jmax": {}}
+	applyString := func(dst map[string]any, key string, v any) {
+		s := strings.TrimSpace(fmt.Sprint(v))
+		if s == "" || s == "<nil>" {
+			delete(dst, key)
+			return
+		}
+		dst[key] = s
+	}
+
+	intKeys := map[string]struct{}{
+		"jc": {}, "jmin": {}, "jmax": {},
+		"s1": {}, "s2": {}, "s3": {}, "s4": {},
+	}
+	stringKeys := map[string]struct{}{
+		"h1": {}, "h2": {}, "h3": {}, "h4": {},
+		"id": {}, "ip": {}, "ib": {},
+		"i1": {}, "i2": {}, "i3": {}, "i4": {}, "i5": {},
+		"header_protection_key": {}, "content_padding_addition": {},
+		"rekey_after_time": {}, "rekey_timeout": {}, "reject_after_time": {},
+		"keepalive_timeout": {}, "max_handshake_attempts": {},
+	}
+
+	applyKV := func(k string, v any) error {
+		k = strings.ToLower(strings.TrimSpace(k))
+		if _, ok := intKeys[k]; ok {
+			return applyInt(h.AWG, k, v)
+		}
+		if _, ok := stringKeys[k]; ok {
+			applyString(h.AWG, k, v)
+			return nil
+		}
+		return nil
+	}
+
 	if nested, ok := body["awg"].(map[string]any); ok {
 		for k, v := range nested {
-			k = strings.ToLower(strings.TrimSpace(k))
-			if _, ok := allowed[k]; !ok {
-				if k == "i1" || k == "i2" || k == "i3" || k == "i4" || k == "i5" {
-					return fmt.Errorf("awg.%s is not supported (CPS slots stripped)", k)
-				}
-				continue
-			}
-			if err := applyInt(h.AWG, k, v); err != nil {
+			if err := applyKV(k, v); err != nil {
 				return err
 			}
 		}
 	}
-	for _, k := range []string{"jc", "jmin", "jmax"} {
+	for _, k := range []string{
+		"jc", "jmin", "jmax", "s1", "s2", "s3", "s4",
+		"h1", "h2", "h3", "h4", "id", "ip", "ib",
+		"i1", "i2", "i3", "i4", "i5",
+	} {
 		if v, ok := body[k]; ok {
-			if err := applyInt(h.AWG, k, v); err != nil {
+			if err := applyKV(k, v); err != nil {
 				return err
 			}
 		}
 	}
+
+	// Top-level masquerade helpers from the client draft.
+	if v, ok := body["masquerade_mode"].(string); ok {
+		mode := strings.ToLower(strings.TrimSpace(v))
+		switch mode {
+		case "", "none":
+			delete(h.AWG, "ip")
+			delete(h.AWG, "id")
+			delete(h.AWG, "ib")
+		case "quic", "dns", "stun", "sip":
+			h.AWG["ip"] = mode
+			for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+				delete(h.AWG, k)
+			}
+		}
+	}
+	if v, ok := body["masquerade_url"].(string); ok {
+		host := strings.TrimSpace(v)
+		host = strings.TrimPrefix(host, "https://")
+		host = strings.TrimPrefix(host, "http://")
+		if i := strings.IndexAny(host, "/:"); i >= 0 {
+			host = host[:i]
+		}
+		if host != "" {
+			h.AWG["id"] = host
+		}
+	}
+	if v, ok := body["manual_init"].(bool); ok && v {
+		for _, k := range []string{"id", "ip", "ib"} {
+			delete(h.AWG, k)
+		}
+	}
+
+	manualCPS := false
+	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+		if v, ok := h.AWG[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+			manualCPS = true
+			break
+		}
+	}
+	if manualCPS {
+		for _, k := range []string{"id", "ip", "ib"} {
+			delete(h.AWG, k)
+		}
+	} else if ip, _ := h.AWG["ip"].(string); strings.TrimSpace(ip) != "" {
+		for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+			delete(h.AWG, k)
+		}
+		ip = strings.ToLower(strings.TrimSpace(ip))
+		switch ip {
+		case "quic", "dns", "stun", "sip":
+			h.AWG["ip"] = ip
+		default:
+			return fmt.Errorf("awg.ip must be one of quic|dns|stun|sip")
+		}
+		if _, ok := h.AWG["ib"]; !ok || strings.TrimSpace(fmt.Sprint(h.AWG["ib"])) == "" {
+			h.AWG["ib"] = "chrome"
+		}
+	}
+
 	jmin, _ := h.AWG["jmin"].(int)
 	jmax, _ := h.AWG["jmax"].(int)
 	if jmin > 0 && jmax > 0 && jmax < jmin {

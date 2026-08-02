@@ -1,7 +1,7 @@
 {
   "param.ssh_custom.client_version.description": "Строка client_version на outbound.",
-  "param.ssh_custom.client_version.help.input_hint": "значение по docs протокола",
-  "param.ssh_custom.client_version.help.summary": "Строка client_version на outbound — параметр inbound/outbound.",
+  "param.ssh_custom.client_version.help.input_hint": "значение из docs / enum",
+  "param.ssh_custom.client_version.help.summary": "Строка client_version на outbound — влияет на JSON inbound/outbound.",
   "param.ssh_custom.client_version.title": "Client version",
   "param.ssh_custom.server_version.description": "SSH version banner для клиентов.",
   "param.ssh_custom.server_version.help.input_hint": "SSH-2.0-…",

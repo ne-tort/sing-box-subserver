@@ -28,7 +28,7 @@
       "h2"
     ],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "TLS ClientHello → Trojan or HTTP fallback",
     "compatible_with_demux": true
   },
   "scores": {
@@ -92,6 +92,46 @@
     "tls_profile": true
   },
   "client_notes": {
-    "fallback": "inbound-only; поднять локальный HTTP на :18080 или сменить адрес"
+    "fallback": "inbound-only; run local HTTP on :18080 or change the address"
+  },
+  "optional_param_fields": [
+    "fingerprint"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
+      }
+    }
   }
 }

@@ -7,86 +7,15 @@
   "i18n": {
     "ru": {
       "title": "DERP",
-      "description": "Tailscale-compatible DERP proxy (curve25519), with_derp."
+      "description": "Tailscale-compatible DERP. Нишевый UDP/TLS путь, не для общего обхода."
     },
     "en": {
       "title": "DERP",
-      "description": "DERP proxy (with_derp)."
+      "description": "Tailscale-compatible DERP. Niche UDP/TLS path, not general bypass."
     }
   },
   "default_cred_fields": [
     "private_key",
     "public_key"
-  ],
-  "optional_param_fields": [
-    "udp",
-    "fingerprint"
-  ],
-  "param_meta": {
-    "udp": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "native",
-        "disabled"
-      ],
-      "default": "native",
-      "ui_group": "transport",
-      "ui_order": 30,
-      "title": {
-        "en": "UDP mode",
-        "ru": "UDP mode"
-      },
-      "description": {
-        "en": "DERP udp: native|disabled.",
-        "ru": "DERP udp: native|disabled."
-      },
-      "help": {
-        "summary": {
-          "en": "DERP UDP path. native keeps STUN/UDP; disabled forces TCP/WS-only relay behavior.",
-          "ru": "UDP-путь DERP. native — STUN/UDP; disabled — только TCP/WS relay."
-        },
-        "input_hint": {
-          "en": "native|disabled",
-          "ru": "native|disabled"
-        },
-        "format": "native"
-      }
-    },
-    "fingerprint": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "ios",
-        "android",
-        "random"
-      ],
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 21,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Outbound uTLS ClientHello fingerprint.",
-        "ru": "uTLS fingerprint ClientHello на outbound."
-      },
-      "help": {
-        "summary": {
-          "en": "Outbound uTLS fingerprint. Match a common browser unless you need a specific ClientHello class.",
-          "ru": "uTLS fingerprint на outbound. Держите browser-like, если не нужен особый ClientHello."
-        },
-        "input_hint": {
-          "en": "chrome|firefox|…",
-          "ru": "chrome|firefox|…"
-        },
-        "format": "chrome"
-      }
-    }
-  }
+  ]
 }

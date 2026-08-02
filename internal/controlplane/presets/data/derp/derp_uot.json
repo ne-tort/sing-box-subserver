@@ -167,9 +167,9 @@
       "widget": "select",
       "enum": [
         "native",
-        "disabled"
+        "uot"
       ],
-      "default": "native",
+      "default": "uot",
       "ui_group": "transport",
       "ui_order": 30,
       "title": {
@@ -177,17 +177,17 @@
         "ru": "UDP mode"
       },
       "description": {
-        "en": "DERP udp: native|disabled.",
-        "ru": "DERP udp: native|disabled."
+        "en": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "ru": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp)."
       },
       "help": {
         "summary": {
-          "en": "DERP UDP path. native keeps STUN/UDP; disabled forces TCP/WS-only relay behavior.",
-          "ru": "UDP-путь DERP. native — STUN/UDP; disabled — только TCP/WS relay."
+          "en": "Wire values native|uot. uot aliases udp_over_tcp — carry UDP inside the DERP TCP/WS path when native UDP is filtered.",
+          "ru": "Wire: native|uot. uot = udp_over_tcp — UDP внутри TCP/WS DERP, если native UDP режут."
         },
         "input_hint": {
-          "en": "native|disabled",
-          "ru": "native|disabled"
+          "en": "native|uot",
+          "ru": "native|uot"
         },
         "format": "native"
       }

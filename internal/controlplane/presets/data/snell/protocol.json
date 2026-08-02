@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Snell",
-      "description": "Snell v5/v6 (PSK + userkey)."
+      "description": "PSK plain TCP/UDP. Demux plain-слот; слабый DPI-профиль без TLS."
     },
     "en": {
       "title": "Snell",
-      "description": "Snell v5/v6."
+      "description": "PSK plain TCP/UDP. Demux plain slot; weak DPI profile without TLS."
     }
   },
   "default_cred_fields": [

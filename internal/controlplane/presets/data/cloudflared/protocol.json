@@ -3,20 +3,21 @@
   "tag": "cloudflared",
   "singbox_type": "cloudflared",
   "short_name": "Cloudflared",
-  "status": "lab",
+  "status": "deferred",
   "i18n": {
     "ru": {
       "title": "Cloudflared",
-      "description": "Cloudflare Tunnel inbound (with_cloudflared); token в bindings[].params."
+      "description": "Cloudflare Tunnel по token. Обход блокировок IP ценой зависимости от CF."
     },
     "en": {
       "title": "Cloudflared",
-      "description": "Cloudflare Tunnel inbound."
+      "description": "Cloudflare Tunnel via token. IP-block bypass at the cost of CF dependency."
     }
   },
   "default_cred_fields": [],
   "notes": {
-    "subscription": "нет симметричного outbound — только edge→router; sub не эмитит outbounds",
-    "params": "обязателен bindings[].params.token"
+    "subscription": "no symmetric outbound — edge→router only; subscription emits no outbounds",
+    "params": "bindings[].params.token is required",
+    "client_deferred": "Hidden from subserver catalog until client outbound / tunnel UX is designed"
   }
 }

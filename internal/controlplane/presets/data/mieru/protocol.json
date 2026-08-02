@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Mieru",
-      "description": "Mieru/mita (with_mieru): TCP или UDP transport."
+      "description": "Чистый TCP/UDP без TLS. Ключ к demux «plain рядом с Reality/Hy2» — first-bytes / always_plain."
     },
     "en": {
       "title": "Mieru",
-      "description": "Mieru/mita (with_mieru)."
+      "description": "Clean TCP/UDP without TLS. Key to demux «plain next to Reality/Hy2» — first-bytes / always_plain."
     }
   },
   "default_cred_fields": [

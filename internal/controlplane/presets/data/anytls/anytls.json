@@ -11,6 +11,10 @@
     "ru": {
       "title": "AnyTLS",
       "description": "AnyTLS TCP+TLS с padding_scheme (DPI видит менее регулярные TLS record sizes)."
+    },
+    "en": {
+      "title": "AnyTLS",
+      "description": "AnyTLS TCP+TLS with padding_scheme (DPI sees less regular TLS record sizes)."
     }
   },
   "traits": [
@@ -86,7 +90,7 @@
   },
   "client_notes": {
     "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
-    "idle": "outbound idle_* — отдельный инвариант anytls_idle"
+    "idle": "outbound idle_* — separate invariant anytls_idle"
   },
   "optional_param_fields": [
     "alpn",

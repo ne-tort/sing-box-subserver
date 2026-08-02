@@ -77,7 +77,7 @@
     "build_tag": "with_sudoku"
   },
   "client_notes": {
-    "key": "shared peer key (не per-user); set.peer_secrets",
+    "key": "shared peer key (not per-user); set.peer_secrets",
     "params": "optional bindings[].params overrides: fallback"
   },
   "optional_param_fields": [

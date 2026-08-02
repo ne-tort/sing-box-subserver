@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Sudoku",
-      "description": "Sudoku-ASCII obfuscation (with_sudoku); shared key."
+      "description": "Plain-TCP обфускация (pad/httpmask/aes). Demux always_plain рядом с TLS-стеком."
     },
     "en": {
       "title": "Sudoku",
-      "description": "Sudoku-ASCII (with_sudoku)."
+      "description": "Plain-TCP obfuscation (pad/httpmask/aes). Demux always_plain beside the TLS stack."
     }
   },
   "default_cred_fields": [

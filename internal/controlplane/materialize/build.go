@@ -807,7 +807,7 @@ func applyBindingParamVars(vars map[string]string, params map[string]string, pre
 		"httpmask_path": "/sudoku", "httpmask_host": "{{server}}",
 		// Custom constructors (vless_custom / hy2_custom / wg_custom)
 		"transport": "tcp", "tls_mode": "tls",
-		"flow": "", "packet_encoding": "xudp", "fingerprint": "chrome",
+		"flow": "none", "packet_encoding": "xudp", "fingerprint": "chrome",
 		"transport_path": "/vless", "transport_host": "{{server}}", "service_name": "GunService",
 		"alpn": "h2,http/1.1",
 		"obfs": "", "obfs_password": "",

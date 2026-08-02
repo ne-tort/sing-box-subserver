@@ -32,7 +32,7 @@
       "h2"
     ],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "TLS ClientHello then H2 TrustTunnel",
     "compatible_with_demux": true
   },
   "scores": {
@@ -108,6 +108,6 @@
     "build_tag": "with_trusttunnel"
   },
   "client_notes": {
-    "tls": "TrustTunnel TLS — отдельный блок (не InboundTLSOptions); CP подставляет PEM при materialize"
+    "tls": "TrustTunnel TLS is a separate block (not InboundTLSOptions); CP injects PEM at materialize"
   }
 }

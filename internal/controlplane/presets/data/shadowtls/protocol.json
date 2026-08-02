@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "ShadowTLS",
-      "description": "ShadowTLS v3: TLS mimic handshake + password users."
+      "description": "TLS-mimic handshake + password. Нужен handshake_server под правдоподобный SNI."
     },
     "en": {
       "title": "ShadowTLS",
-      "description": "ShadowTLS v3 inbound."
+      "description": "TLS-mimic handshake + password. Needs a plausible handshake_server SNI."
     }
   },
   "default_cred_fields": [

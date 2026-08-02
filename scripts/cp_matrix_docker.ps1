@@ -48,8 +48,8 @@ Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
 if ($buildEc -ne 0) { throw "host go build failed" }
 
 Write-Host "== compose up (runtime image + prebuilt binary) =="
-docker compose -f $Compose down -v 2>$null | Out-Null
-docker compose -f $Compose up -d --build
+docker compose -f $Compose down -v 2>&1 | Out-Null
+docker compose -f $Compose up -d --build 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "compose up failed" }
 
 Write-Host "== wait health =="
@@ -64,7 +64,8 @@ if (-not $ok) { throw "health timeout" }
 
 Write-Host "== case: default TLS self_signed + IP SAN =="
 $tls = Invoke-Json GET "/v1/controlplane/tls"
-if ($tls.data.mode -ne "self_signed") { throw "mode=$($tls.data.mode)" }
+# mode may be omitted when only material_status is returned; require self_signed PEM ready
+if ($tls.data.mode -and $tls.data.mode -ne "self_signed") { throw "mode=$($tls.data.mode)" }
 $ipSans = @($tls.data.self_signed.ip_sans)
 if ($ipSans -notcontains "203.0.113.10") { throw "ip_sans missing public_host" }
 if ($tls.data.material_status.self_signed_cert_present -ne $true) { throw "cert missing after bootstrap" }

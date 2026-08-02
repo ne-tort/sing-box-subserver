@@ -72,6 +72,10 @@
         "input_hint": {
           "en": "1–65535 Mbps",
           "ru": "1–65535 Mbps"
+        },
+        "summary": {
+          "en": "Advertised upload cap (Mbps) for Hy1 congestion control.",
+          "ru": "Заявленный upload cap (Mbps) для Hy1 congestion control."
         }
       }
     },
@@ -95,6 +99,10 @@
         "input_hint": {
           "en": "1–65535 Mbps",
           "ru": "1–65535 Mbps"
+        },
+        "summary": {
+          "en": "Advertised download cap (Mbps) for Hy1 congestion control.",
+          "ru": "Заявленный download cap (Mbps) для Hy1 congestion control."
         }
       }
     },
@@ -111,6 +119,12 @@
       "description": {
         "en": "Symmetric Hy1 obfs; empty = no obfuscation.",
         "ru": "Симметричный Hy1 obfs; пусто = без obfuscation."
+      },
+      "help": {
+        "summary": {
+          "en": "Symmetric Hy1 obfuscation string shared by peers. Empty disables obfs.",
+          "ru": "Симметричный Hy1 obfs у peer. Пусто — без obfuscation."
+        }
       }
     }
   },

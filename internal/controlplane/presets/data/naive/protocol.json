@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "NaiveProxy",
-      "description": "NaiveProxy inbound (HTTP/2 или QUIC поверх TLS)."
+      "description": "Трафик как обычный HTTPS/H2 или QUIC. Сильная маскировка; тяжёлый стек."
     },
     "en": {
       "title": "NaiveProxy",
-      "description": "NaiveProxy inbound."
+      "description": "Looks like normal HTTPS/H2 or QUIC. Strong camouflage; heavy stack."
     }
   },
   "default_cred_fields": [

@@ -87,7 +87,8 @@
     "tls_profile": true
   },
   "optional_param_fields": [
-    "service_name"
+    "service_name",
+    "fingerprint"
   ],
   "param_meta": {
     "service_name": {
@@ -103,6 +104,41 @@
       "description": {
         "en": "gRPC Gun service_name for Trojan (ALPN h2).",
         "ru": "gRPC Gun service_name для Trojan (ALPN h2)."
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
       }
     }
   }

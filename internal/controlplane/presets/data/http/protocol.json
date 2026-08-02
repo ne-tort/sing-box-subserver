@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "HTTP",
-      "description": "HTTP CONNECT прокси."
+      "description": "HTTP CONNECT. Служебный прокси, не anti-DPI."
     },
     "en": {
       "title": "HTTP",
-      "description": "HTTP CONNECT прокси."
+      "description": "HTTP CONNECT. Utility proxy, not anti-DPI."
     }
   },
   "default_cred_fields": [

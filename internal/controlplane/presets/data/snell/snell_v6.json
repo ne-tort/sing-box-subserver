@@ -59,5 +59,44 @@
     "version": 6,
     "psk": "{{peer.psk}}",
     "userkey": "{{user.userkey}}"
+  },
+  "optional_param_fields": [
+    "obfs_mode"
+  ],
+  "param_meta": {
+    "obfs_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "http",
+        "tls"
+      ],
+      "default": "http",
+      "ui_group": "obfs",
+      "ui_order": 40,
+      "title": {
+        "en": "Obfs mode",
+        "ru": "Obfs mode"
+      },
+      "description": {
+        "en": "Snell obfs_mode: off|http|tls.",
+        "ru": "Snell obfs_mode: off|http|tls."
+      },
+      "help": {
+        "summary": {
+          "en": "Snell obfuscation. off strips obfs; http/tls need a believable obfs_host.",
+          "ru": "Obfuscation Snell. off снимает obfs; http/tls требуют правдоподобный obfs_host."
+        },
+        "input_hint": {
+          "en": "off|http|tls",
+          "ru": "off|http|tls"
+        },
+        "format": "http"
+      }
+    }
+  },
+  "client_notes": {
+    "params": "optional: obfs_mode, obfs_host"
   }
 }

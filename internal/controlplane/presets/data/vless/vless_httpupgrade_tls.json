@@ -102,14 +102,15 @@
     "tls_profile": true
   },
   "client_notes": {
-    "flow": "Vision/XTLS несовместим с WS/gRPC/HTTP/HTTPUpgrade — только flow-none",
-    "packet_encoding": "по умолчанию xudp; профили pkt-none / pkt-packetaddr через enabled_client_profiles",
+    "flow": "Vision/XTLS is incompatible with WS/gRPC/HTTP/HTTPUpgrade — use flow-none only",
+    "packet_encoding": "default xudp; profiles pkt-none / pkt-packetaddr via enabled_client_profiles",
     "params": "optional bindings[].params overrides: hu_host, hu_path",
     "hu_path_default": "/vless-hu"
   },
   "optional_param_fields": [
     "hu_path",
-    "hu_host"
+    "hu_host",
+    "fingerprint"
   ],
   "param_meta": {
     "hu_path": {
@@ -139,6 +140,41 @@
       "description": {
         "en": "Host for HTTPUpgrade transport.",
         "ru": "Host для HTTPUpgrade."
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
       }
     }
   }

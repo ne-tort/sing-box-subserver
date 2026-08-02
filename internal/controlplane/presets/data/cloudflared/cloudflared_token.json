@@ -7,7 +7,7 @@
     "cf-tunnel"
   ],
   "short_name": "CF Tunnel",
-  "status": "lab",
+  "status": "deferred",
   "i18n": {
     "ru": {
       "title": "Cloudflared token",
@@ -60,8 +60,9 @@
     "build_tag": "with_cloudflared"
   },
   "client_notes": {
-    "token": "Cloudflare tunnel token (ops) в bindings[].params.token",
-    "subscription": "inbound_only — RenderSubscription пропускает"
+    "token": "Cloudflare tunnel token (ops) in bindings[].params.token",
+    "subscription": "inbound_only — RenderSubscription skips this preset",
+    "deferred": "Excluded from subserver catalog until client outbound for CF Tunnel is designed"
   },
   "param_meta": {
     "token": {

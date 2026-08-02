@@ -9,12 +9,12 @@
   "status": "lab",
   "i18n": {
     "ru": {
-      "title": "SQ 0-RTT custom (конструктор)",
-      "description": "Минимальный лабораторный конструктор на базе shadowquic_0rtt.json."
+      "title": "ShadowQUIC конструктор",
+      "description": "ShadowQUIC: JLS addr/SNI + congestion/0-RTT/udp_over_stream. Для demux QUIC — предпочитайте shadowquic_jls."
     },
     "en": {
       "title": "ShadowQUIC constructor",
-      "description": "Lab ShadowQUIC with JLS knobs. Prefer shadowquic_jls for demux QUIC substitutes."
+      "description": "ShadowQUIC: JLS addr/SNI plus congestion, 0-RTT, udp_over_stream. Prefer shadowquic_jls for demux QUIC substitutes."
     }
   },
   "traits": [
@@ -97,7 +97,10 @@
   "custom_preset": true,
   "optional_param_fields": [
     "jls_addr",
-    "jls_server_name"
+    "jls_server_name",
+    "congestion_control",
+    "zero_rtt",
+    "udp_over_stream"
   ],
   "param_meta": {
     "jls_addr": {
@@ -113,6 +116,12 @@
       "description": {
         "en": "host:port for JLS camouflage QUIC upstream.",
         "ru": "host:port для JLS camouflage QUIC upstream."
+      },
+      "help": {
+        "summary": {
+          "en": "JLS upstream host:port used for camouflage QUIC. Must be reachable from the edge.",
+          "ru": "JLS upstream host:port для camouflage QUIC. Должен быть доступен с edge."
+        }
       }
     },
     "jls_server_name": {
@@ -128,6 +137,85 @@
       "description": {
         "en": "TLS/QUIC SNI for JLS upstream; align with demux_sni on :443 stacks.",
         "ru": "SNI для JLS upstream; на demux :443 выравнивайте с demux_sni."
+      },
+      "help": {
+        "summary": {
+          "en": "JLS SNI / server_name. On demux :443 align with demux_sni or the front will fail match.",
+          "ru": "JLS SNI / server_name. На demux :443 выравнивайте с demux_sni, иначе front не сматчит."
+        }
+      }
+    },
+    "congestion_control": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "bbr",
+        "cubic",
+        "new_reno"
+      ],
+      "default": "bbr",
+      "ui_group": "quic",
+      "ui_order": 20,
+      "title": {
+        "en": "Congestion control",
+        "ru": "Congestion control"
+      },
+      "description": {
+        "en": "QUIC congestion_control (bbr|cubic|new_reno).",
+        "ru": "QUIC congestion_control (bbr|cubic|new_reno)."
+      },
+      "help": {
+        "summary": {
+          "en": "QUIC CC algorithm. bbr is the usual default for lossy/mobile paths.",
+          "ru": "Алгоритм QUIC CC. bbr — обычный default на lossy/мобильных."
+        },
+        "input_hint": {
+          "en": "bbr|cubic|new_reno",
+          "ru": "bbr|cubic|new_reno"
+        },
+        "format": "bbr"
+      }
+    },
+    "zero_rtt": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "quic",
+      "ui_order": 21,
+      "title": {
+        "en": "0-RTT",
+        "ru": "0-RTT"
+      },
+      "description": {
+        "en": "zero_rtt QUIC handshake (replay trade-off).",
+        "ru": "zero_rtt QUIC handshake (компромисс replay)."
+      },
+      "help": {
+        "summary": {
+          "en": "Enables 0-RTT. Faster resume; accept replay risk on the application path.",
+          "ru": "Включает 0-RTT. Быстрее resume; принимаете риск replay на application path."
+        }
+      }
+    },
+    "udp_over_stream": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "quic",
+      "ui_order": 22,
+      "title": {
+        "en": "UDP over stream",
+        "ru": "UDP over stream"
+      },
+      "description": {
+        "en": "Outbound udp_over_stream — UDP frames over QUIC stream.",
+        "ru": "Outbound udp_over_stream — UDP frames поверх QUIC stream."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound-only. Use when native UDP datagrams are filtered but stream path works.",
+          "ru": "Только outbound. Когда native UDP datagram режут, а stream path проходит."
+        }
       }
     }
   }

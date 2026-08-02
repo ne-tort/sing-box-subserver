@@ -93,6 +93,46 @@
     "tls_profile": true
   },
   "client_notes": {
-    "flow": "Vision + mux обычно несовместимы — оставляем полный catalog, оператор может сузить enabled_user_variants"
+    "flow": "Vision + mux are usually incompatible — catalog keeps full set; operator may narrow enabled_user_variants"
+  },
+  "optional_param_fields": [
+    "fingerprint"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
+      }
+    }
   }
 }

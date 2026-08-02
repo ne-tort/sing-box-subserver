@@ -91,8 +91,8 @@
     "build_tag": "with_carrier"
   },
   "client_notes": {
-    "room": "обязателен в bindings[].params.room; self-host = свой Jitsi host в URL",
-    "transport": "datachannel|seichannel (vp8channel запрещён для jitsi)"
+    "room": "required in bindings[].params.room; self-host = your Jitsi host in the URL",
+    "transport": "datachannel|seichannel (vp8channel forbidden for jitsi)"
   },
   "peer_secret_fields": {
     "password": "password"

@@ -32,7 +32,7 @@
       "hysteria"
     ],
     "sni_required": true,
-    "first_bytes": "",
+    "first_bytes": "QUIC ClientHello (Hysteria1 / ALPN hysteria)",
     "compatible_with_demux": true
   },
   "scores": {

@@ -61,7 +61,7 @@
     "private_key": "{{peer.private_key}}",
     "users": [],
     "require_users": true,
-    "udp": "{{param.udp}}",
+    "udp": "native",
     "tailscale_relay": false,
     "path": "{{param.path}}",
     "websocket": false,
@@ -84,7 +84,7 @@
     "server_port": 0,
     "private_key": "{{user.private_key}}",
     "peer_public_key": "{{peer.public_key}}",
-    "udp": "{{param.udp}}",
+    "udp": "native",
     "path": "{{param.path}}",
     "host": "{{server}}",
     "websocket": false,
@@ -156,7 +156,7 @@
       "widget": "select",
       "enum": [
         "native",
-        "disabled"
+        "uot"
       ],
       "default": "native",
       "ui_group": "transport",
@@ -166,8 +166,19 @@
         "ru": "UDP mode"
       },
       "description": {
-        "en": "DERP udp: native|disabled.",
-        "ru": "DERP udp: native|disabled."
+        "en": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "ru": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp)."
+      },
+      "help": {
+        "summary": {
+          "en": "Wire values native|uot. uot aliases udp_over_tcp — carry UDP inside the DERP TCP/WS path when native UDP is filtered.",
+          "ru": "Wire: native|uot. uot = udp_over_tcp — UDP внутри TCP/WS DERP, если native UDP режут."
+        },
+        "input_hint": {
+          "en": "native|uot",
+          "ru": "native|uot"
+        },
+        "format": "native"
       }
     },
     "fingerprint": {

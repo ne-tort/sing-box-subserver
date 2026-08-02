@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "TUIC",
-      "description": "TUIC v5 поверх QUIC/TLS."
+      "description": "QUIC/TLS v5. Замена Hy2 в UDP-слоте demux; 0-RTT — отдельный пресет."
     },
     "en": {
       "title": "TUIC",
-      "description": "TUIC v5 поверх QUIC/TLS."
+      "description": "QUIC/TLS v5. Hy2 substitute in demux UDP slot; 0-RTT is a separate preset."
     }
   },
   "default_cred_fields": [

@@ -83,8 +83,8 @@
     "quic": true
   },
   "client_notes": {
-    "udp_relay_mode": "outbound-only: native|quic — профили udp-native / udp-quic",
-    "zero_rtt": "см. инвариант tuic_0rtt"
+    "udp_relay_mode": "outbound-only: native|quic — profiles udp-native / udp-quic",
+    "zero_rtt": "see invariant tuic_0rtt"
   },
   "optional_param_fields": [
     "congestion_control",

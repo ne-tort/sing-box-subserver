@@ -89,7 +89,7 @@
     "build_tag": "with_carrier"
   },
   "client_notes": {
-    "room": "встречу создаёт ops в UI Telemost; CP только join по URL"
+    "room": "ops creates the meeting in Telemost UI; CP only joins by URL"
   },
   "peer_secret_fields": {
     "password": "password"

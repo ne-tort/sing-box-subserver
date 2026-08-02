@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Hysteria2",
-      "description": "UDP/QUIC с агрессивным congestion control."
+      "description": "QUIC/H3 на UDP:443. Быстрый на lossy/мобильных. Salamander/gecko меняют first-bytes (ломает demux по quic). Masquerade — HTTP-обман при неверном auth."
     },
     "en": {
       "title": "Hysteria2",
-      "description": "UDP/QUIC с агрессивным congestion control."
+      "description": "QUIC/H3 on UDP:443. Fast on lossy/mobile. Salamander/gecko alter first-bytes (breaks demux quic match). Masquerade = HTTP decoy on bad auth."
     }
   },
   "default_cred_fields": [

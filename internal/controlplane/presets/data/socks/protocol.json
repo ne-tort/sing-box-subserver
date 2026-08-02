@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "SOCKS5",
-      "description": "Классический SOCKS5 (часто цель demux)."
+      "description": "Классический SOCKS5. Служебный; часто цель demux inject."
     },
     "en": {
       "title": "SOCKS5",
-      "description": "Классический SOCKS5 (часто цель demux)."
+      "description": "Classic SOCKS5. Utility; often a demux inject target."
     }
   },
   "default_cred_fields": [

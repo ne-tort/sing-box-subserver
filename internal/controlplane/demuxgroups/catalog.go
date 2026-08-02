@@ -161,7 +161,7 @@ func builtInGroups() []Group {
 				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
-			Notes: "Per-slot self-signed TLS под demux_sni; Reality — уникальные SNI из пула.",
+			Notes: "Per-slot self-signed TLS under demux_sni; Reality uses unique SNIs from the pool.",
 		},
 		{
 			Tag: "dg_443_ssh_hy2", ShortName: "SSH + Hy2", Status: "lab", SuggestedPort: 443,
@@ -215,7 +215,7 @@ func builtInGroups() []Group {
 				{ID: "tls", Role: RoleTCPTLS, DefaultPreset: "vless_tls", Substitutes: tcpTLSSubs, MatchHint: "sni_pool"},
 				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "protocol_only"},
 			},
-			Notes: "TrustTunnel через demux dial нестабилен в матрице; оставлен в substitutes.",
+			Notes: "TrustTunnel via demux dial is unstable in the matrix; kept as a substitute only.",
 		},
 		{
 			Tag: "dg_8443_quic_pair", ShortName: "8443 QUIC pair", Status: "lab", SuggestedPort: 8443,
@@ -246,7 +246,7 @@ func builtInGroups() []Group {
 				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
-			Notes: "Требует ≥2 валидных Reality SNI; TLS/QUIC — self-signed с demux_sni.",
+			Notes: "Requires ≥2 valid Reality SNIs; TLS/QUIC use self-signed certs with demux_sni.",
 		},
 		{
 			Tag: "dg_443_vless_family", ShortName: "VLESS family", Status: "lab", SuggestedPort: 443,
@@ -317,7 +317,7 @@ func builtInGroups() []Group {
 				{ID: "tcp", Role: RoleTCPReality, DefaultPreset: "vless_reality", Substitutes: tcpRealitySubs, MatchHint: "sni_pool"},
 				{ID: "quic", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: []string{"hy2", "shadowquic_jls", "shadowquic_0rtt", "tuic"}, MatchHint: "protocol_only"},
 			},
-			Notes: "ShadowQUIC через demux dial нестабилен (demux_lab); default Hy2 проходит matrix. Salamander obfs не в demux.",
+			Notes: "ShadowQUIC via demux dial is unstable (demux_lab); default Hy2 passes the matrix. Salamander obfs is not used in demux.",
 		},
 		{
 			Tag: "dg_443_snell_hy2", ShortName: "Snell + Hy2", Status: "lab", SuggestedPort: 443,
@@ -349,7 +349,7 @@ func builtInGroups() []Group {
 				{ID: "hy2", Role: RoleQUIC, DefaultPreset: "hy2", Substitutes: quicSubs, MatchHint: "sni_pool"},
 				{ID: "tuic", Role: RoleQUIC, DefaultPreset: "tuic", Substitutes: []string{"tuic", "tuic_0rtt"}, MatchHint: "sni_pool"},
 			},
-			Notes: "Уникальные SNI на Reality/TLS/QUIC; plain — always_plain first-match.",
+			Notes: "Unique SNIs on Reality/TLS/QUIC; plain uses always_plain first-match.",
 		},
 	}
 }

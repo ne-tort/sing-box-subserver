@@ -26,6 +26,7 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applyCloudflaredCustomKnobs(ib, preset, params)
 	applyCarrierCustomKnobs(ib, preset, params)
 	applyShadowQUICKnobs(ib, params)
+	applySnellKnobs(ib, params)
 	applyStockBandwidthParams(ib, params)
 	applyStockIgnoreClientBandwidth(ib, params)
 }
@@ -47,8 +48,10 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applyDerpCustomKnobs(ob, preset, params, false)
 	applyCarrierCustomKnobs(ob, preset, params)
 	applyShadowQUICKnobs(ob, params)
+	applySnellKnobs(ob, params)
 	applyStockBandwidthParams(ob, params)
 	applyStockIgnoreClientBandwidth(ob, params)
+	applyStockUTLSFingerprint(ob, params)
 	stripUTLSForQUICTransport(ob)
 }
 
@@ -81,6 +84,40 @@ func applyStockIgnoreClientBandwidth(m map[string]any, params map[string]string)
 	m["ignore_client_bandwidth"] = strings.EqualFold(strings.TrimSpace(params["ignore_client_bandwidth"]), "true")
 }
 
+// applyStockUTLSFingerprint overrides outbound tls.utls.fingerprint when set.
+func applyStockUTLSFingerprint(m map[string]any, params map[string]string) {
+	if _, isIn := m["listen"]; isIn {
+		return
+	}
+	fp := strings.TrimSpace(params["fingerprint"])
+	if fp == "" {
+		return
+	}
+	tls, _ := m["tls"].(map[string]any)
+	if tls == nil {
+		return
+	}
+	tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
+}
+
+func applySnellKnobs(m map[string]any, params map[string]string) {
+	typ, _ := m["type"].(string)
+	if typ != "snell" {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(params["obfs_mode"]))
+	if mode == "" {
+		return
+	}
+	switch mode {
+	case "off", "none":
+		delete(m, "obfs_mode")
+		delete(m, "obfs_host")
+	default:
+		m["obfs_mode"] = mode
+	}
+}
+
 func applyShadowQUICKnobs(m map[string]any, params map[string]string) {
 	typ, _ := m["type"].(string)
 	if typ != "shadowquic" {
@@ -91,6 +128,11 @@ func applyShadowQUICKnobs(m map[string]any, params map[string]string) {
 	}
 	if strings.TrimSpace(params["zero_rtt"]) != "" {
 		m["zero_rtt"] = strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true")
+	}
+	if _, isInbound := m["listen"]; !isInbound {
+		if strings.TrimSpace(params["udp_over_stream"]) != "" {
+			m["udp_over_stream"] = strings.EqualFold(strings.TrimSpace(params["udp_over_stream"]), "true")
+		}
 	}
 }
 
@@ -201,16 +243,21 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 		return
 	}
 	cleanupV2RayTransport(m, params)
-	if strings.TrimSpace(params["flow"]) == "" {
+	if strings.TrimSpace(params["flow"]) == "" || strings.EqualFold(strings.TrimSpace(params["flow"]), "none") {
 		delete(m, "flow")
+	} else if v := strings.TrimSpace(params["flow"]); v != "" {
+		m["flow"] = v
 	}
 	if alpn := strings.TrimSpace(params["alpn"]); alpn != "" {
 		if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
 			tls["alpn"] = splitCSV(alpn)
 		}
 	}
-	if strings.TrimSpace(params["packet_encoding"]) == "" {
+	enc := strings.TrimSpace(params["packet_encoding"])
+	if enc == "" || strings.EqualFold(enc, "none") {
 		delete(m, "packet_encoding")
+	} else {
+		m["packet_encoding"] = enc
 	}
 }
 
@@ -356,16 +403,37 @@ func applyTrustTunnelCustomKnobs(m map[string]any, preset string, params map[str
 	}
 	tr, _ := m["transport"].(map[string]any)
 	if tr == nil {
-		return
+		tr = map[string]any{}
+		m["transport"] = tr
 	}
 	if v := strings.TrimSpace(params["mode"]); v != "" {
-		tr["upstream_protocol"] = v
+		tr["upstream_protocol"] = normalizeTrustTunnelUpstream(v)
 	}
 	if strings.TrimSpace(params["anti_dpi"]) != "" {
 		tr["anti_dpi"] = strings.EqualFold(strings.TrimSpace(params["anti_dpi"]), "true")
 	}
 	if strings.TrimSpace(params["enable_protocol_fallback"]) != "" {
 		tr["enable_protocol_fallback"] = strings.EqualFold(strings.TrimSpace(params["enable_protocol_fallback"]), "true")
+	}
+	if strings.TrimSpace(params["force_http1_connect"]) != "" {
+		tr["force_http1_connect"] = strings.EqualFold(strings.TrimSpace(params["force_http1_connect"]), "true")
+	}
+	if strings.TrimSpace(params["enable_udp"]) != "" {
+		m["enable_udp"] = strings.EqualFold(strings.TrimSpace(params["enable_udp"]), "true")
+	}
+}
+
+// normalizeTrustTunnelUpstream maps UI mode aliases to TrustTunnel wire values.
+func normalizeTrustTunnelUpstream(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "h2", "http2", "http/2":
+		return "http2"
+	case "h3", "http3", "http/3", "quic":
+		return "http3"
+	case "auto", "":
+		return "auto"
+	default:
+		return strings.ToLower(strings.TrimSpace(v))
 	}
 }
 
@@ -453,7 +521,7 @@ func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]str
 		m["websocket"] = strings.EqualFold(strings.TrimSpace(params["websocket"]), "true")
 	}
 	if v := strings.TrimSpace(params["udp"]); v != "" {
-		m["udp"] = v
+		m["udp"] = normalizeDerpUDP(v)
 	}
 	if !inbound {
 		if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
@@ -461,6 +529,21 @@ func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]str
 				tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
 			}
 		}
+	}
+}
+
+// normalizeDerpUDP maps UI aliases to DERP wire udp mode (native|uot).
+func normalizeDerpUDP(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "native":
+		return "native"
+	case "uot", "udp_over_tcp", "udp-over-tcp":
+		return "uot"
+	case "disabled", "off", "false", "none":
+		// Historical UI value; wire has no "disabled" — keep native (TCP/WS flags select path).
+		return "native"
+	default:
+		return strings.ToLower(strings.TrimSpace(v))
 	}
 }
 

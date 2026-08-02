@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Trojan",
-      "description": "Парольный прокси поверх TLS."
+      "description": "Пароль поверх TLS. Выглядит как HTTPS; без Reality слабее VLESS+Reality против активного probing."
     },
     "en": {
       "title": "Trojan",
-      "description": "Парольный прокси поверх TLS."
+      "description": "Password over TLS. Looks like HTTPS; without Reality weaker than VLESS+Reality vs active probing."
     }
   },
   "default_cred_fields": [

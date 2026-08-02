@@ -111,7 +111,25 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.hy2_gecko_masquerade.description": "Hy2 + gecko obfs + HTTP decoy on failed auth. Obfs breaks demux quic/SNI match.",
     },
     "presets/derp.json": {
-        "preset.derp_custom.description": "DERP constructor: path, websocket, udp mode, uTLS fingerprint.",
+        "preset.derp_custom.description": "DERP constructor: path, websocket, udp native|uot, uTLS fingerprint.",
+        "param.derp_custom.udp.description": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_custom.udp.help.summary": "Wire values native|uot. uot aliases udp_over_tcp — carry UDP inside the DERP TCP/WS path when native UDP is filtered.",
+        "param.derp_custom.udp.help.input_hint": "native|uot",
+        "param.derp_tls.udp.description": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_tls.udp.help.summary": "Wire values native|uot. uot aliases udp_over_tcp — UDP inside TCP/WS when native UDP is filtered.",
+        "param.derp_tls.udp.help.input_hint": "native|uot",
+        "param.derp_uot.udp.description": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_uot.udp.help.summary": "Wire values native|uot. This preset defaults to uot.",
+        "param.derp_uot.udp.help.input_hint": "native|uot",
+        "param.derp_ws.udp.description": "DERP udp mode: native or uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_ws.udp.help.summary": "Wire values native|uot. uot aliases udp_over_tcp — UDP inside TCP/WS when native UDP is filtered.",
+        "param.derp_ws.udp.help.input_hint": "native|uot",
+    },
+    "presets/anytls.json": {
+        "preset.anytls.description": "AnyTLS TCP+TLS with padding_scheme (DPI sees less regular TLS record sizes).",
+    },
+    "presets/mieru.json": {
+        "preset.mieru_tcp.description": "Mieru TCP transport (DPI: non-standard TCP stream).",
     },
     "presets/hysteria.json": {
         "preset.hysteria_custom.description": "Legacy Hy1 constructor: bandwidth caps + optional obfs. Prefer hy2_custom for new stacks.",
@@ -120,7 +138,10 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.naive_custom.description": "NaiveProxy constructor: network tcp (TLS/H2) or udp (QUIC/H3).",
     },
     "presets/shadowquic.json": {
-        "preset.shadowquic_custom.description": "ShadowQUIC constructor: JLS addr/SNI overrides for demux-aligned camouflage.",
+        "preset.shadowquic_custom.description": "ShadowQUIC: JLS addr/SNI plus congestion, 0-RTT, udp_over_stream. Prefer shadowquic_jls for demux QUIC substitutes.",
+        "param.shadowquic_custom.congestion_control.help.summary": "QUIC CC algorithm. bbr is the usual default for lossy/mobile paths.",
+        "param.shadowquic_custom.zero_rtt.help.summary": "Enables 0-RTT. Faster resume; accept replay risk on the application path.",
+        "param.shadowquic_custom.udp_over_stream.help.summary": "Outbound-only. Use when native UDP datagrams are filtered but stream path works.",
     },
     "presets/shadowsocks.json": {
         "preset.ss_2022_chacha.description": "Shadowsocks 2022 ChaCha20-Poly1305. Prefer on ARM/mobile where AES is weaker.",
@@ -135,7 +156,15 @@ EN_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.sudoku_custom.description": "Sudoku constructor: AEAD method, multiplex, padding bounds, fallback URL.",
     },
     "presets/trusttunnel.json": {
-        "preset.trusttunnel_custom.description": "TrustTunnel constructor: upstream_protocol h2|h3|auto, anti_dpi, protocol fallback.",
+        "preset.trusttunnel_custom.description": "TrustTunnel constructor: mode h2|h3|auto (→ http2/http3/auto), anti_dpi, UDP, protocol fallback, force_http1_connect.",
+        "param.trusttunnel_custom.mode.help.summary": "Maps to transport.upstream_protocol: h2→http2 (TCP/TLS), h3→http3 (QUIC), auto with optional fallback.",
+        "param.trusttunnel_custom.mode.description": "TrustTunnel transport.upstream_protocol (UI h2→http2, h3→http3, auto).",
+        "param.trusttunnel_custom.enable_udp.title": "Enable UDP",
+        "param.trusttunnel_custom.enable_udp.description": "enable_udp — advertise UDP via TrustTunnel _udp2 stream.",
+        "param.trusttunnel_custom.enable_udp.help.summary": "When false, only TCP is advertised. UDP uses the TrustTunnel _udp2 stream.",
+        "param.trusttunnel_custom.force_http1_connect.title": "Force HTTP/1.1 CONNECT",
+        "param.trusttunnel_custom.force_http1_connect.description": "transport.force_http1_connect — legacy CONNECT fallback.",
+        "param.trusttunnel_custom.force_http1_connect.help.summary": "Compatibility: force HTTP/1.1 CONNECT instead of H2/H3 framing.",
     },
     "presets/tuic.json": {
         "preset.tuic_custom.description": "TUIC constructor: congestion_control, udp_relay_mode, optional 0-RTT handshake.",
@@ -275,8 +304,9 @@ def extract_from_data() -> tuple[dict[str, str], dict[str, str], dict[str, dict[
         en_title = (en.get("title") or short or humanize(tag)).strip()
         en_desc = (en.get("description") or "").strip()
         if lang == "en":
-            if not en_desc and ru_desc:
-                en_desc = ru_desc  # semantic bridge until EN patch exists; never emit stub
+            # Never bridge RU→EN: Cyrillic copy pollutes English master and other langs.
+            if en_desc and re.search(r"[\u0400-\u04FF]", en_desc):
+                en_desc = ""
             if en_title:
                 out[f"{prefix}.title"] = en_title
             if en_desc:
@@ -390,11 +420,12 @@ def build_en_ru_masters(rw) -> tuple[dict[str, dict[str, str]], dict[str, dict[s
         disk_en = read_json(LOCALES / "en" / "presets" / f"{proto}.json")
         disk_ru = read_json(LOCALES / "ru" / "presets" / f"{proto}.json")
         tags = tags_by_proto.get(proto, set())
+        # Order: data extract → disk (quality wins) → priority rewrite → EN/RU patches later.
         en_presets[proto] = prune_protocol_keys(
             proto,
             merge_dict(
-                disk_en,
                 presets_en.get(proto, {}),
+                disk_en,
                 priority_en.get(proto, {}),
             ),
             tags,
@@ -403,8 +434,8 @@ def build_en_ru_masters(rw) -> tuple[dict[str, dict[str, str]], dict[str, dict[s
         ru_presets[proto] = prune_protocol_keys(
             proto,
             merge_dict(
-                disk_ru,
                 presets_ru.get(proto, {}),
+                disk_ru,
                 priority_ru.get(proto, {}),
             ),
             tags,
@@ -480,7 +511,19 @@ RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.wg_custom.description": "Схема каталога для PUT /v1/controlplane/wg: MTU, listen_port, up/down Mbps, опциональные jc/jmin/jmax. Не ставится через from-presets.",
     },
     "presets/derp.json": {
-        "preset.derp_custom.description": "Конструктор DERP: path, websocket, udp mode, uTLS fingerprint.",
+        "preset.derp_custom.description": "Конструктор DERP: path, websocket, udp native|uot, uTLS fingerprint.",
+        "param.derp_custom.udp.description": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_custom.udp.help.summary": "Wire: native|uot. uot = udp_over_tcp — UDP внутри TCP/WS DERP, если native UDP режут.",
+        "param.derp_custom.udp.help.input_hint": "native|uot",
+        "param.derp_tls.udp.description": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_tls.udp.help.summary": "Wire: native|uot. uot = udp_over_tcp — UDP внутри TCP/WS, если native UDP режут.",
+        "param.derp_tls.udp.help.input_hint": "native|uot",
+        "param.derp_uot.udp.description": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_uot.udp.help.summary": "Wire: native|uot. У этого пресета default = uot.",
+        "param.derp_uot.udp.help.input_hint": "native|uot",
+        "param.derp_ws.udp.description": "DERP udp: native или uot (UDP-over-TCP / udp_over_tcp).",
+        "param.derp_ws.udp.help.summary": "Wire: native|uot. uot = udp_over_tcp — UDP внутри TCP/WS, если native UDP режут.",
+        "param.derp_ws.udp.help.input_hint": "native|uot",
     },
     "presets/hysteria.json": {
         "preset.hysteria_custom.description": "Legacy конструктор Hy1: bandwidth + optional obfs. Для новых стеков — hy2_custom.",
@@ -489,7 +532,10 @@ RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.naive_custom.description": "Конструктор NaiveProxy: network tcp (TLS/H2) или udp (QUIC/H3).",
     },
     "presets/shadowquic.json": {
-        "preset.shadowquic_custom.description": "Конструктор ShadowQUIC: JLS addr/SNI для demux-aligned camouflage.",
+        "preset.shadowquic_custom.description": "ShadowQUIC: JLS addr/SNI + congestion/0-RTT/udp_over_stream. Для demux QUIC — предпочитайте shadowquic_jls.",
+        "param.shadowquic_custom.congestion_control.help.summary": "Алгоритм QUIC CC. bbr — обычный default на lossy/мобильных.",
+        "param.shadowquic_custom.zero_rtt.help.summary": "Включает 0-RTT. Быстрее resume; принимаете риск replay на application path.",
+        "param.shadowquic_custom.udp_over_stream.help.summary": "Только outbound. Когда native UDP datagram режут, а stream path проходит.",
     },
     "presets/shadowtls.json": {
         "preset.shadowtls_custom.description": "Конструктор ShadowTLS v3: handshake_server, strict_mode, wildcard_sni, uTLS fingerprint.",
@@ -498,7 +544,15 @@ RU_PRESET_PATCHES: dict[str, dict[str, str]] = {
         "preset.sudoku_custom.description": "Конструктор Sudoku: AEAD method, multiplex, padding, fallback URL.",
     },
     "presets/trusttunnel.json": {
-        "preset.trusttunnel_custom.description": "Конструктор TrustTunnel: upstream_protocol h2|h3|auto, anti_dpi, protocol fallback.",
+        "preset.trusttunnel_custom.description": "Конструктор TrustTunnel: mode h2|h3|auto (→ http2/http3/auto), anti_dpi, UDP, protocol fallback, force_http1_connect.",
+        "param.trusttunnel_custom.mode.help.summary": "Пишется в transport.upstream_protocol: h2→http2 (TCP/TLS), h3→http3 (QUIC), auto с optional fallback.",
+        "param.trusttunnel_custom.mode.description": "TrustTunnel transport.upstream_protocol (в UI: h2→http2, h3→http3, auto).",
+        "param.trusttunnel_custom.enable_udp.title": "Enable UDP",
+        "param.trusttunnel_custom.enable_udp.description": "enable_udp — UDP через поток TrustTunnel _udp2.",
+        "param.trusttunnel_custom.enable_udp.help.summary": "false — только TCP. UDP идёт через поток TrustTunnel _udp2.",
+        "param.trusttunnel_custom.force_http1_connect.title": "Force HTTP/1.1 CONNECT",
+        "param.trusttunnel_custom.force_http1_connect.description": "transport.force_http1_connect — legacy CONNECT для совместимости.",
+        "param.trusttunnel_custom.force_http1_connect.help.summary": "Совместимость: форсировать HTTP/1.1 CONNECT вместо H2/H3 framing.",
     },
     "presets/tuic.json": {
         "preset.tuic_custom.description": "Конструктор TUIC: congestion_control, udp_relay_mode, опциональный 0-RTT.",
@@ -635,30 +689,88 @@ def translate_catalog(lang: str, en_master: dict[str, dict[str, str]], ru_master
 
 
 def fill_missing_param_help(files: dict[str, dict[str, str]], lang: str) -> int:
-    """Ensure every param.*.title has help.summary (+ hint) from description when missing."""
+    """Ensure every param.*.title has a technical help.summary (+ hint).
+
+    Also rewrites lame auto-filler tails («applied on inbound/outbound»).
+    """
+    field_help_en = {
+        "up_mbps": "Upload Mbps cap written into the protocol inbound/outbound.",
+        "down_mbps": "Download Mbps cap written into the protocol inbound/outbound.",
+        "alpn": "Comma-separated TLS ALPN list offered on the TLS handshake.",
+        "fingerprint": "Outbound uTLS ClientHello fingerprint (chrome/firefox/…).",
+        "ha_connections": "Number of parallel HA connections to the Cloudflare edge.",
+        "post_quantum": "Prefer post-quantum key exchange with the Cloudflare edge.",
+        "protocol": "Cloudflared edge protocol (http2/quic/…). ",
+        "udp": "UDP path mode for the relay (native keeps UDP; disabled forces TCP/WS).",
+        "websocket": "Enable WebSocket upgrade transport for the DERP path.",
+        "tls_mode": "TLS wrapping mode for the utility inbound (none|tls).",
+        "mtu": "Path MTU for the tunnel/interface; keep ≤ path MTU.",
+        "multiplexing": "Outbound multiplexing profile for Mieru.",
+        "transport": "Underlying transport selector for this protocol.",
+        "network": "Listen/dial network set (tcp|udp|tcp,udp).",
+        "strict_mode": "Reject clients that fail ShadowTLS strict handshake checks.",
+        "wildcard_sni": "Inbound wildcard_sni policy: off|authed|all.",
+        "obfs_mode": "Snell obfuscation mode (off|http|tls). off strips obfs; http/tls need obfs_host.",
+        "padding_min": "Minimum Sudoku padding bytes per frame (anti-fingerprinting bounds).",
+        "padding_max": "Maximum Sudoku padding bytes per frame (anti-fingerprinting bounds).",
+    }
+    field_help_ru = {
+        "up_mbps": "Лимит upload (Mbps) в inbound/outbound протокола.",
+        "down_mbps": "Лимит download (Mbps) в inbound/outbound протокола.",
+        "alpn": "Список TLS ALPN через запятую на handshake.",
+        "fingerprint": "uTLS fingerprint ClientHello на outbound (chrome/firefox/…).",
+        "ha_connections": "Число параллельных HA-соединений к Cloudflare edge.",
+        "post_quantum": "Предпочитать post-quantum key exchange с Cloudflare edge.",
+        "protocol": "Протокол cloudflared к edge (http2/quic/…). ",
+        "udp": "Режим UDP у relay (native — UDP; disabled — только TCP/WS).",
+        "websocket": "Включить WebSocket upgrade для DERP path.",
+        "tls_mode": "Режим TLS-обёртки utility inbound (none|tls).",
+        "mtu": "MTU пути туннеля/интерфейса; держите ≤ path MTU.",
+        "multiplexing": "Профиль multiplexing на outbound Mieru.",
+        "transport": "Выбор underlying transport для протокола.",
+        "network": "Набор сетей listen/dial (tcp|udp|tcp,udp).",
+        "strict_mode": "Отклонять клиенты, не прошедшие strict handshake ShadowTLS.",
+        "wildcard_sni": "Политика inbound wildcard_sni: off|authed|all.",
+        "obfs_mode": "Режим obfuscation Snell (off|http|tls). off снимает obfs; http/tls требуют obfs_host.",
+        "padding_min": "Минимум padding bytes Sudoku на frame (границы anti-fingerprinting).",
+        "padding_max": "Максимум padding bytes Sudoku на frame (границы anti-fingerprinting).",
+    }
     n = 0
     for blob in files.values():
         titles = [k for k in list(blob) if k.startswith("param.") and k.endswith(".title")]
         for title_k in titles:
             base = title_k[: -len(".title")]
+            parts = base.split(".")
+            field = parts[-1] if parts else ""
             hs = f"{base}.help.summary"
-            if hs in blob and blob[hs].strip():
-                continue
             desc = (blob.get(f"{base}.description") or "").strip()
             title = (blob.get(title_k) or "").strip()
-            if not desc and not title:
+            cur = (blob.get(hs) or "").strip()
+            lame = ("applied on inbound/outbound" in cur.lower()) or ("параметр inbound/outbound" in cur.lower())
+            short = bool(cur) and len(cur) < 40
+            if cur and not lame and not short:
                 continue
-            src = desc or title
-            if lang == "ru":
-                summary = src if len(src) >= 45 else f"{src.rstrip('.')} — параметр inbound/outbound."
-                hint = "значение по docs протокола"
+            table = field_help_ru if lang == "ru" else field_help_en
+            if field in table:
+                summary = table[field].strip()
             else:
-                summary = src if len(src) >= 45 else f"{src.rstrip('.')}; applied on inbound/outbound."
-                hint = "protocol-specific value"
+                src = desc or title or field
+                if lang == "ru":
+                    summary = src if len(src) >= 50 else f"{src.rstrip('.')} — влияет на JSON inbound/outbound."
+                else:
+                    summary = src if len(src) >= 50 else f"{src.rstrip('.')}. Controls the generated sing-box object."
+            if cur and not lame and not short:
+                pass
             blob[hs] = summary
             ih = f"{base}.help.input_hint"
-            if ih not in blob or not str(blob.get(ih, "")).strip():
-                blob[ih] = hint
+            if ih not in blob or not str(blob.get(ih, "")).strip() or str(blob.get(ih)) in (
+                "protocol-specific value",
+                "значение по docs протокола",
+            ):
+                if lang == "ru":
+                    blob[ih] = "значение из docs / enum"
+                else:
+                    blob[ih] = "value from docs / enum"
             n += 1
     return n
 

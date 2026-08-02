@@ -23,7 +23,7 @@
     "looks_like": "raw_tcp",
     "alpn": [],
     "sni_required": false,
-    "first_bytes": "часто цель demux inject",
+    "first_bytes": "often a demux inject target",
     "compatible_with_demux": true
   },
   "scores": {
@@ -56,6 +56,6 @@
     "uuid": "{{user.uuid}}"
   },
   "client_notes": {
-    "variants": "flow-none / xtls-rprx-vision / udp-vision — отдельные inbound users"
+    "variants": "flow-none / xtls-rprx-vision / udp-vision — separate inbound users"
   }
 }

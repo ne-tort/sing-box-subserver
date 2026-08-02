@@ -190,7 +190,7 @@ type ProtocolMeta struct {
 	Tag                string                    `json:"tag"`
 	SingBoxType        string                    `json:"singbox_type"`
 	ShortName          string                    `json:"short_name"`
-	Status             string                    `json:"status"` // stable|lab|planned
+	Status             string                    `json:"status"` // stable|lab|planned|deferred
 	I18n               map[string]LocalizedText  `json:"i18n"`
 	DefaultCredFields  []string                  `json:"default_cred_fields,omitempty"`
 	Notes              map[string]string         `json:"notes,omitempty"`
@@ -256,6 +256,8 @@ type ParamFieldMeta struct {
 	Description   map[string]string `json:"description,omitempty"`
 	Help          *ParamHelpMeta    `json:"help,omitempty"`
 	RequiredGuide *ParamGuideMeta   `json:"required_guide,omitempty"`
+	// RequiredGuides are mutually exclusive branches selected by VisibleWhen (first match).
+	RequiredGuides []ParamGuideMeta `json:"required_guides,omitempty"`
 }
 
 // ParamCondition is a machine-readable visibility / branch rule.
@@ -275,8 +277,9 @@ type ParamHelpMeta struct {
 
 // ParamGuideMeta is a step-by-step guide for required parameters.
 type ParamGuideMeta struct {
-	Title map[string]string  `json:"title,omitempty"`
-	Steps []ParamGuideStepMeta `json:"steps,omitempty"`
+	VisibleWhen []ParamCondition    `json:"visible_when,omitempty"`
+	Title       map[string]string   `json:"title,omitempty"`
+	Steps       []ParamGuideStepMeta `json:"steps,omitempty"`
 }
 
 // ParamGuideStepMeta is one guide step (optional URL).
@@ -296,13 +299,14 @@ func cloneParamMeta(in map[string]ParamFieldMeta) map[string]ParamFieldMeta {
 	return out
 }
 
-// PickLocalized returns lang, then ru, then en, then any non-empty value.
+// PickLocalized returns lang, then en, then any non-empty value.
+// Russian is not a universal fallback (catalog policy: missing → English).
 func PickLocalized(m map[string]string, lang string) string {
 	if len(m) == 0 {
 		return ""
 	}
 	lang = NormalizeLang(lang)
-	for _, k := range []string{lang, "ru", "en"} {
+	for _, k := range []string{lang, "en"} {
 		if k == "" {
 			continue
 		}
@@ -365,10 +369,11 @@ func (inv InvariantPreset) ToProtocolPreset(lang string) ProtocolPreset {
 	}
 }
 
-// ResolveI18n picks lang, then ru, then en, then any.
+// ResolveI18n picks lang, then en, then any.
 func ResolveI18n(i18n map[string]LocalizedText, lang string) (title, description string) {
 	lang = NormalizeLang(lang)
-	try := []string{lang, "ru", "en"}
+	// Requested lang → English. Do not fall back to Russian for other langs.
+	try := []string{lang, "en"}
 	for _, k := range try {
 		if k == "" {
 			continue

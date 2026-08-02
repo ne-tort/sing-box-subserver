@@ -69,7 +69,7 @@
     "build_tag": "with_ssh"
   },
   "client_notes": {
-    "keys": "ensureCreds генерирует ed25519 PEM + authorized_keys; inbound users[].public_key",
+    "keys": "ensureCreds generates ed25519 PEM + authorized_keys; inbound users[].public_key",
     "params": "optional: server_version (inbound banner), client_version (outbound)"
   },
   "optional_param_fields": [

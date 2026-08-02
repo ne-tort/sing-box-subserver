@@ -72,14 +72,14 @@
     "packet_encoding": {
       "type": "enum",
       "widget": "select",
-      "enum": ["", "xudp", "packetaddr"],
+      "enum": ["none", "xudp", "packetaddr"],
       "default": "xudp",
       "ui_group": "core",
       "ui_order": 11,
       "title": {"en": "Packet encoding", "ru": "Packet encoding"},
       "description": {
-        "en": "UDP/full-cone encoding for outbound (xudp recommended).",
-        "ru": "Кодирование UDP для outbound (обычно xudp)."
+        "en": "UDP/full-cone encoding (xudp recommended). none omits the field.",
+        "ru": "Кодирование UDP (обычно xudp). none — поле не пишется."
       }
     },
     "fingerprint": {

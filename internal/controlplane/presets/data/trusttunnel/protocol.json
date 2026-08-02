@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "TrustTunnel",
-      "description": "TrustTunnel H2/H3 anti-DPI (with_trusttunnel)."
+      "description": "Anti-DPI туннель H2/H3. h2 — TCP TLS-слот; h3 — QUIC. Lab→usable в demux substitutes."
     },
     "en": {
       "title": "TrustTunnel",
-      "description": "TrustTunnel (with_trusttunnel)."
+      "description": "Anti-DPI H2/H3 tunnel. h2 = TCP TLS slot; h3 = QUIC. Lab→usable in demux substitutes."
     }
   },
   "default_cred_fields": [

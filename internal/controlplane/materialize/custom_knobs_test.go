@@ -148,8 +148,62 @@ func TestApplyAnyTLSAndDerpStockKnobs(t *testing.T) {
 	}
 	derp := map[string]any{"type": "derp", "udp": "native", "websocket": false}
 	applyDerpCustomKnobs(derp, "derp_tls", map[string]string{"udp": "disabled", "websocket": "true"}, true)
-	if derp["udp"] != "disabled" || derp["websocket"] != true {
+	// "disabled" was a historical UI value; wire only has native|uot → map to native.
+	if derp["udp"] != "native" || derp["websocket"] != true {
 		t.Fatalf("derp=%#v", derp)
+	}
+	applyDerpCustomKnobs(derp, "derp_tls", map[string]string{"udp": "udp_over_tcp"}, true)
+	if derp["udp"] != "uot" {
+		t.Fatalf("uot alias %#v", derp)
+	}
+}
+
+func TestApplyVlessLikeFlowNone(t *testing.T) {
+	t.Parallel()
+	m := map[string]any{
+		"type":            "vless",
+		"flow":            "none",
+		"packet_encoding": "none",
+		"transport":       map[string]any{"type": "tcp"},
+	}
+	applyVlessLikeCustomKnobs(m, "vless_custom", map[string]string{
+		"transport":       "tcp",
+		"flow":            "none",
+		"packet_encoding": "none",
+	})
+	if _, ok := m["flow"]; ok {
+		t.Fatalf("flow none must be stripped: %#v", m)
+	}
+	if _, ok := m["packet_encoding"]; ok {
+		t.Fatalf("packet_encoding none must be stripped: %#v", m)
+	}
+	m2 := map[string]any{"type": "vless", "transport": map[string]any{"type": "tcp"}}
+	applyVlessLikeCustomKnobs(m2, "vless_custom", map[string]string{
+		"transport": "tcp",
+		"flow":      "xtls-rprx-vision",
+	})
+	if m2["flow"] != "xtls-rprx-vision" {
+		t.Fatalf("flow=%v", m2["flow"])
+	}
+}
+
+func TestApplyStockUTLSAndSnell(t *testing.T) {
+	t.Parallel()
+	ob := map[string]any{
+		"type": "vless",
+		"tls": map[string]any{
+			"enabled": true,
+			"utls":    map[string]any{"enabled": true, "fingerprint": "chrome"},
+		},
+	}
+	applyStockUTLSFingerprint(ob, map[string]string{"fingerprint": "safari"})
+	if ob["tls"].(map[string]any)["utls"].(map[string]any)["fingerprint"] != "safari" {
+		t.Fatalf("%#v", ob["tls"])
+	}
+	sn := map[string]any{"type": "snell", "obfs_mode": "http", "obfs_host": "x"}
+	applySnellKnobs(sn, map[string]string{"obfs_mode": "off"})
+	if _, ok := sn["obfs_mode"]; ok {
+		t.Fatalf("obfs must be stripped: %#v", sn)
 	}
 }
 
@@ -189,5 +243,66 @@ func TestCleanupV2RayTransportGRPC(t *testing.T) {
 	}
 	if _, ok := tr["headers"]; ok {
 		t.Fatal("grpc must drop headers")
+	}
+}
+
+func TestApplyTrustTunnelCustomKnobs(t *testing.T) {
+	t.Parallel()
+	ob := map[string]any{
+		"type":        "trusttunnel",
+		"enable_udp":  true,
+		"transport":   map[string]any{"upstream_protocol": "auto", "anti_dpi": true},
+	}
+	applyTrustTunnelCustomKnobs(ob, "trusttunnel_custom", map[string]string{
+		"mode":                 "h2",
+		"anti_dpi":             "false",
+		"enable_udp":           "false",
+		"force_http1_connect":  "true",
+		"enable_protocol_fallback": "false",
+	})
+	tr := ob["transport"].(map[string]any)
+	if tr["upstream_protocol"] != "http2" {
+		t.Fatalf("upstream_protocol=%v want http2", tr["upstream_protocol"])
+	}
+	if tr["anti_dpi"] != false {
+		t.Fatalf("anti_dpi=%v", tr["anti_dpi"])
+	}
+	if tr["force_http1_connect"] != true {
+		t.Fatalf("force_http1_connect=%v", tr["force_http1_connect"])
+	}
+	if ob["enable_udp"] != false {
+		t.Fatalf("enable_udp=%v", ob["enable_udp"])
+	}
+	if normalizeTrustTunnelUpstream("h3") != "http3" {
+		t.Fatal("h3 alias")
+	}
+}
+
+func TestNormalizeDerpUDPAndShadowQUIC(t *testing.T) {
+	t.Parallel()
+	if normalizeDerpUDP("udp_over_tcp") != "uot" {
+		t.Fatal("uot alias")
+	}
+	if normalizeDerpUDP("disabled") != "native" {
+		t.Fatal("disabled→native")
+	}
+	derp := map[string]any{"type": "derp", "udp": "native", "websocket": false}
+	applyDerpCustomKnobs(derp, "derp_custom", map[string]string{"udp": "uot", "websocket": "true"}, true)
+	if derp["udp"] != "uot" || derp["websocket"] != true {
+		t.Fatalf("%#v", derp)
+	}
+	sq := map[string]any{"type": "shadowquic", "zero_rtt": true, "udp_over_stream": false}
+	applyShadowQUICKnobs(sq, map[string]string{
+		"congestion_control": "cubic",
+		"zero_rtt":           "false",
+		"udp_over_stream":    "true",
+	})
+	if sq["congestion_control"] != "cubic" || sq["zero_rtt"] != false || sq["udp_over_stream"] != true {
+		t.Fatalf("%#v", sq)
+	}
+	sqIn := map[string]any{"type": "shadowquic", "listen": "0.0.0.0"}
+	applyShadowQUICKnobs(sqIn, map[string]string{"udp_over_stream": "true"})
+	if _, ok := sqIn["udp_over_stream"]; ok {
+		t.Fatal("inbound must not set udp_over_stream")
 	}
 }

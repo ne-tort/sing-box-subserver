@@ -1,7 +1,7 @@
 {
   "param.ssh_custom.client_version.description": "Outbound SSH client_version string.",
-  "param.ssh_custom.client_version.help.input_hint": "protocol-specific value",
-  "param.ssh_custom.client_version.help.summary": "Outbound SSH client_version string; applied on inbound/outbound.",
+  "param.ssh_custom.client_version.help.input_hint": "value from docs / enum",
+  "param.ssh_custom.client_version.help.summary": "Outbound SSH client_version string. Controls the generated sing-box object.",
   "param.ssh_custom.client_version.title": "Client version",
   "param.ssh_custom.server_version.description": "SSH version banner shown to clients.",
   "param.ssh_custom.server_version.help.input_hint": "SSH-2.0-…",

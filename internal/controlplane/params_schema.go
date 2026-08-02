@@ -171,7 +171,10 @@ func paramFieldSchema(field string, pp domain.ProtocolPreset, lang string) map[s
 		"help":        paramFieldHelp(field, pp, lang),
 	}
 	m = enrichFieldSchema(m, meta, lang)
-	if guide := paramFieldRequiredGuide(field, pp, lang); guide != nil {
+	if guides := paramFieldRequiredGuides(field, pp, lang); len(guides) > 0 {
+		m["required_guides"] = guides
+		m["required_guide"] = guides[0]
+	} else if guide := paramFieldRequiredGuide(field, pp, lang); guide != nil {
 		m["required_guide"] = guide
 	}
 	return m
@@ -538,21 +541,57 @@ func paramFieldHelp(field string, pp domain.ProtocolPreset, lang string) map[str
 	}
 }
 
+func localizeGuideMeta(g domain.ParamGuideMeta, lang string) map[string]any {
+	steps := make([]any, 0, len(g.Steps))
+	for _, s := range g.Steps {
+		step := map[string]any{"text": domain.PickLocalized(s.Text, lang)}
+		if u := strings.TrimSpace(s.URL); u != "" {
+			step["url"] = u
+		}
+		steps = append(steps, step)
+	}
+	out := map[string]any{
+		"title": domain.PickLocalized(g.Title, lang),
+		"steps": steps,
+	}
+	if len(g.VisibleWhen) > 0 {
+		conds := make([]any, 0, len(g.VisibleWhen))
+		for _, c := range g.VisibleWhen {
+			cm := map[string]any{"key": c.Key}
+			if c.Equals != "" {
+				cm["equals"] = c.Equals
+			}
+			if len(c.In) > 0 {
+				cm["in"] = append([]string{}, c.In...)
+			}
+			if c.NotEmpty {
+				cm["not_empty"] = true
+			}
+			conds = append(conds, cm)
+		}
+		out["visible_when"] = conds
+	}
+	return out
+}
+
+func paramFieldRequiredGuides(field string, pp domain.ProtocolPreset, lang string) []map[string]any {
+	m, ok := pp.ParamMeta[field]
+	if !ok || len(m.RequiredGuides) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(m.RequiredGuides))
+	for _, g := range m.RequiredGuides {
+		if len(g.Steps) == 0 {
+			continue
+		}
+		out = append(out, localizeGuideMeta(g, lang))
+	}
+	return out
+}
+
 func paramFieldRequiredGuide(field string, pp domain.ProtocolPreset, lang string) map[string]any {
 	if m, ok := pp.ParamMeta[field]; ok && m.RequiredGuide != nil && len(m.RequiredGuide.Steps) > 0 {
-		g := m.RequiredGuide
-		steps := make([]any, 0, len(g.Steps))
-		for _, s := range g.Steps {
-			step := map[string]any{"text": domain.PickLocalized(s.Text, lang)}
-			if u := strings.TrimSpace(s.URL); u != "" {
-				step["url"] = u
-			}
-			steps = append(steps, step)
-		}
-		return map[string]any{
-			"title": domain.PickLocalized(g.Title, lang),
-			"steps": steps,
-		}
+		return localizeGuideMeta(*m.RequiredGuide, lang)
 	}
 	switch field {
 	case "room":

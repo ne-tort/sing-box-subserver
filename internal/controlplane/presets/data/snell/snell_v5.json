@@ -68,10 +68,11 @@
     "version": "inbound v5 ~ outbound v4 wire",
     "psk": "peer_symmetric",
     "userkey": "user_symmetric",
-    "params": "optional bindings[].params overrides: obfs_host"
+    "params": "optional: obfs_mode, obfs_host"
   },
   "optional_param_fields": [
-    "obfs_host"
+    "obfs_host",
+    "obfs_mode"
   ],
   "param_meta": {
     "obfs_host": {
@@ -98,6 +99,37 @@
           "ru": "Hostname без схемы"
         },
         "format": "www.bing.com"
+      }
+    },
+    "obfs_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "http",
+        "tls"
+      ],
+      "default": "http",
+      "ui_group": "obfs",
+      "ui_order": 40,
+      "title": {
+        "en": "Obfs mode",
+        "ru": "Obfs mode"
+      },
+      "description": {
+        "en": "Snell obfs_mode: off|http|tls.",
+        "ru": "Snell obfs_mode: off|http|tls."
+      },
+      "help": {
+        "summary": {
+          "en": "Snell obfuscation. off strips obfs; http/tls need a believable obfs_host.",
+          "ru": "Obfuscation Snell. off снимает obfs; http/tls требуют правдоподобный obfs_host."
+        },
+        "input_hint": {
+          "en": "off|http|tls",
+          "ru": "off|http|tls"
+        },
+        "format": "http"
       }
     }
   }

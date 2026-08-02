@@ -104,13 +104,14 @@
     "reality_assignment": true
   },
   "client_notes": {
-    "flow": "Vision/XTLS несовместим с HTTPUpgrade — только flow-none",
+    "flow": "Vision/XTLS is incompatible with HTTPUpgrade — use flow-none only",
     "params": "optional bindings[].params overrides: hu_host, hu_path",
     "hu_path_default": "/vless-hu"
   },
   "optional_param_fields": [
     "hu_path",
-    "hu_host"
+    "hu_host",
+    "fingerprint"
   ],
   "param_meta": {
     "hu_path": {
@@ -140,6 +141,41 @@
       "description": {
         "en": "Host for HTTPUpgrade transport.",
         "ru": "Host для HTTPUpgrade."
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
       }
     }
   }

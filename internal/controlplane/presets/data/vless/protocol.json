@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "VLESS",
-      "description": "Лёгкий UUID-транспорт; часто с TLS/Reality."
+      "description": "Лёгкий UUID-транспорт. С Reality — эталон обхода DPI/ТСПУ на TCP:443. Транспорты WS/gRPC/HTTP меняют post-TLS картину; Vision — только TCP."
     },
     "en": {
       "title": "VLESS",
-      "description": "Лёгкий UUID-транспорт; часто с TLS/Reality."
+      "description": "Light UUID transport. With Reality — reference DPI bypass on TCP:443. WS/gRPC/HTTP change post-TLS shape; Vision is TCP-only."
     }
   },
   "default_cred_fields": [

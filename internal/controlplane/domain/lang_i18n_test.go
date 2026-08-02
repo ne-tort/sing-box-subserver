@@ -68,3 +68,44 @@ func TestNoEnglishStubDescriptions(t *testing.T) {
 		}
 	}
 }
+
+func TestNoCyrillicInEnglishCatalog(t *testing.T) {
+	cyr := false
+	for _, r := range "Аа" {
+		_ = r
+		cyr = true
+		break
+	}
+	_ = cyr
+	check := func(kind, tag, field string) {
+		t.Helper()
+		var d string
+		switch kind {
+		case "protocol":
+			d = cpi18n.Protocol(tag, field, "en")
+		case "preset":
+			d = cpi18n.Preset(tag, field, "en")
+		}
+		for _, r := range d {
+			if r >= 0x0400 && r <= 0x04FF {
+				t.Fatalf("%s.%s.%s en has Cyrillic: %q", kind, tag, field, d)
+			}
+		}
+	}
+	for _, tag := range []string{"http", "vless", "trojan", "tuic", "vmess", "shadowsocks", "socks", "hysteria2"} {
+		check("protocol", tag, "description")
+	}
+	for _, tag := range []string{"anytls", "mieru_tcp", "vless_reality", "hy2"} {
+		check("preset", tag, "description")
+	}
+}
+
+func TestPickLocalizedFallsBackToEnglish(t *testing.T) {
+	m := map[string]string{"ru": "русский", "en": "english"}
+	if got := domain.PickLocalized(m, "fr"); got != "english" {
+		t.Fatalf("PickLocalized fr: got %q want english", got)
+	}
+	if got := domain.PickLocalized(m, "ru"); got != "русский" {
+		t.Fatalf("PickLocalized ru: got %q", got)
+	}
+}

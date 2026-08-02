@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "Hysteria v1",
-      "description": "Hysteria 1 (legacy QUIC); предпочтительнее hysteria2."
+      "description": "Legacy QUIC. Берите Hysteria2, если нет жёсткой совместимости."
     },
     "en": {
       "title": "Hysteria v1",
-      "description": "Legacy Hysteria 1."
+      "description": "Legacy QUIC. Prefer Hysteria2 unless you need hard compatibility."
     }
   },
   "default_cred_fields": [

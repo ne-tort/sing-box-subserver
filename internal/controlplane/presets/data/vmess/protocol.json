@@ -7,11 +7,11 @@
   "i18n": {
     "ru": {
       "title": "VMess",
-      "description": "UUID-транспорт VMess (AES/auto)."
+      "description": "UUID-транспорт VMess. Покрытие разнообразия; не приоритет demux."
     },
     "en": {
       "title": "VMess",
-      "description": "UUID-транспорт VMess (AES/auto)."
+      "description": "UUID VMess transport. Diversity coverage; not a demux priority."
     }
   },
   "default_cred_fields": [

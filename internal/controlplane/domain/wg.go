@@ -73,6 +73,10 @@ func (h *WgHub) Normalize() {
 	if h.ListenPort == 0 {
 		h.ListenPort = WgDefaultListenPort
 	}
+	// AmneziaWG profiles prefer a lower MTU; plain WG keeps template default unless set.
+	if h.MTU <= 0 && (h.Profile == WgProfileAWG2 || h.Profile == WgProfileAWG3) {
+		h.MTU = 1280
+	}
 }
 
 // Validate checks profile, subnet, and forward/system coupling.

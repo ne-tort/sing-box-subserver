@@ -88,7 +88,7 @@
     "quic": true
   },
   "client_notes": {
-    "masquerade": "inbound-only: клиенту не нужен; DPI/пробы видят HTML ответ"
+    "masquerade": "inbound-only: not needed on client; DPI/probes see an HTML response"
   },
   "optional_param_fields": [
     "up_mbps",

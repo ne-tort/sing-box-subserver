@@ -87,6 +87,6 @@
     "sec-auto"
   ],
   "client_notes": {
-    "utls": "uTLS несовместим с transport quic/hysteria"
+    "utls": "uTLS is incompatible with transport quic/hysteria"
   }
 }

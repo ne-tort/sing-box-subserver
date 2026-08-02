@@ -76,13 +76,14 @@
     }
   },
   "client_notes": {
-    "handshake": "SNI/handshake server должен быть доступен с edge; outbound tls.server_name обычно совпадает",
-    "detour": "часто ставят SS/VLESS за ShadowTLS — в CP пока standalone proxy",
+    "handshake": "SNI/handshake server must be reachable from the edge; outbound tls.server_name usually matches",
+    "detour": "often front SS/VLESS behind ShadowTLS — CP currently exposes a standalone proxy",
     "params": "optional bindings[].params overrides: handshake_server"
   },
   "optional_param_fields": [
     "handshake_server",
-    "strict_mode"
+    "strict_mode",
+    "fingerprint"
   ],
   "param_meta": {
     "handshake_server": {
@@ -124,6 +125,41 @@
           "ru": "true|false"
         },
         "format": "true"
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
       }
     }
   }
