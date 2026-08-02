@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "tag": "vless_hysteria_tls",
+  "protocol": "vless",
+  "aliases": [
+    "vless-hysteria-tls"
+  ],
+  "short_name": "VLESS Hy",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "VLESS Hysteria TLS",
+      "description": "vless + TLS + transport.type=hysteria (HY2 QUIC/H3 auth; Xray method=hysteria). Не путать с type:hysteria2."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "hysteria"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "peer_secret_fields": {
+    "hy_auth": "password"
+  },
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "transport": {
+      "type": "hysteria",
+      "password": "{{peer.hy_auth}}",
+      "version": 2
+    }
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "transport": {
+      "type": "hysteria",
+      "password": "{{peer.hy_auth}}",
+      "version": 2
+    },
+    "packet_encoding": "xudp"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_hysteria_transport"
+  },
+  "default_user_variants": [
+    "flow-none"
+  ],
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
+  "client_notes": {
+    "flow": "Vision/XTLS is incompatible with hysteria transport — use flow-none only",
+    "hy_auth": "peer_symmetric: set.peer_secrets[preset/hy_auth] (Xray hysteriaSettings.auth)",
+    "vs_hy2": "not type:hysteria2; no up_mbps/obfs/salamander — password+version=2 only",
+    "utls": "uTLS is incompatible with transport quic/hysteria"
+  }
+}

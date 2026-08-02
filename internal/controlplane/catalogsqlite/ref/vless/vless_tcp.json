@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "tag": "vless_tcp",
+  "protocol": "vless",
+  "aliases": [
+    "vless-tcp"
+  ],
+  "short_name": "VLESS TCP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VLESS TCP",
+      "description": "VLESS TCP без TLS (plaintext UUID) — для внутренней сети; для DPI используйте tls/reality."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "often a demux inject target",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 3,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 8
+  },
+  "cred_fields": [
+    "uuid",
+    "uuid_xtls",
+    "uuid_udp"
+  ],
+  "default_user_variants": [
+    "flow-none",
+    "flow-xtls-rprx-vision"
+  ],
+  "inbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": []
+  },
+  "outbound_template": {
+    "type": "vless",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "uuid": "{{user.uuid}}"
+  },
+  "client_notes": {
+    "variants": "flow-none / xtls-rprx-vision / udp-vision — separate inbound users"
+  }
+}

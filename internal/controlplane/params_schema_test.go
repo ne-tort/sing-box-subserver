@@ -45,13 +45,17 @@ func TestParamsSchemaCarrierRoomRequired(t *testing.T) {
 }
 
 func TestParamsSchemaVlessNoRequiredExtras(t *testing.T) {
+	// Stock Reality is now a ready preset on the VLESS constructor (full schema).
 	inv, err := presets.GetInvariant("vless_reality")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pp := inv.ToProtocolPreset("en")
-	if len(pp.ParamFields) != 0 {
-		t.Fatalf("unexpected param_fields=%v", pp.ParamFields)
+	if !pp.CustomPreset {
+		t.Fatal("vless_reality must be custom_preset (constructor schema)")
+	}
+	if len(pp.ParamFields) == 0 {
+		t.Fatal("expected constructor required param_fields")
 	}
 	schema := buildParamsSchema(pp, false)
 	for k, v := range schema {
@@ -62,16 +66,15 @@ func TestParamsSchemaVlessNoRequiredExtras(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: expected map, got %T", k, v)
 		}
-		if req, _ := m["required"].(bool); req {
+		// Only constructor required keys may be required.
+		if req, _ := m["required"].(bool); req && k != "transport" && k != "tls_mode" && k != "listen_port" {
 			t.Fatalf("%s unexpectedly required", k)
 		}
 	}
 	if ver, ok := schema["_schema_version"].(int); !ok || ver != 2 {
 		t.Fatalf("_schema_version want 2, got %#v", schema["_schema_version"])
 	}
-	if _, ok := schema["sni"]; ok {
-		t.Fatal("reality preset must not expose ACME sni in list schema")
-	}
+	// Full constructor schema may expose ACME sni (user can switch tls_mode to tls).
 }
 
 func TestParamsSchemaTlsListExposesSNI(t *testing.T) {

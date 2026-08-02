@@ -141,18 +141,25 @@ func TestProtocolsCatalog(t *testing.T) {
 }
 
 func TestEnrichmentTLSandTransportPresent(t *testing.T) {
+	// VLESS is served from catalogsqlite: base constructor templates + ready overrides.
 	p, err := Get("vless_ws_tls")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !p.CustomPreset {
+		t.Fatal("vless_ws_tls must expose full custom schema")
+	}
+	if p.ParamMeta["transport"].Default != "ws" {
+		t.Fatalf("transport default=%q", p.ParamMeta["transport"].Default)
+	}
 	tls, _ := p.OutboundTemplate["tls"].(map[string]any)
 	utls, _ := tls["utls"].(map[string]any)
-	if utls["fingerprint"] != "chrome" {
+	if utls["fingerprint"] != "{{param.fingerprint}}" {
 		t.Fatalf("utls=%v", utls)
 	}
 	tr, _ := p.InboundTemplate["transport"].(map[string]any)
-	if tr["max_early_data"] == nil {
-		t.Fatalf("ws early data missing: %v", tr)
+	if tr["type"] != "{{param.transport}}" {
+		t.Fatalf("transport type=%v", tr["type"])
 	}
 	hy, err := Get("hy2")
 	if err != nil {

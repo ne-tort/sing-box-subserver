@@ -75,12 +75,11 @@ func TestParamsSchemaCommonFallbackWS(t *testing.T) {
 	}
 	pp := inv.ToProtocolPreset("en")
 	schema := buildParamsSchemaLang(pp, true, "en")
-	path, ok := schema["ws_path"].(map[string]any)
+	path, ok := schema["transport_path"].(map[string]any)
 	if !ok {
-		t.Fatal("ws_path missing")
+		t.Fatal("transport_path missing")
 	}
-	help, _ := path["help"].(map[string]any)
-	if help["summary"] == nil || help["summary"] == "" {
-		t.Fatalf("ws_path help missing: %#v", path)
+	if path["title"] == nil || path["title"] == "" {
+		t.Fatalf("transport_path title missing: %#v", path)
 	}
 }

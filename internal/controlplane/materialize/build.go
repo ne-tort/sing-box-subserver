@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/catalogsqlite"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
 	"golang.org/x/crypto/curve25519"
@@ -758,6 +759,11 @@ func paramDefaultsForPreset(name string) map[string]string {
 // Template substitution already merges via applyBindingParamVars; knobs need the same
 // effective map so optional_param_fields (e.g. Hy2 up/down Mbps) are not ignored.
 func effectiveKnobParams(params map[string]string, presetName string) map[string]string {
+	if catalogsqlite.Owns(presetName) {
+		if out, err := catalogsqlite.EffectiveParams(presetName, params); err == nil {
+			return out
+		}
+	}
 	out := map[string]string{}
 	for k, v := range paramDefaultsForPreset(presetName) {
 		if strings.TrimSpace(v) != "" {

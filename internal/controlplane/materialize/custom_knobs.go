@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/catalogsqlite"
 )
 
 func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[string]string) {
@@ -237,8 +239,10 @@ func applyHy2CustomKnobs(m map[string]any, preset string, params map[string]stri
 }
 
 func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	switch preset {
-	case "vless_custom", "trojan_custom", "vmess_custom":
+	switch {
+	case preset == "vless_custom", preset == "trojan_custom", preset == "vmess_custom":
+	case catalogsqlite.Owns(preset):
+		// VLESS ready/base from SQLite use constructor templates + knobs.
 	default:
 		return
 	}
