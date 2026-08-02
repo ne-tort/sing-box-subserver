@@ -1499,6 +1499,90 @@ func firstInbound(t *testing.T, doc map[string]any) map[string]any {
 	return ib
 }
 
+// Synthetic smoke: catalogsqlite ready tags materialize with constructor defaults.
+func TestCatalogsqliteVlessReadyMatrix(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	tls := domain.DefaultSelfSigned("h.example")
+	cases := []struct {
+		tag       string
+		wantTr    string
+		wantTLS   bool
+		wantReality bool
+	}{
+		{"vless_tcp", "", false, false},
+		{"vless_tls", "", true, false},
+		{"vless_ws_tls", "ws", true, false},
+		{"vless_grpc_tls", "grpc", true, false},
+		{"vless_quic_tls", "quic", true, false},
+		{"vless_custom", "", true, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.tag, func(t *testing.T) {
+			t.Parallel()
+			set := domain.InboundSet{
+				Name: "m1", Listen: "0.0.0.0", ListenPort: 443,
+				Presets: []string{tc.tag},
+			}
+			user := domain.User{
+				Name: "u1", Enabled: true, CreatedAt: now,
+				Creds: map[string]map[string]any{
+					tc.tag: {
+						"uuid":      "11111111-2222-3333-4444-555555555555",
+						"uuid_xtls": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+						"uuid_udp":  "99999999-8888-7777-6666-555555555555",
+					},
+				},
+			}
+			raw, err := Build(Input{
+				PublicHost:  "h.example",
+				DataDir:     "/data",
+				TLS:         tls,
+				TLSCertPath: "/data/controlplane/tls/server.crt",
+				TLSKeyPath:  "/data/controlplane/tls/server.key",
+				ActiveSets:  []domain.InboundSet{set},
+				Users:       []domain.User{user},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc map[string]any
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				t.Fatal(err)
+			}
+			ib := firstInbound(t, doc)
+			if ib["type"] != "vless" {
+				t.Fatalf("type=%v", ib["type"])
+			}
+			_, hasTLS := ib["tls"]
+			if hasTLS != tc.wantTLS {
+				t.Fatalf("tls present=%v want=%v", hasTLS, tc.wantTLS)
+			}
+			tr, _ := ib["transport"].(map[string]any)
+			if tc.wantTr == "" {
+				if tr != nil {
+					t.Fatalf("expected no transport, got %v", tr)
+				}
+			} else if tr["type"] != tc.wantTr {
+				t.Fatalf("transport=%v want %s", tr, tc.wantTr)
+			}
+			body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sub map[string]any
+			if err := json.Unmarshal(body, &sub); err != nil {
+				t.Fatal(err)
+			}
+			outs, _ := sub["outbounds"].([]any)
+			if len(outs) == 0 {
+				t.Fatal("subscription empty")
+			}
+		})
+	}
+}
+
 func assertSubInsecure(t *testing.T, body []byte, want bool) {
 	t.Helper()
 	var doc map[string]any

@@ -177,6 +177,10 @@ func loadReadyByTag(conn *sql.DB, tag string) (domain.InvariantPreset, error) {
 	if err != nil {
 		return domain.InvariantPreset{}, err
 	}
+	inv, err := cloneInvariant(base)
+	if err != nil {
+		return domain.InvariantPreset{}, err
+	}
 	var shortName, status string
 	var aliases, traits, scores, demux, reqs, creds, variants, profiles, i18n, notes string
 	var inTpl, outTpl, epTpl sql.NullString
@@ -190,14 +194,14 @@ FROM ready_presets WHERE tag = ?`, tag).Scan(
 	if err != nil {
 		return domain.InvariantPreset{}, fmt.Errorf("ready %q: %w", tag, err)
 	}
-	inv := base
 	inv.Tag = tag
 	inv.ShortName = shortName
 	inv.Status = status
 	inv.CustomPreset = true // ready edits use full base schema
 	_ = json.Unmarshal([]byte(aliases), &inv.Aliases)
 	_ = json.Unmarshal([]byte(traits), &inv.Traits)
-	_ = json.Unmarshal([]byte(creds), &inv.CredFields)
+	// CredFields / generators / peer secrets stay from base (full constructor).
+	_ = creds
 	_ = json.Unmarshal([]byte(variants), &inv.DefaultUserVariants)
 	_ = json.Unmarshal([]byte(profiles), &inv.DefaultClientProfiles)
 	if scores != "" && scores != "null" {
@@ -220,37 +224,56 @@ FROM ready_presets WHERE tag = ?`, tag).Scan(
 	}
 	_ = json.Unmarshal([]byte(i18n), &inv.I18n)
 	_ = json.Unmarshal([]byte(notes), &inv.ClientNotes)
+	// Own templates must REPLACE base maps entirely (json.Unmarshal merges into existing maps).
 	if inTpl.Valid && inTpl.String != "" {
-		_ = json.Unmarshal([]byte(inTpl.String), &inv.InboundTemplate)
+		inv.InboundTemplate = map[string]any{}
+		if err := json.Unmarshal([]byte(inTpl.String), &inv.InboundTemplate); err != nil {
+			return inv, err
+		}
 	}
 	if outTpl.Valid && outTpl.String != "" {
-		_ = json.Unmarshal([]byte(outTpl.String), &inv.OutboundTemplate)
+		inv.OutboundTemplate = map[string]any{}
+		if err := json.Unmarshal([]byte(outTpl.String), &inv.OutboundTemplate); err != nil {
+			return inv, err
+		}
 	}
 	if epTpl.Valid && epTpl.String != "" {
-		_ = json.Unmarshal([]byte(epTpl.String), &inv.EndpointTemplate)
+		inv.EndpointTemplate = map[string]any{}
+		if err := json.Unmarshal([]byte(epTpl.String), &inv.EndpointTemplate); err != nil {
+			return inv, err
+		}
 	}
 	// Apply ready overrides as ParamMeta defaults (UI prefill + materialize defaults).
-	overrides := map[string]string{}
 	rows, err := conn.Query(`SELECT key,value FROM ready_param_values WHERE ready_tag = ?`, tag)
 	if err != nil {
 		return inv, err
 	}
 	defer rows.Close()
+	if inv.ParamMeta == nil {
+		inv.ParamMeta = map[string]domain.ParamFieldMeta{}
+	}
 	for rows.Next() {
 		var k, v string
 		if err := rows.Scan(&k, &v); err != nil {
 			return inv, err
 		}
-		overrides[k] = v
 		meta := inv.ParamMeta[k]
 		meta.Default = v
-		if inv.ParamMeta == nil {
-			inv.ParamMeta = map[string]domain.ParamFieldMeta{}
-		}
 		inv.ParamMeta[k] = meta
 	}
-	_ = overrides
 	return inv, nil
+}
+
+func cloneInvariant(in domain.InvariantPreset) (domain.InvariantPreset, error) {
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return domain.InvariantPreset{}, err
+	}
+	var out domain.InvariantPreset
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return domain.InvariantPreset{}, err
+	}
+	return out, nil
 }
 
 func baseTagForProtocol(conn *sql.DB, protocol string) (string, error) {

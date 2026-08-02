@@ -49,7 +49,6 @@ func importVlessRef(conn *sql.DB) error {
 	if proto.Tag == "" || base.Tag == "" {
 		return fmt.Errorf("vless ref incomplete: protocol=%q base=%q", proto.Tag, base.Tag)
 	}
-	sanitizeConstructorTemplates(&base)
 	if err := insertProtocol(conn, proto); err != nil {
 		return err
 	}
@@ -236,6 +235,7 @@ func marshalPresetRow(inv domain.InvariantPreset) (presetJSONRow, error) {
 
 func readyNeedsOwnTemplates(tag string) bool {
 	// Stock templates not fully expressible via base constructor params yet.
+	// Own templates REPLACE base templates entirely (see loadReadyByTag clone+replace).
 	switch tag {
 	case "vless_tls_mux", "vless_hysteria_tls":
 		return true
@@ -244,36 +244,18 @@ func readyNeedsOwnTemplates(tag string) bool {
 	}
 }
 
-func sanitizeConstructorTemplates(inv *domain.InvariantPreset) {
-	stripTransportPeerPassword(inv.InboundTemplate)
-	stripTransportPeerPassword(inv.OutboundTemplate)
-}
-
-func stripTransportPeerPassword(tpl map[string]any) {
-	if tpl == nil {
-		return
-	}
-	tr, _ := tpl["transport"].(map[string]any)
-	if tr == nil {
-		return
-	}
-	if pw, _ := tr["password"].(string); strings.Contains(pw, "{{peer.") {
-		delete(tr, "password")
-	}
-}
-
 // inferReadyOverrides maps a legacy stock VLESS tag onto base constructor params.
 func inferReadyOverrides(tag string, inv domain.InvariantPreset) map[string]string {
 	out := map[string]string{
-		"transport":        "tcp",
-		"tls_mode":         "tls",
-		"flow":             "none",
-		"packet_encoding":  "xudp",
-		"fingerprint":      "chrome",
-		"transport_path":   "/vless",
-		"transport_host":   "{{server}}",
-		"service_name":     "GunService",
-		"alpn":             "h2,http/1.1",
+		"transport":       "tcp",
+		"tls_mode":        "tls",
+		"flow":            "none",
+		"packet_encoding": "xudp",
+		"fingerprint":     "chrome",
+		"transport_path":  "/vless",
+		"transport_host":  "{{server}}",
+		"service_name":    "GunService",
+		"alpn":            "h2,http/1.1",
 	}
 	switch {
 	case strings.Contains(tag, "_ws_"):
@@ -289,6 +271,7 @@ func inferReadyOverrides(tag string, inv domain.InvariantPreset) map[string]stri
 		out["alpn"] = "h3"
 	case strings.Contains(tag, "_hysteria_"):
 		out["transport"] = "hysteria"
+		out["alpn"] = "h3"
 	case tag == "vless_tcp":
 		out["transport"] = "tcp"
 		out["tls_mode"] = "none"

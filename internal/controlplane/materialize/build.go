@@ -271,6 +271,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		for field, val := range peerSecretsForPreset(set, p.Name) {
 			vars["{{peer."+field+"}}"] = val
 		}
+		fillEmptyPeerPlaceholders(vars, p.Name)
 		slotParams := paramsForDemuxSlot(b.Params, p.Protocol, slotSNI)
 		applyBindingParamVars(vars, slotParams, paramDefaultsForPreset(p.Name))
 		ib, err = substituteMap(ib, vars)
@@ -705,6 +706,22 @@ func peerSecretsForPreset(set domain.InboundSet, preset string) map[string]strin
 func applyPeerSecretVars(vars map[string]string, set domain.InboundSet, preset string) {
 	for field, val := range peerSecretsForPreset(set, preset) {
 		vars["{{peer."+field+"}}"] = val
+	}
+	fillEmptyPeerPlaceholders(vars, preset)
+}
+
+// fillEmptyPeerPlaceholders ensures {{peer.*}} keys from the preset schema exist
+// (empty string) so optional constructor fields like hy_auth do not leave unresolved tokens.
+func fillEmptyPeerPlaceholders(vars map[string]string, preset string) {
+	inv, err := presets.GetInvariant(preset)
+	if err != nil {
+		return
+	}
+	for field := range inv.PeerSecretFields {
+		key := "{{peer." + field + "}}"
+		if _, ok := vars[key]; !ok {
+			vars[key] = ""
+		}
 	}
 }
 

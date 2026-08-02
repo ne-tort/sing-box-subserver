@@ -4,7 +4,7 @@
 
 | Protocol | A catalog | B params | C meta | D custom | E i18n | F demux | Notes |
 |----------|-----------|----------|--------|----------|--------|---------|-------|
-| vless | [x] | [x] | [x] | [x] | [x] | [x] | **catalogsqlite pilot**: base=`vless_custom` + ready overrides; JSON `presets/data/vless` not on hot path |
+| vless | [x] | [x] | [x] | [x] | [x] | [x] | **catalogsqlite pilot (prod path)**: base=`vless_custom` + ready overrides; ready → full constructor schema (`custom_preset`); own templates only mux/hysteria (replace, not merge) |
 | hysteria2 | [x] | [x] | [x] | [x] | [x] | [x] | bandwidth + ignore_client_bandwidth; first_bytes |
 | wireguard | [x] | [x] | [x] | [x] | [x] | n/a | hub PUT mtu/awg/s/h + masquerade or manual i1–i5; wg_custom schema-only |
 | trojan | [x] | [x] | [x] | [x] | [x] | [x] | constructor = transport + tls_mode |
