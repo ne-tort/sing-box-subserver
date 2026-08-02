@@ -6,11 +6,23 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/catalogsqlite"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	cpi18n "github.com/ne-tort/sing-box-subserver/internal/controlplane/presets/i18n"
 )
 
 const paramsSchemaVersion = 2
+
+// paramI18nPreset is the locale key namespace for param.* copy.
+// Catalogsqlite ready presets reuse the base constructor locale keys.
+func paramI18nPreset(pp domain.ProtocolPreset) string {
+	if catalogsqlite.Owns(pp.Name) {
+		if base := catalogsqlite.KnobProfile(pp.Name); base != "" {
+			return base
+		}
+	}
+	return pp.Name
+}
 
 // buildParamsSchema returns the thin-client form schema for a preset (lang=en).
 func buildParamsSchema(pp domain.ProtocolPreset, detail bool) map[string]any {
@@ -373,7 +385,7 @@ func presetOptionalParamsDetailLang(pp domain.ProtocolPreset, lang string) map[s
 }
 
 func paramFieldTitle(field string, pp domain.ProtocolPreset, lang string) string {
-	if t := cpi18n.Param(pp.Name, field, "title", lang); t != "" {
+	if t := cpi18n.Param(paramI18nPreset(pp), field, "title", lang); t != "" {
 		return t
 	}
 	if m, ok := pp.ParamMeta[field]; ok {
@@ -416,7 +428,7 @@ func paramFieldTitle(field string, pp domain.ProtocolPreset, lang string) string
 }
 
 func paramFieldDescription(field string, pp domain.ProtocolPreset, lang string) string {
-	if t := cpi18n.Param(pp.Name, field, "description", lang); t != "" {
+	if t := cpi18n.Param(paramI18nPreset(pp), field, "description", lang); t != "" {
 		return t
 	}
 	if m, ok := pp.ParamMeta[field]; ok {
@@ -471,11 +483,13 @@ func paramFieldDescription(field string, pp domain.ProtocolPreset, lang string) 
 
 func paramFieldHelp(field string, pp domain.ProtocolPreset, lang string) map[string]any {
 	// Locale files win (thin-client source of truth for copy).
-	if s := cpi18n.Param(pp.Name, field, "help.summary", lang); s != "" {
+	// Ready presets share constructor param copy under the base tag (e.g. vless_custom).
+	i18nPreset := paramI18nPreset(pp)
+	if s := cpi18n.Param(i18nPreset, field, "help.summary", lang); s != "" {
 		return map[string]any{
 			"summary":    s,
-			"input_hint": cpi18n.Param(pp.Name, field, "help.input_hint", lang),
-			"format":     cpi18n.Param(pp.Name, field, "help.format", lang),
+			"input_hint": cpi18n.Param(i18nPreset, field, "help.input_hint", lang),
+			"format":     cpi18n.Param(i18nPreset, field, "help.format", lang),
 		}
 	}
 	if m, ok := pp.ParamMeta[field]; ok && m.Help != nil {

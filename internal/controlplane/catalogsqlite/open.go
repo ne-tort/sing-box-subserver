@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -17,42 +19,49 @@ var schemaSQL string
 //go:embed ref/vless
 var vlessRefFS embed.FS
 
+//go:embed data/vless.sqlite
+var vlessSQLite []byte
+
 var (
 	bootOnce sync.Once
 	bootErr  error
 	db       *sql.DB
 )
 
-// DB returns the read-only in-memory catalog. Safe for concurrent queries.
+// DB returns the read-only catalog. Safe for concurrent queries.
 func DB() (*sql.DB, error) {
 	bootOnce.Do(func() {
-		bootErr = openAndSeed()
+		bootErr = openCatalog()
 	})
 	return db, bootErr
 }
 
-func openAndSeed() error {
-	conn, err := sql.Open("sqlite", "file:catalogv2?mode=memory&cache=shared")
+func openCatalog() error {
+	if len(vlessSQLite) == 0 {
+		return fmt.Errorf("catalogsqlite: embedded data/vless.sqlite is empty — run: go run -tags with_controlplane ./cmd/gen-catalogsqlite-vless")
+	}
+	dir, err := os.MkdirTemp("", "cp-catalogsqlite-*")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "vless.sqlite")
+	if err := os.WriteFile(path, vlessSQLite, 0o444); err != nil {
+		return err
+	}
+	dsn := "file:" + filepath.ToSlash(path) + "?mode=ro&_pragma=query_only(ON)"
+	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("catalogsqlite open: %w", err)
 	}
 	conn.SetMaxOpenConns(1)
-	if _, err := conn.Exec(schemaSQL); err != nil {
+	var n int
+	if err := conn.QueryRow(`SELECT COUNT(1) FROM ready_presets`).Scan(&n); err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("catalogsqlite schema: %w", err)
+		return fmt.Errorf("catalogsqlite probe: %w", err)
 	}
-	if err := importVlessRef(conn); err != nil {
+	if n < 5 {
 		_ = conn.Close()
-		return fmt.Errorf("catalogsqlite seed vless: %w", err)
-	}
-	if _, err := conn.Exec(`INSERT INTO meta(key,value) VALUES('schema_version','1'),('pilot_protocol','vless')`); err != nil {
-		_ = conn.Close()
-		return err
-	}
-	// Enforce read-only after seed.
-	if _, err := conn.Exec(`PRAGMA query_only = ON`); err != nil {
-		_ = conn.Close()
-		return err
+		return fmt.Errorf("catalogsqlite: ready_presets too small (%d)", n)
 	}
 	db = conn
 	return nil

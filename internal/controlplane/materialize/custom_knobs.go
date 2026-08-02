@@ -263,6 +263,59 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 	} else {
 		m["packet_encoding"] = enc
 	}
+	applyVlessMultiplexKnob(m, params)
+	applyVlessWSEarlyDataKnob(m, params)
+}
+
+func applyVlessMultiplexKnob(m map[string]any, params map[string]string) {
+	mux := strings.ToLower(strings.TrimSpace(params["multiplex"]))
+	if mux == "" || mux == "none" || mux == "false" || mux == "0" {
+		delete(m, "multiplex")
+		return
+	}
+	_, isInbound := m["listen"]
+	if isInbound {
+		m["multiplex"] = map[string]any{"enabled": true, "padding": true}
+		return
+	}
+	m["multiplex"] = map[string]any{
+		"enabled":         true,
+		"protocol":        "smux",
+		"padding":         true,
+		"max_connections": 4,
+		"min_streams":     4,
+		"max_streams":     16,
+	}
+}
+
+func applyVlessWSEarlyDataKnob(m map[string]any, params map[string]string) {
+	tr, _ := m["transport"].(map[string]any)
+	if tr == nil {
+		return
+	}
+	typ := strings.ToLower(strings.TrimSpace(params["transport"]))
+	if typ == "" {
+		typ = strings.ToLower(strings.TrimSpace(fmt.Sprint(tr["type"])))
+	}
+	if typ != "ws" {
+		delete(tr, "max_early_data")
+		delete(tr, "early_data_header_name")
+		return
+	}
+	raw := strings.TrimSpace(params["ws_max_early_data"])
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		delete(tr, "max_early_data")
+		delete(tr, "early_data_header_name")
+		return
+	}
+	tr["max_early_data"] = n
+	tr["early_data_header_name"] = "Sec-WebSocket-Protocol"
+	if headers, ok := tr["headers"].(map[string]any); ok {
+		if _, hasUA := headers["User-Agent"]; !hasUA {
+			headers["User-Agent"] = []any{"Mozilla/5.0"}
+		}
+	}
 }
 
 func cleanupV2RayTransport(m map[string]any, params map[string]string) {

@@ -1858,13 +1858,18 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		pp := inv.ToProtocolPreset(lang)
+		title := cpi18n.Preset(pp.Name, "title", lang)
 		if d := cpi18n.Preset(pp.Name, "description", lang); d != "" {
 			pp.Description = d
+		}
+		if title == "" {
+			title = pp.ShortName
 		}
 		item := map[string]any{
 			"name":         pp.Name,
 			"tag":          pp.Name,
 			"protocol":     pp.Protocol,
+			"title":        title,
 			"description":  pp.Description,
 			"short_name":   pp.ShortName,
 			"traits":       pp.Traits,
@@ -1905,8 +1910,12 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pp := inv.ToProtocolPreset(lang)
+	title := cpi18n.Preset(pp.Name, "title", lang)
 	if d := cpi18n.Preset(pp.Name, "description", lang); d != "" {
 		pp.Description = d
+	}
+	if title == "" {
+		title = pp.ShortName
 	}
 	proto, _ := presets.GetProtocol(inv.Protocol)
 	_, pDesc := domain.ResolveI18n(proto.I18n, lang)
@@ -1917,6 +1926,7 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		"name":                  pp.Name,
 		"tag":                   pp.Name,
 		"protocol":              pp.Protocol,
+		"title":                 title,
 		"description":           pp.Description,
 		"short_name":            pp.ShortName,
 		"traits":                pp.Traits,

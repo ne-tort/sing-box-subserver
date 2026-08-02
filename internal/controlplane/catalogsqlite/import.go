@@ -234,32 +234,29 @@ func marshalPresetRow(inv domain.InvariantPreset) (presetJSONRow, error) {
 }
 
 func readyNeedsOwnTemplates(tag string) bool {
-	// Stock templates not fully expressible via base constructor params yet.
-	// Own templates REPLACE base templates entirely (see loadReadyByTag clone+replace).
-	switch tag {
-	case "vless_tls_mux", "vless_hysteria_tls":
-		return true
-	default:
-		return false
-	}
+	// All VLESS ready presets use the base constructor templates + param overrides.
+	return false
 }
 
 // inferReadyOverrides maps a legacy stock VLESS tag onto base constructor params.
 func inferReadyOverrides(tag string, inv domain.InvariantPreset) map[string]string {
 	out := map[string]string{
-		"transport":       "tcp",
-		"tls_mode":        "tls",
-		"flow":            "none",
-		"packet_encoding": "xudp",
-		"fingerprint":     "chrome",
-		"transport_path":  "/vless",
-		"transport_host":  "{{server}}",
-		"service_name":    "GunService",
-		"alpn":            "h2,http/1.1",
+		"transport":         "tcp",
+		"tls_mode":          "tls",
+		"flow":              "none",
+		"packet_encoding":   "xudp",
+		"fingerprint":       "chrome",
+		"transport_path":    "/vless",
+		"transport_host":    "{{server}}",
+		"service_name":      "GunService",
+		"alpn":              "h2,http/1.1",
+		"multiplex":         "none",
+		"ws_max_early_data": "0",
 	}
 	switch {
 	case strings.Contains(tag, "_ws_"):
 		out["transport"] = "ws"
+		out["ws_max_early_data"] = "2048"
 	case strings.Contains(tag, "_grpc_"):
 		out["transport"] = "grpc"
 	case strings.Contains(tag, "_httpupgrade_"):
@@ -275,9 +272,13 @@ func inferReadyOverrides(tag string, inv domain.InvariantPreset) map[string]stri
 	case tag == "vless_tcp":
 		out["transport"] = "tcp"
 		out["tls_mode"] = "none"
-	case tag == "vless_tls" || tag == "vless_tls_mux":
+	case tag == "vless_tls":
 		out["transport"] = "tcp"
 		out["tls_mode"] = "tls"
+	case tag == "vless_tls_mux":
+		out["transport"] = "tcp"
+		out["tls_mode"] = "tls"
+		out["multiplex"] = "smux"
 	case tag == "vless_reality":
 		out["transport"] = "tcp"
 		out["tls_mode"] = "reality"

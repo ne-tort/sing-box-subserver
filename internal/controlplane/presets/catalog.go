@@ -163,10 +163,12 @@ func AliasesOf(canonical string) []string {
 }
 
 // Protocols returns protocol metadata in index order (planned/deferred omitted).
+// Catalogsqlite-owned protocols (VLESS pilot) are injected even if removed from JSON index.
 func Protocols() []domain.ProtocolMeta {
 	ensureLoaded()
 	mustOK()
-	out := make([]domain.ProtocolMeta, 0, len(protocols))
+	out := make([]domain.ProtocolMeta, 0, len(protocols)+1)
+	seen := map[string]struct{}{}
 	for _, p := range protocols {
 		if p.Status == "planned" || p.Status == "deferred" {
 			continue
@@ -174,10 +176,21 @@ func Protocols() []domain.ProtocolMeta {
 		if catalogsqlite.OwnsProtocol(p.Tag) {
 			if sq, err := catalogsqlite.GetProtocol(p.Tag); err == nil {
 				out = append(out, sq)
+				seen[p.Tag] = struct{}{}
 			}
 			continue
 		}
 		out = append(out, p)
+		seen[p.Tag] = struct{}{}
+	}
+	// Ensure cut-over protocols still appear after JSON removal.
+	if catalogsqlite.OwnsProtocol("vless") {
+		if _, ok := seen["vless"]; !ok {
+			if sq, err := catalogsqlite.GetProtocol("vless"); err == nil {
+				// Keep vless near the front for UI stability.
+				out = append([]domain.ProtocolMeta{sq}, out...)
+			}
+		}
 	}
 	return out
 }

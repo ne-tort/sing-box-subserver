@@ -123,11 +123,13 @@ func TestMuxOwnTemplateDoesNotLeakBaseTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := inv.InboundTemplate["transport"]; ok {
-		t.Fatalf("mux inbound must not keep base transport: %#v", inv.InboundTemplate["transport"])
+	// Mux is expressed via constructor params (no own templates).
+	if inv.ParamMeta["multiplex"].Default != "smux" {
+		t.Fatalf("multiplex default=%q", inv.ParamMeta["multiplex"].Default)
 	}
-	if inv.InboundTemplate["multiplex"] == nil {
-		t.Fatal("mux inbound missing multiplex")
+	tr, _ := inv.InboundTemplate["transport"].(map[string]any)
+	if tr["type"] != "{{param.transport}}" {
+		t.Fatalf("expected base constructor transport, got %#v", tr)
 	}
 }
 

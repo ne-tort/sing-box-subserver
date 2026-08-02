@@ -68,7 +68,9 @@
     "transport_path",
     "transport_host",
     "service_name",
-    "alpn"
+    "alpn",
+    "multiplex",
+    "ws_max_early_data"
   ],
   "param_meta": {
     "transport": {
@@ -293,6 +295,52 @@
           "en": "h2,http/1.1 (CSV)",
           "ru": "h2,http/1.1 (CSV)"
         }
+      }
+    },
+    "multiplex": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "smux"
+      ],
+      "default": "none",
+      "ui_group": "core",
+      "ui_order": 40,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "tcp"
+        }
+      ],
+      "title": {
+        "en": "Multiplex",
+        "ru": "Multiplex"
+      },
+      "description": {
+        "en": "smux+padding on TCP (inbound/outbound). Usually incompatible with Vision flow.",
+        "ru": "smux+padding на TCP. Обычно несовместим с Vision flow."
+      }
+    },
+    "ws_max_early_data": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "0",
+      "ui_group": "transport",
+      "ui_order": 33,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "ws"
+        }
+      ],
+      "title": {
+        "en": "WS max early data",
+        "ru": "WS max early data"
+      },
+      "description": {
+        "en": "0 disables; 2048 matches common CDN 0-RTT WS setups.",
+        "ru": "0 отключает; 2048 — типичный CDN 0-RTT WS."
       }
     }
   },

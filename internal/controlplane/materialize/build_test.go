@@ -1516,6 +1516,7 @@ func TestCatalogsqliteVlessReadyMatrix(t *testing.T) {
 		{"vless_grpc_tls", "grpc", true, false},
 		{"vless_quic_tls", "quic", true, false},
 		{"vless_custom", "", true, false},
+		{"vless_tls_mux", "", true, false},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -1566,6 +1567,17 @@ func TestCatalogsqliteVlessReadyMatrix(t *testing.T) {
 				}
 			} else if tr["type"] != tc.wantTr {
 				t.Fatalf("transport=%v want %s", tr, tc.wantTr)
+			}
+			if tc.tag == "vless_tls_mux" {
+				mux, _ := ib["multiplex"].(map[string]any)
+				if mux["enabled"] != true {
+					t.Fatalf("mux=%v", mux)
+				}
+			}
+			if tc.tag == "vless_ws_tls" {
+				if tr["max_early_data"] != 2048 && tr["max_early_data"] != float64(2048) {
+					t.Fatalf("ws early data=%v", tr["max_early_data"])
+				}
 			}
 			body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
 			if err != nil {

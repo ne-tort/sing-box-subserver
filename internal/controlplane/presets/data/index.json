@@ -1,7 +1,6 @@
 {
   "schema_version": 1,
   "protocols": [
-    "vless",
     "shadowsocks",
     "trojan",
     "vmess",
