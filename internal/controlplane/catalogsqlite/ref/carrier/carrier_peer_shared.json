@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_peer_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier",
+    "carrier-peer",
+    "carrier-peer-shared"
+  ],
+  "short_name": "Carrier peer shared",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier peer shared",
+      "description": "Self-host TCP peer underlay + shared password; client device_id. link.peer ← set listen:port."
+    },
+    "en": {
+      "title": "Carrier peer shared",
+      "description": "Direct peer underlay (self-host), shared auth. No public SFU — you run the peer endpoint."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_auth",
+    "wg_star",
+    "needs_listen",
+    "self_host"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 6,
+    "mobile": 3,
+    "setup": 4
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "peer": "self-host: inbound listens link.peer; outbound dials publicHost:listen_port"
+  },
+  "param_values": {
+    "provider": "peer",
+    "auth_mode": "shared",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [],
+  "optional_param_fields": [
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password",
+    "key",
+    "token",
+    "room"
+  ]
+}

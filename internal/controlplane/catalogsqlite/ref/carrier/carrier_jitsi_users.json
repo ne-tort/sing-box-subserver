@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_jitsi_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-jitsi-users"
+  ],
+  "short_name": "Carrier Jitsi users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Jitsi users",
+      "description": "Jitsi SFU + auth=users; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Jitsi users",
+      "description": "Jitsi underlay with per-user credentials. Stronger isolation; still needs a valid room URL."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "jitsi"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "jitsi",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

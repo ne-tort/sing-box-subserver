@@ -10,7 +10,7 @@ Install demux substitutes that are `demux_compat=demux_lab` / promoted variants;
 |--------|--------------|-------|
 | `vless_ws_reality` | **full** | Matrix 2026-07-30: member + demux front OK |
 | `vless_grpc_reality` | demux_lab | Install with `allow_lab:true` |
-| `shadowquic_*` | demux_lab | Needs `with_shadowquic` — **not** in `tags.server.controlplane` |
+| `shadowquic_*` | demux_lab | Needs `with_shadowquic` — **included** in `tags.server.controlplane` (+ agent box register) |
 
 Stable group install **without** `allow_lab` must reject remaining lab presets (`cp_invalid_slot`).
 

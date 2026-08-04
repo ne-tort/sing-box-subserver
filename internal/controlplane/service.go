@@ -25,12 +25,12 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxgroups"
-	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxrecipes"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/materialize"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/paramvalidate"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
 	cpi18n "github.com/ne-tort/sing-box-subserver/internal/controlplane/presets/i18n"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/smoke"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/store"
 	"github.com/ne-tort/sing-box-subserver/internal/supervisor"
 	"golang.org/x/crypto/curve25519"
@@ -54,6 +54,9 @@ type Service struct {
 	}
 
 	trafficHooks TrafficHooks
+
+	smokeMu      sync.Mutex
+	smokeRunning bool
 }
 
 // SetTrafficHooks wires optional traffic module bridge.
@@ -338,8 +341,6 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("GET /v1/controlplane/presets/{name}", requireAuth(s.handlePresetsGet))
 	mux.HandleFunc("GET /v1/controlplane/protocols", requireAuth(s.handleProtocolsList))
 	mux.HandleFunc("GET /v1/controlplane/protocols/{tag}", requireAuth(s.handleProtocolsGet))
-	mux.HandleFunc("GET /v1/controlplane/demux-recipes", requireAuth(s.handleDemuxRecipesList))
-	mux.HandleFunc("GET /v1/controlplane/demux-recipes/{name}", requireAuth(s.handleDemuxRecipesGet))
 	mux.HandleFunc("GET /v1/controlplane/demux-groups", requireAuth(s.handleDemuxGroupsList))
 	mux.HandleFunc("GET /v1/controlplane/demux-groups/{tag}", requireAuth(s.handleDemuxGroupsGet))
 	mux.HandleFunc("GET /v1/controlplane/demux-groups/{tag}/substitutions", requireAuth(s.handleDemuxGroupsSubstitutions))
@@ -356,15 +357,23 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("DELETE /v1/controlplane/sets/{name}", requireAuth(s.handleSetsDelete))
 	mux.HandleFunc("POST /v1/controlplane/sets/{name}/activate", requireAuth(s.handleSetsActivate))
 	mux.HandleFunc("POST /v1/controlplane/sets/{name}/deactivate", requireAuth(s.handleSetsDeactivate))
+	mux.HandleFunc("POST /v1/controlplane/smoke", requireAuth(s.handleSmoke))
+	mux.HandleFunc("GET /v1/controlplane/smoke/last", requireAuth(s.handleSmokeLast))
 	mux.HandleFunc("GET /v1/controlplane/tls", requireAuth(s.handleTLSGet))
 	mux.HandleFunc("PUT /v1/controlplane/tls", requireAuth(s.handleTLSPut))
 	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
 	mux.HandleFunc("GET /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerGet))
 	mux.HandleFunc("PUT /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerPut))
+	mux.HandleFunc("GET /v1/controlplane/config", requireAuth(s.handleConfigGet))
 	mux.HandleFunc("GET /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSGet))
 	mux.HandleFunc("PUT /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSPut))
+	mux.HandleFunc("DELETE /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSDelete))
 	mux.HandleFunc("GET /v1/controlplane/config/route", requireAuth(s.handleConfigRouteGet))
 	mux.HandleFunc("PUT /v1/controlplane/config/route", requireAuth(s.handleConfigRoutePut))
+	mux.HandleFunc("DELETE /v1/controlplane/config/route", requireAuth(s.handleConfigRouteDelete))
+	mux.HandleFunc("GET /v1/controlplane/config/outbounds", requireAuth(s.handleConfigOutboundsGet))
+	mux.HandleFunc("PUT /v1/controlplane/config/outbounds", requireAuth(s.handleConfigOutboundsPut))
+	mux.HandleFunc("DELETE /v1/controlplane/config/outbounds", requireAuth(s.handleConfigOutboundsDelete))
 	mux.HandleFunc("GET /v1/controlplane/reality", requireAuth(s.handleRealityGet))
 	mux.HandleFunc("PUT /v1/controlplane/reality", requireAuth(s.handleRealityPut))
 	mux.HandleFunc("GET /v1/controlplane/wg", requireAuth(s.handleWgGet))
@@ -878,6 +887,7 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		CertManager:        cm,
 		DNS:                fragments.EffectiveDNS(),
 		Route:              fragments.EffectiveRoute(),
+		Outbounds:          fragments.EffectiveOutbounds(),
 		RealityAssignments: realityAssignments,
 	}
 	if hub.Enabled {
@@ -1077,18 +1087,57 @@ func (s *Service) setPublicView(set domain.InboundSet, active bool) map[string]a
 }
 
 func (s *Service) setPublicViewOpts(set domain.InboundSet, active, includeSecrets bool) map[string]any {
+	last, _ := s.store.LoadSmokeLast()
+	return s.setPublicViewOptsSmoke(set, active, includeSecrets, last)
+}
+
+func (s *Service) setPublicViewOptsSmoke(set domain.InboundSet, active, includeSecrets bool, last *smoke.Report) map[string]any {
 	bindings := set.EffectiveBindings()
+	bindingViews := make([]map[string]any, 0, len(bindings))
+	var setSmoke *smoke.BindingSmoke
+	for _, b := range bindings {
+		view := map[string]any{
+			"preset": b.Preset,
+		}
+		if len(b.SubscriptionTags) > 0 {
+			view["subscription_tags"] = b.SubscriptionTags
+		}
+		if len(b.EnabledUserVariants) > 0 {
+			view["enabled_user_variants"] = b.EnabledUserVariants
+		}
+		if len(b.EnabledClientProfiles) > 0 {
+			view["enabled_client_profiles"] = b.EnabledClientProfiles
+		}
+		if b.CredentialInstancePolicy != "" {
+			view["credential_instance_policy"] = b.CredentialInstancePolicy
+		}
+		if len(b.Params) > 0 {
+			view["params"] = b.Params
+		}
+		if sm := last.SmokeFor(set.Name, b.Preset); sm != nil {
+			view["smoke"] = sm
+			if setSmoke == nil {
+				setSmoke = sm
+			} else if !sm.Skipped && (setSmoke.Skipped || (!sm.OK && setSmoke.OK)) {
+				setSmoke = sm
+			}
+		}
+		bindingViews = append(bindingViews, view)
+	}
 	m := map[string]any{
 		"name":        set.Name,
 		"description": set.Description,
 		"listen":      set.Listen,
 		"listen_port": set.ListenPort,
 		"presets":     uniqueSetPresets(bindings),
-		"bindings":    bindings,
+		"bindings":    bindingViews,
 		"has_demux":   set.HasDemux(),
 		"active":      active,
 		"created_at":  set.CreatedAt,
 		"updated_at":  set.UpdatedAt,
+	}
+	if setSmoke != nil {
+		m["smoke"] = setSmoke
 	}
 	if len(set.DemuxTemplate) > 0 {
 		m["demux_template"] = set.DemuxTemplate
@@ -1204,7 +1253,6 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		"users_total":             len(users),
 		"users_eligible":          elig,
 		"presets_count":           len(presets.All()),
-		"demux_recipes_count":     len(demuxrecipes.All()),
 		"demux_groups_count":      demuxgroups.Count(),
 		"sets_count":              len(sets),
 		"demux_in_binary":         demuxInBinary,
@@ -1465,6 +1513,9 @@ func (s *Service) handleUsersList(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]any, 0, len(users))
 	for _, u := range users {
+		if smoke.IsSmokeUser(u.Name) {
+			continue
+		}
 		out = append(out, redactUser(u, false))
 	}
 	okJSONETag(w, r, out)
@@ -1488,6 +1539,10 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(body.Name) == "" {
 		failJSON(w, 400, "bad_request", "name required")
+		return
+	}
+	if smoke.IsSmokeUser(strings.TrimSpace(body.Name)) {
+		failJSON(w, 400, "bad_request", "reserved system name")
 		return
 	}
 	if err := validateCreds(body.Creds); err != nil {
@@ -1558,14 +1613,14 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, materializeErrorCode(err), err.Error())
-		return
-	}
 	path, url := s.subscriptionURL(r, u.SubToken)
 	data := redactUser(u, true)
 	data["subscription_path"] = path
 	data["subscription_url"] = url
+	// User is already persisted — rematerialize failure must not hide the create.
+	if err := s.rematerialize(r.Context()); err != nil {
+		data["rematerialize_warning"] = err.Error()
+	}
 	okJSON(w, 200, data)
 }
 
@@ -1695,11 +1750,11 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	if wasEligible && !u.Eligible(time.Now().UTC()) && s.trafficHooks != nil {
 		s.trafficHooks.OnBecameIneligible([]string{u.ID})
 	}
+	data := redactUser(*u, false)
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, materializeErrorCode(err), err.Error())
-		return
+		data["rematerialize_warning"] = err.Error()
 	}
-	okJSON(w, 200, redactUser(*u, false))
+	okJSON(w, 200, data)
 }
 
 func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
@@ -1718,11 +1773,16 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	if hub, err := s.store.LoadWgHub(); err == nil && hub.ExitUserID == deletedID {
+		hub.ExitUserID = ""
+		_ = s.store.SaveWgHub(hub)
+	}
 	if s.trafficHooks != nil {
 		s.trafficHooks.OnBecameIneligible([]string{deletedID})
 	}
+	// User already deleted from store — rematerialize failure must not hide success.
 	if err := s.rematerialize(r.Context()); err != nil {
-		failJSON(w, 422, materializeErrorCode(err), err.Error())
+		okJSON(w, 200, map[string]any{"deleted": true, "rematerialize_warning": err.Error()})
 		return
 	}
 	okJSON(w, 200, map[string]any{"deleted": true})
@@ -2031,29 +2091,6 @@ func (s *Service) handleProtocolsGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Service) handleDemuxRecipesList(w http.ResponseWriter, r *http.Request) {
-	all := demuxrecipes.All()
-	out := make([]any, 0, len(all))
-	for _, rec := range all {
-		out = append(out, map[string]any{
-			"name":             rec.Name,
-			"description":      rec.Description,
-			"required_presets": rec.RequiredPresets,
-			"suggested_port":   rec.SuggestedPort,
-		})
-	}
-	okJSONETag(w, r, out)
-}
-
-func (s *Service) handleDemuxRecipesGet(w http.ResponseWriter, r *http.Request) {
-	rec, err := demuxrecipes.Get(r.PathValue("name"))
-	if err != nil {
-		failJSON(w, 404, "not_found", err.Error())
-		return
-	}
-	okJSONETag(w, r, rec)
-}
-
 func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet) error {
 	bindings := set.EffectiveBindings()
 	if set.Name == "" || set.ListenPort == 0 || len(bindings) == 0 {
@@ -2097,11 +2134,6 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 			return err
 		}
 	}
-	if set.HasDemux() {
-		if err := demuxrecipes.ValidateTemplate(set.DemuxTemplate); err != nil {
-			return fmt.Errorf("cp_invalid_demux: %w", err)
-		}
-	}
 	myNets := portNetworks(set)
 	for _, o := range others {
 		if o.Name == set.Name || o.ListenPort != set.ListenPort {
@@ -2123,8 +2155,28 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 	if b.Params == nil {
 		b.Params = map[string]string{}
 	}
+	operator := make(map[string]string, len(b.Params))
+	for k, v := range b.Params {
+		operator[k] = v
+	}
 	applyParamMetaDefaults(p, b.Params)
 	if err := paramvalidate.Validate(p, b.Params); err != nil {
+		return err
+	}
+	// Operator-supplied values must be applicable under visible_when (e.g. Vision on WS).
+	for k, v := range operator {
+		v = strings.TrimSpace(v)
+		if v == "" || isNeutralParamValue(v) {
+			continue
+		}
+		if _, ok := p.ParamMeta[k]; !ok {
+			continue
+		}
+		if !paramvalidate.Visible(p, k, b.Params) {
+			return fmt.Errorf("cp_param_not_applicable: %s not applicable for current params", k)
+		}
+	}
+	if err := validateVlessFlowConflicts(b.Params); err != nil {
 		return err
 	}
 	sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
@@ -2140,6 +2192,39 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 	}
 	if !cm.HasDomain(sni) {
 		return fmt.Errorf("cp_invalid_bindings: params.sni %q not in cert-manager domains", sni)
+	}
+	return nil
+}
+
+func isNeutralParamValue(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "none", "0", "false":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateVlessFlowConflicts(params map[string]string) error {
+	flow := strings.ToLower(strings.TrimSpace(params["flow"]))
+	if flow == "" || flow == "none" {
+		return nil
+	}
+	vision := strings.Contains(flow, "vision") || flow == "xtls-rprx-vision"
+	if !vision {
+		return nil
+	}
+	tr := strings.ToLower(strings.TrimSpace(params["transport"]))
+	if tr != "" && tr != "tcp" {
+		return fmt.Errorf("cp_param_conflict: flow %q requires transport=tcp (got %s)", flow, tr)
+	}
+	tlsMode := strings.ToLower(strings.TrimSpace(params["tls_mode"]))
+	if tlsMode == "none" || tlsMode == "" {
+		return fmt.Errorf("cp_param_conflict: flow %q requires tls_mode tls|reality", flow)
+	}
+	mux := strings.ToLower(strings.TrimSpace(params["multiplex"]))
+	if mux != "" && mux != "none" && mux != "false" && mux != "0" {
+		return fmt.Errorf("cp_param_conflict: flow %q incompatible with multiplex=%s", flow, mux)
 	}
 	return nil
 }
@@ -2182,9 +2267,10 @@ func (s *Service) handleSetsList(w http.ResponseWriter, r *http.Request) {
 	}
 	includeSecrets := parseBoolQuery(r, "secrets", false)
 	st, _ := s.store.LoadState()
+	last, _ := s.store.LoadSmokeLast()
 	out := make([]any, 0, len(sets))
 	for _, set := range sets {
-		out = append(out, s.setPublicViewOpts(set, contains(st.ActiveSets, set.Name), includeSecrets))
+		out = append(out, s.setPublicViewOptsSmoke(set, contains(st.ActiveSets, set.Name), includeSecrets, last))
 	}
 	if includeSecrets {
 		okJSON(w, 200, out)
@@ -2807,6 +2893,12 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	if hub.Enabled {
 		hubPtr = &hub
 	}
+	certPath, _ := tlsMaterialPaths(s.cfg.DataDir)
+	slotTLS, _, err := s.ensureDemuxSlotTLS(sets, cm)
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
 	body, err := materialize.RenderSubscription(*user, sets, host, profile, cm, materialize.SubscriptionFilters{
 		Set:           filterSet,
 		Presets:       filterPresets,
@@ -2816,6 +2908,8 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		Flow:          filterFlow,
 		Network:       filterNetwork,
 		StrictFilters: strictFilters,
+		TLSCertPath:   certPath,
+		SlotTLS:       slotTLS,
 	}, assignments, hubPtr)
 	if err != nil {
 		if strictFilters && strings.Contains(err.Error(), "cp_invalid_sub_filter") {

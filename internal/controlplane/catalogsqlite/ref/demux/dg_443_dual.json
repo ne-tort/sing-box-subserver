@@ -1,0 +1,92 @@
+{
+  "tag": "dg_443_dual",
+  "short_name": "Bypasser",
+  "status": "stable",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "Bypasser",
+      "description": "Reality بسيط مع Hy2 احتياطي."
+    },
+    "en": {
+      "title": "Bypasser",
+      "description": "Simple Reality with Hy2 fallback."
+    },
+    "es": {
+      "title": "Bypasser",
+      "description": "Reality simple con Hy2 de respaldo."
+    },
+    "fa": {
+      "title": "Bypasser",
+      "description": "Reality ساده با پشتیبان Hy2."
+    },
+    "fr": {
+      "title": "Bypasser",
+      "description": "Reality simple avec secours Hy2."
+    },
+    "id": {
+      "title": "Bypasser",
+      "description": "Reality sederhana dengan cadangan Hy2."
+    },
+    "pt-BR": {
+      "title": "Bypasser",
+      "description": "Reality simples com Hy2 de reserva."
+    },
+    "ru": {
+      "title": "Bypasser",
+      "description": "Простой Reality с запасным Hy2."
+    },
+    "tr": {
+      "title": "Bypasser",
+      "description": "Hy2 yedekli basit Reality."
+    },
+    "zh-CN": {
+      "title": "Bypasser",
+      "description": "简洁 Reality，Hy2 作为备用。"
+    },
+    "zh-TW": {
+      "title": "Bypasser",
+      "description": "簡潔 Reality，Hy2 作為備用。"
+    }
+  },
+  "slots": [
+    {
+      "id": "tcp",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "protocol_only"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 7,
+    "setup": 8,
+    "speed": 8
+  }
+}

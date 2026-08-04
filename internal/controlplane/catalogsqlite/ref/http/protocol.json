@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "http",
+  "singbox_type": "http",
+  "short_name": "HTTP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "HTTP",
+      "description": "HTTP CONNECT. Утилитарный прокси, не anti-DPI."
+    },
+    "en": {
+      "title": "HTTP",
+      "description": "HTTP CONNECT. Utility proxy, not anti-DPI."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ],
+  "notes": {
+    "variants_family": "none"
+  }
+}

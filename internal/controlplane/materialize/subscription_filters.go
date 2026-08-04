@@ -35,9 +35,6 @@ func BuildSubscriptionCatalog(sets []domain.InboundSet) SubscriptionCatalog {
 			if b.Preset != "" {
 				cat.Presets[b.Preset] = struct{}{}
 			}
-			for _, p := range b.EnabledClientProfiles {
-				cat.Profiles[p] = struct{}{}
-			}
 			for _, t := range b.SubscriptionTags {
 				cat.Tags[t] = struct{}{}
 			}

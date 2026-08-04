@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "tag": "anytls_idle",
+  "protocol": "anytls",
+  "aliases": [],
+  "short_name": "AnyTLS idle",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "AnyTLS + idle session",
+      "description": "AnyTLS с рекомендованными idle_session_* на outbound (клиент держит warm TLS)."
+    },
+    "en": {
+      "title": "AnyTLS idle",
+      "description": "AnyTLS with idle session timeout tuning. Same TLS wrapper; use when long-idle clients need keep-alive policy."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello (AnyTLS idle session)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
+    "idle": "outbound idle_* — separate invariant anytls_idle"
+  },
+  "param_values": {
+    "alpn": "h2,http/1.1",
+    "fingerprint": "chrome",
+    "idle_session": "true"
+  }
+}

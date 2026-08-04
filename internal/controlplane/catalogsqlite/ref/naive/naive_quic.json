@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "tag": "naive_quic",
+  "protocol": "naive",
+  "aliases": [
+    "naive-quic"
+  ],
+  "short_name": "Naive H2+H3",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Naive H2+H3",
+      "description": "NaiveProxy H2+H3: один inbound (tcp+udp). H3 нельзя без H2."
+    },
+    "en": {
+      "title": "NaiveProxy H2+H3",
+      "description": "NaiveProxy H2+H3 on one inbound (tcp+udp). H3 always includes H2."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp",
+    "quic",
+    "tls",
+    "http2"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp",
+      "udp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello (H2) or QUIC (H3)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "param_values": {
+    "network": "tcp,udp"
+  }
+}

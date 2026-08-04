@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "tag": "socks",
+  "protocol": "socks",
+  "aliases": [],
+  "short_name": "SOCKS5",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SOCKS5",
+      "description": "SOCKS5 с логином/паролем (plaintext)."
+    },
+    "en": {
+      "title": "SOCKS5",
+      "description": "Classic SOCKS5. Utility inbound / demux inject target — not anti-DPI."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SOCKS greeting",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 9
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {},
+  "param_values": {
+    "udp_over_tcp": "false"
+  }
+}

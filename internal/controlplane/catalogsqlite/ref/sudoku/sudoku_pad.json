@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_pad",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku",
+    "sudoku-pad"
+  ],
+  "short_name": "Sudoku pad",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku padding",
+      "description": "Sudoku TCP: AEAD + padding + fallback decoy; shared peer key."
+    },
+    "en": {
+      "title": "Sudoku pad",
+      "description": "Sudoku with padding obfuscation. Plain-TCP demux slot; shared key."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku ASCII stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "key": "shared peer key (not per-user); set.peer_secrets",
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "param_values": {
+    "aead_method": "chacha20-poly1305",
+    "multiplex": "auto",
+    "padding_min": "5",
+    "padding_max": "15",
+    "fallback": "http://127.0.0.1:80",
+    "httpmask_mode": "off",
+    "httpmask_path": "/sudoku"
+  }
+}

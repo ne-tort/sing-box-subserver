@@ -1,8 +1,12 @@
 # Runtime-only image for local matrix when docker build cannot reach the module proxy.
-# Expects a prebuilt linux binary at dist/subserver-cp-linux (see scripts/cp_matrix_docker.ps1).
-FROM alpine:3.21
-RUN apk add --no-cache ca-certificates || true
+# Expects a prebuilt linux binary at dist/subserver-cp-linux (see scripts/cp_matrix_docker.ps1)
+# and glibc libcronet.so at dist/libcronet.so (naive smoke / purego).
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/lib/subserver
 COPY dist/subserver-cp-linux /usr/local/bin/subserver
-RUN chmod +x /usr/local/bin/subserver && mkdir -p /var/lib/subserver
+COPY dist/libcronet.so /usr/local/bin/libcronet.so
+RUN chmod +x /usr/local/bin/subserver
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/subserver", "-config", "/etc/subserver/agent.yaml"]

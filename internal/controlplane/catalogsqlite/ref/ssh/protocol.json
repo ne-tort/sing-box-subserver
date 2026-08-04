@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "ssh",
+  "singbox_type": "ssh",
+  "short_name": "SSH",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH",
+      "description": "SSH-banner inbound. Lab/plain demux; выглядит как SSH, не как веб."
+    },
+    "en": {
+      "title": "SSH",
+      "description": "SSH-banner inbound. Lab/plain demux; looks like SSH, not web."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ],
+  "notes": {
+    "variants_family": "none",
+    "lx": "with_ssh"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "tag": "ssh_pubkey",
+  "protocol": "ssh",
+  "aliases": [
+    "ssh-pubkey",
+    "ssh-key"
+  ],
+  "short_name": "SSH pubkey",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH public key",
+      "description": "SSH inbound: user + authorized public_key; outbound private_key (ed25519 auto)."
+    },
+    "en": {
+      "title": "SSH pubkey",
+      "description": "SSH inbound with public-key auth. Same plain SSH fingerprint as password variant."
+    }
+  },
+  "traits": [
+    "tcp",
+    "pubkey"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "ssh_banner",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SSH-2.0 banner",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "private_key",
+    "public_key"
+  ],
+  "cred_generators": {
+    "private_key": "ssh_ed25519"
+  },
+  "requirements": {
+    "build_tag": "with_ssh"
+  },
+  "client_notes": {
+    "keys": "ensureCreds generates ed25519 PEM + authorized_keys; inbound users[].public_key",
+    "params": "optional: server_version (inbound banner), client_version (outbound)"
+  },
+  "param_values": {
+    "server_version": "SSH-2.0-OpenSSH_8.9",
+    "client_version": "SSH-2.0-OpenSSH_8.9",
+    "auth_mode": "pubkey",
+    "udp_over_tcp": "false"
+  }
+}

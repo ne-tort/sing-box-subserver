@@ -20,6 +20,8 @@ if ($LASTEXITCODE -ne 0) { throw "traffic-only build failed" }
 
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
 Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
+& "$PSScriptRoot\ensure_libcronet.ps1" -Arch amd64
+if ($LASTEXITCODE -ne 0) { throw "ensure_libcronet failed" }
 
 Write-Host "== compose up =="
 $prevEap = $ErrorActionPreference

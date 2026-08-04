@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_httpupgrade_tls",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-httpupgrade-tls"
+  ],
+  "short_name": "Trojan HUp",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan HTTPUpgrade TLS",
+      "description": "Trojan + TLS + HTTPUpgrade."
+    },
+    "en": {
+      "title": "Trojan HTTPUpgrade TLS",
+      "description": "Trojan + TLS + HTTPUpgrade."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "httpupgrade"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS → HTTPUpgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "transport": "httpupgrade",
+    "tls_mode": "tls",
+    "fingerprint": "chrome",
+    "transport_path": "/trojan-hu",
+    "transport_host": "{{server}}",
+    "service_name": "TrojanService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0",
+    "fallback": "none"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "hu_path_default": "/trojan-hu"
+  }
+}

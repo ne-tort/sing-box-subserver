@@ -48,6 +48,13 @@ func DeriveSlotMatchMeta(slot Slot) SlotMatchMeta {
 			MatchShape:      "always",
 			MatchPriority:   300,
 		}
+	case hint == "tls_and_quic":
+		return SlotMatchMeta{
+			SeparationTags:  []string{"tcp", "tls", "sni", "udp", "quic"},
+			InterchangeTags: []string{"naive_dual", "tcp_tls", "quic"},
+			MatchShape:      "tls.sni+protocol.quic",
+			MatchPriority:   100,
+		}
 	case slot.Role == RoleQUIC && hint == "protocol_only":
 		return SlotMatchMeta{
 			SeparationTags:  []string{"udp", "quic"},
@@ -147,6 +154,8 @@ func matchNote(slot Slot, m SlotMatchMeta) string {
 		return "any QUIC Initial (UDP)"
 	case "protocol.quic+sni":
 		return "QUIC Initial matched by SNI"
+	case "tls.sni+protocol.quic":
+		return "TLS SNI (H2) and QUIC (H3) to the same member"
 	case "always":
 		return "catch-all remaining TCP (plain)"
 	default:
@@ -195,6 +204,14 @@ func FitsInterchange(slot Slot, traits []string, looksLike string) bool {
 	case RoleTCPTLS:
 		if has("reality") {
 			return false
+		}
+		if strings.TrimSpace(slot.MatchHint) == "tls_and_quic" {
+			// Naive dual slot: H2-only (naive_tls) or H2+H3 (naive_quic).
+			return has("tls") || has("http2") || has("quic")
+		}
+		// Dual-capable Naive (H2+H3) may sit on a TLS slot and claim QUIC at build time.
+		if has("quic") && (has("tls") || has("http2") || has("naive")) {
+			return true
 		}
 		if !has("tls") && !has("tls_custom") {
 			return false

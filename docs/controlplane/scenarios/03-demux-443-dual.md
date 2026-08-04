@@ -4,6 +4,8 @@
 
 Install catalog group `dg_443_dual` (defaults: `vless_reality` + `hy2`) on public 443, verify subscription, prove member ports **and** demux front work with official sing-box.
 
+Cost: 1 demux + 2 members (see [09-demux-cost.md](../../guides/controlplane-presets/09-demux-cost.md)). Groups SoT = catalogsqlite `ref/demux`.
+
 ## Steps
 
 1. `GET /v1/controlplane/demux-groups?status=stable&lang=en`

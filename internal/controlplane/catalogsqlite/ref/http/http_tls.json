@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "tag": "http_tls",
+  "protocol": "http",
+  "aliases": [
+    "http-tls"
+  ],
+  "short_name": "HTTP TLS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "HTTP CONNECT + TLS",
+      "description": "HTTP CONNECT за TLS (DPI видит ClientHello, не plaintext CONNECT)."
+    },
+    "en": {
+      "title": "HTTP CONNECT TLS",
+      "description": "HTTP CONNECT behind TLS. Slightly less obvious than plain CONNECT; still not Reality-class."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS → HTTP CONNECT",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 8
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true
+  },
+  "param_values": {
+    "tls_mode": "tls",
+    "fingerprint": "chrome"
+  }
+}

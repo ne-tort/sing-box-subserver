@@ -57,6 +57,9 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"cert_manager":           true,
 			"inbound_tls_sni_param":  "sni",
 			"config_dns_route":       true,
+			"config_outbounds":       true,
+			"config_fragments":       true,
+			"config_route_rulesets":  true,
 			"demux_action":           "dial",
 			"optional_listen_port":   true, // omit listen_port → auto-pick free port (presets + demux)
 			"ready_poll":             true,

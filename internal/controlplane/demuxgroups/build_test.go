@@ -196,17 +196,114 @@ func TestModern5HasFiveSlots(t *testing.T) {
 	}
 }
 
-func TestBuildInstallNewGroups(t *testing.T) {
-	for _, tag := range []string{"dg_443_reality_sq", "dg_443_snell_hy2", "dg_443_broad7"} {
-		res, err := BuildInstall(InstallRequest{GroupTag: tag, SetName: "t-" + tag}, nil)
-		if err != nil {
-			t.Fatalf("%s: %v", tag, err)
+func TestNaiveQUICOnTLSClaimsQUICSlot(t *testing.T) {
+	res, err := BuildInstall(InstallRequest{
+		GroupTag:   "dg_443_tls_quic",
+		SetName:    "naive-claim",
+		SlotPreset: map[string]string{"tls": "naive_quic"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := res.MemberPorts["naive_quic"]; !ok {
+		t.Fatalf("expected naive_quic member, ports=%v", res.MemberPorts)
+	}
+	if _, ok := res.MemberPorts["hy2"]; ok {
+		t.Fatalf("hy2 should be skipped when naive_quic claims QUIC, ports=%v", res.MemberPorts)
+	}
+	tmpl, ok := res.Set.DemuxTemplate["rules"].([]any)
+	if !ok {
+		t.Fatalf("rules type %T", res.Set.DemuxTemplate["rules"])
+	}
+	hasQuic := false
+	for _, raw := range tmpl {
+		m, _ := raw.(map[string]any)
+		name, _ := m["name"].(string)
+		if strings.HasPrefix(name, "quic-") {
+			hasQuic = true
 		}
-		if !res.Set.HasDemux() {
-			t.Fatalf("%s: expected demux", tag)
-		}
-		if len(res.MemberPorts) != len(res.Set.Presets) && len(res.MemberPorts) == 0 {
-			t.Fatalf("%s: empty member ports", tag)
-		}
+	}
+	if !hasQuic {
+		t.Fatalf("expected quic rule from naive claim, rules=%v", tmpl)
+	}
+}
+
+func TestUniqueSlotSNIsForMultiTLSGroups(t *testing.T) {
+	for _, tag := range []string{"dg_443_fullstack", "dg_443_sni_stack", "dg_443_modern5"} {
+		tag := tag
+		t.Run(tag, func(t *testing.T) {
+			res, err := BuildInstall(InstallRequest{GroupTag: tag, SetName: "sni-" + tag}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g, err := Get(tag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := map[string]string{}
+			needSNI := 0
+			for _, slot := range g.Slots {
+				switch slot.Role {
+				case RoleTCPReality, RoleTCPTLS:
+					needSNI++
+				case RoleQUIC:
+					if slot.MatchHint == "sni_pool" {
+						needSNI++
+					}
+				}
+				sni := res.SlotSNIs[slot.ID]
+				if slot.Role == RoleTCPPlain || (slot.Role == RoleQUIC && slot.MatchHint == "protocol_only") {
+					if sni != "" {
+						t.Fatalf("slot %s should not get SNI, got %q", slot.ID, sni)
+					}
+					continue
+				}
+				if sni == "" {
+					t.Fatalf("slot %s missing SNI", slot.ID)
+				}
+				if other, ok := seen[sni]; ok {
+					t.Fatalf("duplicate SNI %q on slots %s and %s", sni, other, slot.ID)
+				}
+				seen[sni] = slot.ID
+			}
+			if len(seen) != needSNI {
+				t.Fatalf("unique SNIs=%d want %d map=%v", len(seen), needSNI, res.SlotSNIs)
+			}
+			raw := fmt.Sprintf("%v", res.Set.DemuxTemplate)
+			if !strings.Contains(raw, "tls") || !strings.Contains(raw, "sni") {
+				t.Fatalf("demux template should match tls.sni: %s", raw)
+			}
+			for sni := range seen {
+				if !strings.Contains(raw, sni) {
+					t.Fatalf("demux template missing SNI %q: %s", sni, raw)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildInstallAllGroupsDefaults(t *testing.T) {
+	for _, g := range All() {
+		g := g
+		t.Run(g.Tag, func(t *testing.T) {
+			res, err := BuildInstall(InstallRequest{GroupTag: g.Tag, SetName: "t-" + g.Tag}, nil)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			if !res.Set.HasDemux() {
+				t.Fatal("expected demux")
+			}
+			wantMembers := len(g.Slots)
+			if len(res.MemberPorts) != wantMembers {
+				t.Fatalf("member ports=%d want %d (%v)", len(res.MemberPorts), wantMembers, res.MemberPorts)
+			}
+			raw := fmt.Sprintf("%v", res.Set.DemuxTemplate)
+			if !strings.Contains(raw, "dial") {
+				t.Fatalf("expected dial actions: %s", raw)
+			}
+			if strings.Contains(raw, "{{tag:") {
+				t.Fatalf("legacy inject tag must not appear: %s", raw)
+			}
+		})
 	}
 }

@@ -69,6 +69,38 @@ func TestBuildSelfSignedPaths(t *testing.T) {
 	}
 }
 
+func TestBuildCustomOutbounds(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	tls := domain.DefaultSelfSigned("vpn.example.com")
+	out := []byte(`[{"type":"direct","tag":"direct"},{"type":"block","tag":"block"},{"type":"socks","tag":"socks-out","server":"127.0.0.1","server_port":1080}]`)
+	raw, err := Build(Input{
+		PublicHost:  "vpn.example.com",
+		DataDir:     "/data",
+		TLS:         tls,
+		TLSCertPath: "/data/controlplane/tls/server.crt",
+		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		ActiveSets:  []domain.InboundSet{trojanSet()},
+		Users:       []domain.User{trojanUser(now)},
+		Outbounds:   out,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := doc["outbounds"].([]any)
+	if len(outs) != 3 {
+		t.Fatalf("outbounds len=%d", len(outs))
+	}
+	last, _ := outs[2].(map[string]any)
+	if last["tag"] != "socks-out" {
+		t.Fatalf("last outbound=%v", last)
+	}
+}
+
 func TestBuildCertManagerProviders(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
@@ -694,7 +726,7 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 				Preset:                "vless-tcp",
 				SubscriptionTags:      []string{"mobile", "stable"},
 				EnabledUserVariants:   []string{"flow-none", "flow-udp-vision"},
-				EnabledClientProfiles: []string{"profile-mobile"},
+				EnabledClientProfiles: []string{"pkt-none", "pkt-xudp"},
 			},
 		},
 		Presets: []string{"vless-tcp"},
@@ -709,7 +741,7 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 		},
 	}
 
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"profile-mobile"}}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"pkt-xudp"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,6 +759,26 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 	}
 	if ob["uuid"] != "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" {
 		t.Fatalf("uuid=%v", ob["uuid"])
+	}
+	if ob["packet_encoding"] != "xudp" {
+		t.Fatalf("packet_encoding=%v want xudp from pkt-xudp profile", ob["packet_encoding"])
+	}
+
+	bodyNone, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Variants: []string{"flow-none"}, Profiles: []string{"pkt-none"}}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var docNone map[string]any
+	if err := json.Unmarshal(bodyNone, &docNone); err != nil {
+		t.Fatal(err)
+	}
+	outsNone, _ := docNone["outbounds"].([]any)
+	if len(outsNone) != 1 {
+		t.Fatalf("pkt-none outbounds=%d body=%s", len(outsNone), bodyNone)
+	}
+	obNone, _ := outsNone[0].(map[string]any)
+	if _, ok := obNone["packet_encoding"]; ok {
+		t.Fatalf("pkt-none must clear packet_encoding, got %v", obNone["packet_encoding"])
 	}
 }
 
@@ -835,6 +887,12 @@ func TestMaterializeVlessWSTransportDefaults(t *testing.T) {
 	tr, _ := ib["transport"].(map[string]any)
 	if tr["type"] != "ws" {
 		t.Fatalf("transport=%v", tr)
+	}
+	if _, ok := tr["host"]; ok {
+		t.Fatalf("inbound ws must not set transport.host: %#v", tr)
+	}
+	if path, _ := tr["path"].(string); path != "/vless-ws" {
+		t.Fatalf("ws path=%v", tr["path"])
 	}
 	users, _ := ib["users"].([]any)
 	if len(users) != 1 {

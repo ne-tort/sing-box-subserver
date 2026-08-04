@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "tag": "ss_aes128_mux",
+  "protocol": "shadowsocks",
+  "aliases": [],
+  "short_name": "SS AES+mux",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS AES-128 + multiplex",
+      "description": "AES-128-GCM с multiplex (smux)."
+    },
+    "en": {
+      "title": "SS AES-128 + mux",
+      "description": "SS AES-128 with multiplex. Fewer handshakes; still plaintext SS to DPI."
+    }
+  },
+  "traits": [
+    "tcp",
+    "multiplex"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD+mux",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 8,
+    "mobile": 6,
+    "setup": 7
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "method": "aes-128-gcm",
+    "network": "tcp",
+    "udp_over_tcp": "false",
+    "multiplex": "smux"
+  }
+}

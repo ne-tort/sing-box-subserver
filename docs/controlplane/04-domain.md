@@ -31,13 +31,16 @@ Persisted as `wg_hub.json`. At most one WireGuard endpoint per agent.
 |-------|------|-------|
 | `enabled` | bool | When true, materialize emits `endpoints[]` |
 | `profile` | string | `wg` \| `wg_awg2` \| `wg_awg3` |
-| `subnet` | string | Default `10.8.0.0/24` (must be /24) |
+| `subnet` | string | Default `10.8.0.0/24` (must be /24); allocates sticky `wg_host_index` addresses |
+| `peer_relay` | bool | L3 peer forwarding inside WG hub (`peer_relay` in sing-box-lx); default false = hard isolation; forced true when `exit_user_id` is set |
+| `internet_allow` | bool | Client `use_exit_node` (default true); false → overlay/subnet only |
+| `exit_user_id` | string | Optional CP user id whose hub peer is sugar `exit_node` |
 | `listen_port` | uint16 | Default 51820 |
 | `system` | bool | Opt-in; default false (omit) |
-| `forward_allow` | bool | P2P firewall; requires `system=true`; default false |
-| `internet_allow` | bool | Client full-tunnel; default true |
 | `hub_private_key` / `hub_public_key` | string | Auto curve25519 |
 | `awg` | object | Generated AWG2/3 + masquerade (`id`/`ip`/`ib`); no i1–i5 |
+
+Materialize uses **WG config sugar** (sing-box-lx SPEC 057): hub/client JSON has `subnet` + host `address` / peer `ip`, **no** `allowed_ips`. Creds store sticky `wg_host_index` and derived host IP `address` (not CIDR). Exit peer → `exit_node` on hub; that client's sub → `advertise_exit_node`; other internet clients → `use_exit_node`.
 
 ### Credential map
 
@@ -74,7 +77,8 @@ Actual increment of `traffic_used_bytes` is **out of scope** (future module).
 
 ## ProtocolPreset / InvariantPreset
 
-Source of truth: embedded files under `internal/controlplane/presets/data/`
+Source of truth: embedded SQLite catalog (`internal/controlplane/catalogsqlite/data/catalog.sqlite`),
+authored from `internal/controlplane/catalogsqlite/ref/`
 (see operator guide [`docs/guides/controlplane-presets/`](../guides/controlplane-presets/00-index.md)).
 
 Compat view `ProtocolPreset` (materialize / older callers):
@@ -131,7 +135,7 @@ Used when authoring demux `match` blocks — stored/returned by API; not a runti
 | `listen_port` | uint16 | Public port |
 | `presets` | string[] | Ordered preset names (must exist; ≥1) |
 | `bindings` | object[] | Optional logical bindings. Backward-compatible layer over `presets[]` (if absent, each preset becomes one default binding). |
-| `demux_template` | object \| null | Optional. If set: demux listens on port; protocol inbounds inject-only. If null: **exactly one** preset; that inbound binds `listen`/`listen_port` directly |
+| `demux_template` | object \| null | Optional. If set: demux listens on public port and **dials** member inbounds on `127.0.0.1` private ports. If null: **exactly one** preset; that inbound binds `listen`/`listen_port` directly |
 | `created_at` / `updated_at` | RFC3339 | |
 
 ### SetBinding (logical)
@@ -214,8 +218,12 @@ ACME domain pool; inbounds opt in via `bindings[].params.sni`.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `dns` | raw JSON object | Optional; default local DNS |
-| `route` | raw JSON object | Optional; default `final=direct`, `rules=[]` |
+| `dns` | raw JSON object | Optional; default `{"servers":[{"tag":"local","type":"local"}]}` |
+| `route` | raw JSON object | Optional; default `{"final":"direct","rules":[]}` |
+| `outbounds` | raw JSON array | Optional; default `[{"type":"direct","tag":"direct"},{"type":"block","tag":"block"}]` |
+
+Empty / omitted field → materialize uses the default. PUT replaces the whole block; DELETE clears the override.
+Outbounds here are **server dataplane** outbounds only (not subscription `/v1/sub` outbounds).
 
 ## Reality config (`reality_config.json`)
 

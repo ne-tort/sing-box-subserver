@@ -1,20 +1,167 @@
 {
-  "ts": "2026-07-30T02:50:51.068880+00:00",
+  "ts": "2026-08-02T23:55:20.569092+00:00",
   "min_mbps": 0.5,
   "results": [
     {
-      "group": "dg_443_reality_sq",
+      "group": "dg_443_dual",
       "tag": "vless_reality",
       "status": "pass",
-      "mbps": 3845.6,
-      "detail": "mbps=3845.6"
+      "mbps": 6462.63,
+      "detail": "mbps=6462.63"
     },
     {
-      "group": "dg_443_reality_sq",
-      "tag": "shadowquic_jls",
+      "group": "dg_443_dual",
+      "tag": "hy2",
       "status": "pass",
-      "mbps": 1027.47,
-      "detail": "mbps=1027.47"
+      "mbps": 98.0,
+      "detail": "mbps=98.0"
+    },
+    {
+      "group": "dg_443_triple",
+      "tag": "vless_reality",
+      "status": "pass",
+      "mbps": 6471.51,
+      "detail": "mbps=6471.51"
+    },
+    {
+      "group": "dg_443_triple",
+      "tag": "anytls",
+      "status": "pass",
+      "mbps": 5859.04,
+      "detail": "mbps=5859.04"
+    },
+    {
+      "group": "dg_443_triple",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 97.99,
+      "detail": "mbps=97.99"
+    },
+    {
+      "group": "dg_443_fullstack",
+      "tag": "vless_reality",
+      "status": "pass",
+      "mbps": 5437.04,
+      "detail": "mbps=5437.04"
+    },
+    {
+      "group": "dg_443_fullstack",
+      "tag": "vless_grpc_tls",
+      "status": "pass",
+      "mbps": 3541.67,
+      "detail": "mbps=3541.67"
+    },
+    {
+      "group": "dg_443_fullstack",
+      "tag": "anytls",
+      "status": "pass",
+      "mbps": 5885.84,
+      "detail": "mbps=5885.84"
+    },
+    {
+      "group": "dg_443_fullstack",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 98.0,
+      "detail": "mbps=98.0"
+    },
+    {
+      "group": "dg_443_fullstack",
+      "tag": "mieru_tcp",
+      "status": "pass",
+      "mbps": 654.96,
+      "detail": "mbps=654.96"
+    },
+    {
+      "group": "dg_443_tls_quic",
+      "tag": "anytls",
+      "status": "pass",
+      "mbps": 5801.74,
+      "detail": "mbps=5801.74"
+    },
+    {
+      "group": "dg_443_tls_quic",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 97.98,
+      "detail": "mbps=97.98"
+    },
+    {
+      "group": "dg_443_exotic",
+      "tag": "vless_reality",
+      "status": "pass",
+      "mbps": 6885.94,
+      "detail": "mbps=6885.94"
+    },
+    {
+      "group": "dg_443_exotic",
+      "tag": "anytls",
+      "status": "pass",
+      "mbps": 5913.49,
+      "detail": "mbps=5913.49"
+    },
+    {
+      "group": "dg_443_exotic",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 98.0,
+      "detail": "mbps=98.0"
+    },
+    {
+      "group": "dg_443_exotic",
+      "tag": "sudoku_pad",
+      "status": "pass",
+      "mbps": 342.41,
+      "detail": "mbps=342.41"
+    },
+    {
+      "group": "dg_443_modern5",
+      "tag": "vless_reality",
+      "status": "pass",
+      "mbps": 6745.72,
+      "detail": "mbps=6745.72"
+    },
+    {
+      "group": "dg_443_modern5",
+      "tag": "vless_grpc_reality",
+      "status": "pass",
+      "mbps": 3583.55,
+      "detail": "mbps=3583.55"
+    },
+    {
+      "group": "dg_443_modern5",
+      "tag": "anytls",
+      "status": "pass",
+      "mbps": 5833.98,
+      "detail": "mbps=5833.98"
+    },
+    {
+      "group": "dg_443_modern5",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 98.0,
+      "detail": "mbps=98.0"
+    },
+    {
+      "group": "dg_443_modern5",
+      "tag": "tuic",
+      "status": "pass",
+      "mbps": 1132.61,
+      "detail": "mbps=1132.61"
+    },
+    {
+      "group": "dg_443_quic_storm",
+      "tag": "hy2",
+      "status": "pass",
+      "mbps": 97.98,
+      "detail": "mbps=97.98"
+    },
+    {
+      "group": "dg_443_quic_storm",
+      "tag": "tuic",
+      "status": "pass",
+      "mbps": 1128.39,
+      "detail": "mbps=1128.39"
     }
   ]
 }

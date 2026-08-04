@@ -16,7 +16,7 @@ FIXED_UUID = "b831381d-6324-4d53-ad4f-8cda48b30811"
 FIXED_PASSWORD = "matrix-pass-1"
 SERVER_DNS = "inv-server"
 TLS_SNI = "matrix.local"
-REALITY_SNI = "www.microsoft.com"
+REALITY_SNI = "www.apple.com"
 REALITY_HANDSHAKE_SERVER = "inv-handshake"
 REALITY_HANDSHAKE_PORT = 443
 REALITY_SHORT_ID = "0123456789abcdef"
@@ -25,9 +25,9 @@ USER_NAME = "u1"
 
 LEFTOVER_RE = re.compile(r"\{\{[^{}]+\}\}")
 
-# scripts/invariant_matrix -> ../../internal/controlplane/presets/data
+# scripts/invariant_matrix -> ../../internal/controlplane/catalogsqlite/ref
 HERE = Path(__file__).resolve().parent
-DEFAULT_PRESETS = HERE / ".." / ".." / "internal" / "controlplane" / "presets" / "data"
+DEFAULT_PRESETS = HERE / ".." / ".." / "internal" / "controlplane" / "catalogsqlite" / "ref"
 DEFAULT_LX_BIN = Path(os.environ.get("LX_BIN", r"c:\Users\qwerty\git\sui\.tools\lx-client\sing-box"))
 IMAGE = os.environ.get("INVMATRIX_IMAGE", "sui-lx-iperf:local")
 
@@ -96,11 +96,43 @@ def docker_path(p: Path) -> str:
 
 def load_preset(presets_root: Path, tag: str) -> dict[str, Any]:
     for path in presets_root.rglob(f"{tag}.json"):
-        if path.name == "protocol.json" or path.parent.name == "_schema":
+        if path.name == "protocol.json" or path.parent.name in ("_schema", "demux"):
             continue
         data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("tag") == tag:
-            return data
+        if data.get("tag") != tag:
+            continue
+        # catalogsqlite ready presets inherit templates from *_custom.json in same folder.
+        if not data.get("inbound_template") and not data.get("endpoint_template"):
+            custom_path = None
+            for cand in sorted(path.parent.glob("*_custom.json")):
+                custom_path = cand
+                break
+            if custom_path is not None and custom_path.is_file():
+                base = json.loads(custom_path.read_text(encoding="utf-8"))
+                for key in (
+                    "inbound_template",
+                    "outbound_template",
+                    "endpoint_template",
+                    "param_fields",
+                    "param_meta",
+                    "cred_fields",
+                    "cred_generators",
+                    "peer_secret_fields",
+                    "requirements",
+                    "traits",
+                    "demux_hints",
+                ):
+                    if key not in data and key in base:
+                        data[key] = copy.deepcopy(base[key])
+                # Ready param_values override custom defaults.
+                pvals = data.get("param_values") or {}
+                meta = data.get("param_meta") or {}
+                if isinstance(pvals, dict) and isinstance(meta, dict):
+                    for k, v in pvals.items():
+                        if k in meta and isinstance(meta[k], dict):
+                            meta[k]["default"] = v
+                    data["param_meta"] = meta
+        return data
     raise FileNotFoundError(f"preset tag not found: {tag} under {presets_root}")
 
 
@@ -512,6 +544,154 @@ def drop_empty_optional_fields(obj: dict[str, Any]) -> None:
     for k in ("traffic_pattern", "path", "host", "mode"):
         if k in obj and obj[k] == "":
             del obj[k]
+    # catalogsqlite templates use {{param.transport}} → "tcp" for native;
+    # sing-box rejects transport.type=tcp (omit the object instead).
+    tr = obj.get("transport")
+    if isinstance(tr, dict):
+        typ = str(tr.get("type") or "").strip().lower()
+        if typ in ("", "tcp", "none", "null", "<nil>"):
+            del obj["transport"]
+        else:
+            cleanup_v2ray_transport(obj, typ)
+    elif isinstance(tr, str) and tr.strip().lower() in ("tcp", "udp"):
+        # mieru uses transport as enum string; normalize case.
+        obj["transport"] = tr.strip().upper() if str(obj.get("type") or "") == "mieru" else tr.strip().lower()
+    mx = obj.get("multiplex")
+    if isinstance(mx, dict) and str(mx.get("enabled")).lower() in ("false", "0", "none", ""):
+        del obj["multiplex"]
+    elif mx == "none":
+        del obj["multiplex"]
+    # VLESS flow "none" must be omitted (not sent as the string "none").
+    if str(obj.get("flow") or "").strip().lower() in ("", "none"):
+        obj.pop("flow", None)
+    if str(obj.get("packet_encoding") or "").strip().lower() in ("", "none"):
+        obj.pop("packet_encoding", None)
+
+
+def cleanup_v2ray_transport(obj: dict[str, Any], typ: str) -> None:
+    """Mirror materialize.cleanupV2RayTransport for matrix harness."""
+    tr = obj.get("transport")
+    if not isinstance(tr, dict):
+        return
+    tr["type"] = typ
+    if typ in ("ws", "httpupgrade"):
+        tr.pop("host", None)
+        tr.pop("service_name", None)
+        tr.pop("password", None)
+        tr.pop("version", None)
+    elif typ == "http":
+        tr.pop("service_name", None)
+        tr.pop("password", None)
+        tr.pop("version", None)
+        host = tr.get("host")
+        if isinstance(host, str) and host.strip():
+            tr["host"] = [host.strip()]
+        elif not isinstance(host, list):
+            tr.pop("host", None)
+    elif typ == "grpc":
+        tr.pop("path", None)
+        tr.pop("host", None)
+        tr.pop("headers", None)
+        tr.pop("password", None)
+        tr.pop("version", None)
+
+
+def cleanup_hysteria2_knobs(obj: dict[str, Any], params: dict[str, str]) -> None:
+    """Mirror materialize hy2 stock knobs for catalogsqlite templates."""
+    if str(obj.get("type") or "") != "hysteria2":
+        return
+    obfs_type = str(params.get("obfs_type") or "").strip().lower()
+    if obfs_type in ("", "none", "off"):
+        obj.pop("obfs", None)
+    masq = str(params.get("masquerade_mode") or "").strip().lower()
+    if masq in ("", "none", "off"):
+        obj.pop("masquerade", None)
+    realm = str(params.get("realm_mode") or "").strip().lower()
+    if realm in ("", "none", "off"):
+        obj.pop("realm", None)
+    for k in ("up_mbps", "down_mbps"):
+        if k in obj and isinstance(obj[k], str) and obj[k].isdigit():
+            obj[k] = int(obj[k])
+
+
+def cleanup_mieru_knobs(obj: dict[str, Any]) -> None:
+    if str(obj.get("type") or "") != "mieru":
+        return
+    if "mtu" in obj:
+        try:
+            obj["mtu"] = int(obj["mtu"])
+        except (TypeError, ValueError):
+            obj.pop("mtu", None)
+    tr = obj.get("transport")
+    if isinstance(tr, str):
+        obj["transport"] = tr.strip().upper()
+
+
+def cleanup_sudoku_knobs(obj: dict[str, Any]) -> None:
+    """Mirror materialize.applySudokuKnobs numeric coercion for catalogsqlite templates."""
+    if str(obj.get("type") or "") != "sudoku":
+        return
+    for k in ("padding_min", "padding_max"):
+        if k not in obj:
+            continue
+        v = obj[k]
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, (int, float)):
+            obj[k] = int(v)
+            continue
+        s = str(v).strip()
+        if s.isdigit():
+            obj[k] = int(s)
+        else:
+            obj.pop(k, None)
+    mode = ""
+    hm = obj.get("httpmask")
+    if isinstance(hm, dict):
+        mode = str(hm.get("mode") or "").strip().lower()
+    if mode in ("", "off", "none", "false"):
+        obj.pop("httpmask", None)
+
+
+def cleanup_naive_knobs(obj: dict[str, Any], params: dict[str, str], *, inbound: bool) -> None:
+    """Mirror materialize.applyNaiveNetworkKnobs.
+
+    Outbound NaiveOutboundOptions has no `network` field (unknown field FATAL);
+    UDP mode uses `quic: true` instead.
+    """
+    if str(obj.get("type") or "") != "naive":
+        return
+    netw = str(params.get("network") or obj.get("network") or "tcp").strip().lower()
+    if inbound:
+        if netw == "udp":
+            obj["network"] = "udp"
+            tls = obj.get("tls")
+            if isinstance(tls, dict):
+                tls["alpn"] = ["h3"]
+            obj["quic_congestion_control"] = obj.get("quic_congestion_control") or "bbr"
+        else:
+            obj["network"] = "tcp"
+            tls = obj.get("tls")
+            if isinstance(tls, dict):
+                tls["alpn"] = ["h2"]
+        return
+    # outbound
+    obj.pop("network", None)
+    tls = obj.get("tls") if isinstance(obj.get("tls"), dict) else None
+    if netw == "udp":
+        obj["quic"] = True
+        obj.pop("extra_headers", None)
+        obj["quic_congestion_control"] = obj.get("quic_congestion_control") or "bbr"
+    else:
+        obj.pop("quic", None)
+        obj.pop("quic_congestion_control", None)
+    if tls is not None:
+        # Cronet outbound rejects alpn/insecure/utls (mirror sanitizeNaiveOutboundTLS).
+        tls.pop("alpn", None)
+        tls.pop("insecure", None)
+        tls.pop("utls", None)
+        tls.pop("reality", None)
+        tls.pop("ech", None)
 
 
 def apply_ss2022_outbound_password(
@@ -612,6 +792,15 @@ def render_cell(
     notes = preset.get("client_notes") if isinstance(preset.get("client_notes"), dict) else {}
     params = dict(PARAM_DEFAULTS)
     params.update(param_defaults_from_notes(notes))
+    # catalogsqlite: fill from param_meta defaults + ready param_values.
+    meta = preset.get("param_meta") if isinstance(preset.get("param_meta"), dict) else {}
+    for k, spec in meta.items():
+        if isinstance(spec, dict) and "default" in spec and spec["default"] is not None:
+            params[str(k)] = str(spec["default"])
+    pvals = preset.get("param_values") if isinstance(preset.get("param_values"), dict) else {}
+    for k, v in pvals.items():
+        if v is not None:
+            params[str(k)] = str(v)
     # ShadowTLS handshake must hit a reachable TLS host inside the matrix net.
     if "tls_mimic" in traits_of(preset) or protocol == "shadowtls":
         params["handshake_server"] = REALITY_HANDSHAKE_SERVER
@@ -692,6 +881,14 @@ def render_cell(
     )
     drop_empty_optional_fields(ib)
     drop_empty_optional_fields(ob)
+    cleanup_hysteria2_knobs(ib, params)
+    cleanup_hysteria2_knobs(ob, params)
+    cleanup_mieru_knobs(ib)
+    cleanup_mieru_knobs(ob)
+    cleanup_sudoku_knobs(ib)
+    cleanup_sudoku_knobs(ob)
+    cleanup_naive_knobs(ib, params, inbound=True)
+    cleanup_naive_knobs(ob, params, inbound=False)
 
     return {
         "tag": tag,
@@ -893,6 +1090,7 @@ def rewrite_client_iperf_ip(workdir: Path, tag: str, iperf_ip: str, server_ip: s
             if "server" in ob:
                 ob["server"] = server_ip
         dns = doc.get("dns")
+        demux_sni = str(meta_cells[tag].get("demux_sni") or "").strip()
         if isinstance(dns, dict):
             for srv in dns.get("servers") or []:
                 if isinstance(srv, dict) and srv.get("type") == "hosts":
@@ -900,6 +1098,19 @@ def rewrite_client_iperf_ip(workdir: Path, tag: str, iperf_ip: str, server_ip: s
                     if isinstance(predefined, dict):
                         predefined[TLS_SNI] = [server_ip]
                         predefined[SERVER_DNS] = [server_ip]
+                        # Cronet resolves TLS SNI / demux match name; pin demux_sni too.
+                        if demux_sni:
+                            predefined[demux_sni] = [server_ip]
+            # Also pin demux_sni in dns rules when present.
+            if demux_sni:
+                rules = dns.get("rules")
+                if isinstance(rules, list):
+                    for rule in rules:
+                        if not isinstance(rule, dict):
+                            continue
+                        domains = rule.get("domain")
+                        if isinstance(domains, list) and demux_sni not in domains:
+                            domains.append(demux_sni)
     write_json(client_path, doc)
     return client_path
 

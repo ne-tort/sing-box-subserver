@@ -43,53 +43,6 @@
   "default_client_profiles": [
     "pkt-xudp"
   ],
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": [],
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2"
-      ]
-    },
-    "transport": {
-      "type": "grpc",
-      "service_name": "{{param.service_name}}",
-      "idle_timeout": "15s",
-      "ping_timeout": "15s",
-      "permit_without_stream": false
-    }
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "uuid": "{{user.uuid}}",
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2"
-      ],
-      "utls": {
-        "enabled": true,
-        "fingerprint": "chrome"
-      }
-    },
-    "transport": {
-      "type": "grpc",
-      "service_name": "{{param.service_name}}",
-      "idle_timeout": "15s",
-      "ping_timeout": "15s",
-      "permit_without_stream": false
-    },
-    "packet_encoding": "xudp"
-  },
   "requirements": {
     "tls_profile": true
   },
@@ -97,60 +50,17 @@
     "flow": "Vision/XTLS is incompatible with WS/gRPC/HTTP/HTTPUpgrade — use flow-none only",
     "packet_encoding": "default xudp; profiles pkt-none / pkt-packetaddr via enabled_client_profiles"
   },
-  "optional_param_fields": [
-    "service_name",
-    "fingerprint"
-  ],
-  "param_meta": {
-    "service_name": {
-      "type": "string",
-      "widget": "text",
-      "default": "GunService",
-      "ui_group": "transport",
-      "ui_order": 36,
-      "title": {
-        "en": "gRPC service name",
-        "ru": "gRPC service name"
-      },
-      "description": {
-        "en": "gRPC Gun service_name (post-TLS H2 marker).",
-        "ru": "gRPC Gun service_name (маркер после TLS/H2)."
-      }
-    },
-    "fingerprint": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "ios",
-        "android",
-        "random"
-      ],
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 90,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Outbound uTLS ClientHello fingerprint.",
-        "ru": "uTLS fingerprint ClientHello на outbound."
-      },
-      "help": {
-        "summary": {
-          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
-          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
-        },
-        "input_hint": {
-          "en": "chrome|firefox|…",
-          "ru": "chrome|firefox|…"
-        },
-        "format": "chrome"
-      }
-    }
+  "param_values": {
+    "transport": "grpc",
+    "tls_mode": "tls",
+    "flow": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
   }
 }

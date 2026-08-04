@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_aes",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-aes"
+  ],
+  "short_name": "Sudoku AES",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku AES-GCM",
+      "description": "Sudoku shared key + aes-128-gcm + entropy table."
+    },
+    "en": {
+      "title": "Sudoku AES",
+      "description": "Sudoku AES mode. Stronger payload crypto inside the sudoku framing."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku AES stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "param_values": {
+    "aead_method": "aes-128-gcm",
+    "multiplex": "off",
+    "padding_min": "3",
+    "padding_max": "12",
+    "fallback": "http://127.0.0.1:80",
+    "httpmask_mode": "off",
+    "httpmask_path": "/sudoku"
+  }
+}

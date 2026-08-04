@@ -1,0 +1,55 @@
+{
+  "protocol": "vless",
+  "user_variants": [
+    {
+      "name": "flow-none",
+      "scope": "user_symmetric",
+      "credential_field": "uuid",
+      "flow_value": "",
+      "requires_user_symmetric_entry": true,
+      "subscription_default": false,
+      "query_tags": ["variant:flow-none", "flow:none", "tag:flow-none"]
+    },
+    {
+      "name": "flow-xtls-rprx-vision",
+      "scope": "user_symmetric",
+      "credential_field": "uuid_xtls",
+      "flow_value": "xtls-rprx-vision",
+      "requires_user_symmetric_entry": true,
+      "subscription_default": true,
+      "query_tags": ["variant:flow-xtls-rprx-vision", "flow:xtls-rprx-vision", "tag:flow-xtls"]
+    },
+    {
+      "name": "flow-udp-vision",
+      "scope": "user_symmetric",
+      "credential_field": "uuid_udp",
+      "flow_value": "xtls-rprx-vision-udp443",
+      "requires_user_symmetric_entry": true,
+      "subscription_default": false,
+      "query_tags": ["variant:flow-udp-vision", "flow:udp-vision", "tag:flow-udp"]
+    }
+  ],
+  "client_profiles": [
+    {
+      "name": "pkt-none",
+      "scope": "outbound_only",
+      "subscription_default": true,
+      "query_tags": ["profile:pkt-none", "tag:pkt-none"],
+      "outbound_overrides": {"packet_encoding": null}
+    },
+    {
+      "name": "pkt-xudp",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:pkt-xudp", "tag:pkt-xudp"],
+      "outbound_overrides": {"packet_encoding": "xudp"}
+    },
+    {
+      "name": "pkt-packetaddr",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:pkt-packetaddr", "tag:pkt-packetaddr"],
+      "outbound_overrides": {"packet_encoding": "packetaddr"}
+    }
+  ]
+}

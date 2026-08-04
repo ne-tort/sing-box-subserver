@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "tag": "anytls_custom",
+  "protocol": "anytls",
+  "aliases": [
+    "anytls-custom"
+  ],
+  "short_name": "AnyTLS custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "AnyTLS конструктор",
+      "description": "AnyTLS: uTLS fingerprint, ALPN, опциональные idle_session_* на outbound."
+    },
+    "en": {
+      "title": "AnyTLS constructor",
+      "description": "AnyTLS: uTLS fingerprint, ALPN, optional idle_session_* on outbound."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello (password TLS wrapper; depends on ALPN/fingerprint)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "padding_scheme": [
+      "stop=8",
+      "0=30-30",
+      "1=100-400",
+      "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000",
+      "3=9-9,500-1000",
+      "4=500-1000",
+      "5=500-1000",
+      "6=500-1000",
+      "7=500-1000"
+    ]
+  },
+  "outbound_template": {
+    "type": "anytls",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "padding_scheme": "inbound peer setting (DPI: irregular TLS record sizes)",
+    "idle": "outbound idle_* — separate invariant anytls_idle"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fingerprint",
+    "alpn",
+    "idle_session",
+    "padding_scheme"
+  ],
+  "param_meta": {
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS fingerprint.",
+        "ru": "uTLS fingerprint на outbound."
+      }
+    },
+    "alpn": {
+      "type": "string",
+      "widget": "text",
+      "default": "h2,http/1.1",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "title": {
+        "en": "ALPN list",
+        "ru": "Список ALPN"
+      },
+      "description": {
+        "en": "Comma-separated ALPN for AnyTLS TLS.",
+        "ru": "ALPN через запятую для AnyTLS TLS."
+      },
+      "help": {
+        "summary": {
+          "en": "Comma-separated TLS ALPN. Keep h2,http/1.1 unless the front requires a single ALPN.",
+          "ru": "TLS ALPN через запятую. Обычно h2,http/1.1, если front не требует один ALPN."
+        }
+      }
+    },
+    "idle_session": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "advanced",
+      "ui_order": 10,
+      "title": {
+        "en": "Idle session",
+        "ru": "Idle-сессии"
+      },
+      "description": {
+        "en": "Outbound idle_session_check_interval/timeout=30s (warm TLS).",
+        "ru": "Outbound idle_session_* = 30s (warm TLS)."
+      },
+      "help": {
+        "summary": {
+          "en": "When true, outbound keeps idle_session_* timers (same idea as anytls_idle). Off = stock anytls without idle pool.",
+          "ru": "true — outbound с idle_session_* (как anytls_idle). Off — stock anytls без idle pool."
+        }
+      }
+    },
+    "padding_scheme": {
+      "type": "string",
+      "widget": "text",
+      "default": "stop=8\n0=30-30\n1=100-400\n2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000\n3=9-9,500-1000\n4=500-1000\n5=500-1000\n6=500-1000\n7=500-1000",
+      "ui_group": "advanced",
+      "ui_order": 20,
+      "title": {
+        "en": "Padding scheme",
+        "ru": "Padding scheme"
+      },
+      "description": {
+        "en": "Inbound padding_scheme profile (one rule per line).",
+        "ru": "Профиль padding_scheme на inbound (по правилу на строку)."
+      },
+      "help": {
+        "summary": {
+          "en": "Full AnyTLS padding_scheme. One rule per line (or semicolon-separated). Applied to the inbound; leave empty to keep the template default.",
+          "ru": "Полный padding_scheme AnyTLS. По правилу на строку (или через ;). На inbound; пусто — шаблон по умолчанию."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "tag": "dg_443_sni_stack",
+  "short_name": "SNI Lattice",
+  "status": "lab",
+  "suggested_port": 443,
+  "networks": [
+    "tcp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "SNI Lattice",
+      "description": "عدة TLS و Reality حسب اسم المضيف."
+    },
+    "en": {
+      "title": "SNI Lattice",
+      "description": "Multiple TLS and Reality by hostname."
+    },
+    "es": {
+      "title": "SNI Lattice",
+      "description": "Varios TLS y Reality por nombre de host."
+    },
+    "fa": {
+      "title": "SNI Lattice",
+      "description": "چند TLS و Reality بر اساس نام میزبان."
+    },
+    "fr": {
+      "title": "SNI Lattice",
+      "description": "Plusieurs TLS et Reality par nom d’hôte."
+    },
+    "id": {
+      "title": "SNI Lattice",
+      "description": "Beberapa TLS dan Reality menurut hostname."
+    },
+    "pt-BR": {
+      "title": "SNI Lattice",
+      "description": "Vários TLS e Reality por hostname."
+    },
+    "ru": {
+      "title": "SNI Lattice",
+      "description": "Несколько TLS и Reality по имени хоста."
+    },
+    "tr": {
+      "title": "SNI Lattice",
+      "description": "Ana bilgisayar adına göre birden fazla TLS ve Reality."
+    },
+    "zh-CN": {
+      "title": "SNI Lattice",
+      "description": "按主机名区分的多路 TLS / Reality。"
+    },
+    "zh-TW": {
+      "title": "SNI Lattice",
+      "description": "依主機名區分的多路 TLS / Reality。"
+    }
+  },
+  "slots": [
+    {
+      "id": "r1",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "r2",
+      "role": "tcp_reality",
+      "default_preset": "vless_grpc_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "t1",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "t2",
+      "role": "tcp_tls",
+      "default_preset": "anytls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "t3",
+      "role": "tcp_tls",
+      "default_preset": "vless_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool"
+    }
+  ],
+  "scores": {
+    "dpi": 8,
+    "mobile": 7,
+    "setup": 6,
+    "speed": 7
+  }
+}

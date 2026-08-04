@@ -5,6 +5,7 @@ package wgawg
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -41,15 +42,6 @@ type MasqueradeParams struct {
 	ID string `json:"id"`
 	IP string `json:"ip"` // quic|dns|stun|sip
 	IB string `json:"ib"` // chrome|firefox|curl
-}
-
-var decoyDomains = []string{
-	"nic.at", "nic.ch", "switch.ch", "restena.lu", "denic.de", "nic.cz",
-	"uio.no", "helsinki.fi", "uu.se", "ku.dk", "tum.de", "rwth-aachen.de",
-	"kit.edu", "fu-berlin.de", "univie.ac.at", "unige.ch", "polimi.it",
-	"upm.es", "jaist.ac.jp", "nict.go.jp", "kaist.ac.kr", "ntu.edu.tw",
-	"cuhk.edu.hk", "nus.edu.sg", "anu.edu.au", "ualberta.ca", "mcgill.ca",
-	"usp.br", "unam.mx", "bnf.fr", "dnb.de", "bl.uk",
 }
 
 var masqueradeIPs = []string{"quic", "dns", "stun", "sip"}
@@ -160,31 +152,171 @@ func GenerateAWG3Params() (AWG3Params, error) {
 	}, nil
 }
 
-// GenerateMasquerade picks random decoy domain + protocol + browser.
+// GenerateMasquerade picks protocol + browser. ID must come from the Reality SNI
+// pool on the client — never from a static decoy list.
 func GenerateMasquerade() MasqueradeParams {
 	return MasqueradeParams{
-		ID: decoyDomains[rnd(0, len(decoyDomains)-1)],
+		ID: "",
 		IP: masqueradeIPs[rnd(0, len(masqueradeIPs)-1)],
 		IB: masqueradeIBs[rnd(0, len(masqueradeIBs)-1)],
 	}
 }
 
-// Bundle merges device (+ optional AWG3) + masquerade into a flat map for hub.AWG.
-func Bundle(awg3 bool) (map[string]any, error) {
-	dev := GenerateDeviceParams(awg3)
-	masq := GenerateMasquerade()
-	out := map[string]any{
-		"jc": dev.JC, "jmin": dev.JMin, "jmax": dev.JMax,
-		"s1": dev.S1, "s2": dev.S2, "s3": dev.S3, "s4": dev.S4,
-		"h1": dev.H1, "h2": dev.H2, "h3": dev.H3, "h4": dev.H4,
-		"id": masq.ID, "ip": masq.IP, "ib": masq.IB,
+// GenerateInitPacket builds one AmneziaWG CPS string as a single <b 0xHEXBLOB>
+// (official Amnezia / amneziawg-go style). Prefer GenerateInitPackets.
+func GenerateInitPacket(minBytes, maxBytes int) string {
+	if minBytes < 1 {
+		minBytes = 1
 	}
-	if awg3 {
+	if maxBytes < minBytes {
+		maxBytes = minBytes
+	}
+	n := rnd(minBytes, maxBytes)
+	buf := make([]byte, n)
+	_, _ = rand.Read(buf)
+	return "<b 0x" + hex.EncodeToString(buf) + ">"
+}
+
+// GenerateInitPackets returns i1–i5 from the amnezia-wg-easy signatures bank,
+// with protocol-aware entropy tags (<r>/<t>/…) applied on top of real dumps.
+// preferred is a masquerade sugar hint (quic|dns|stun|sip|"") used to bias
+// protocol family selection; empty / "none" picks across the full bank.
+func GenerateInitPackets() (i1, i2, i3, i4, i5 string) {
+	return GenerateInitPacketsPreferred("")
+}
+
+// GenerateInitPacketsPreferred is GenerateInitPackets with a protocol bias.
+func GenerateInitPacketsPreferred(preferred string) (i1, i2, i3, i4, i5 string) {
+	proto, _, slots, err := PickSignature(preferred)
+	if err != nil {
+		return fallbackInitPackets()
+	}
+	return RandomizeCPS(proto, slots.I1),
+		RandomizeCPS(proto, slots.I2),
+		RandomizeCPS(proto, slots.I3),
+		RandomizeCPS(proto, slots.I4),
+		RandomizeCPS(proto, slots.I5)
+}
+
+// GenerateInitPacketsDetailed returns slots plus the bank protocol/variant ids
+// (useful for junk-range calibration and UI labels).
+func GenerateInitPacketsDetailed(preferred string) (protocol, variant string, i1, i2, i3, i4, i5 string) {
+	proto, ver, slots, err := PickSignature(preferred)
+	if err != nil {
+		a, b, c, d, e := fallbackInitPackets()
+		return "fallback", "0", a, b, c, d, e
+	}
+	return proto, ver,
+		RandomizeCPS(proto, slots.I1),
+		RandomizeCPS(proto, slots.I2),
+		RandomizeCPS(proto, slots.I3),
+		RandomizeCPS(proto, slots.I4),
+		RandomizeCPS(proto, slots.I5)
+}
+
+func fallbackInitPackets() (i1, i2, i3, i4, i5 string) {
+	// Structured templates (not N×`<b 0xNN>`), matching amnezia-wg-easy fixtures.
+	return "<b 0xc00000000108><r 8><b 0x000044d0><r 1232>",
+		"<b 0x000100002112a442><r 12>",
+		"<r 2><b 0x012000010000000000010000010001>",
+		GenerateInitPacket(8, 24),
+		GenerateInitPacket(8, 16)
+}
+
+// HasManualCPS reports whether awg carries explicit i1–i5.
+func HasManualCPS(awg map[string]any) bool {
+	if awg == nil {
+		return false
+	}
+	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+		if v, ok := awg[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// BundleOpts controls sugar vs bank-manual generation.
+type BundleOpts struct {
+	AWG3 bool
+	// Mode: ""|"sugar" → id/ip/ib sugar (lx builds CPS at runtime).
+	// "none"|"manual" → bank i1–i5 with selective entropy.
+	Mode string
+	// Preferred biases bank protocol family or sugar ip (quic|dns|stun|sip).
+	Preferred string
+	// PreserveID keeps an existing masquerade id (Reality SNI) on sugar regenerate.
+	PreserveID string
+}
+
+// Bundle merges device (+ optional AWG3) into a flat map for hub.AWG.
+// Default is sugar masquerade (ip/ib); id is left empty for the client SNI pool.
+func Bundle(awg3 bool) (map[string]any, error) {
+	return BundleWith(BundleOpts{AWG3: awg3, Mode: "sugar"})
+}
+
+// BundleManual generates junk + bank-based i1–i5 (no id/ip/ib).
+func BundleManual(awg3 bool, preferred string) (map[string]any, error) {
+	return BundleWith(BundleOpts{AWG3: awg3, Mode: "manual", Preferred: preferred})
+}
+
+// BundleWith generates an AWG hub map according to opts.
+func BundleWith(opts BundleOpts) (map[string]any, error) {
+	mode := strings.ToLower(strings.TrimSpace(opts.Mode))
+	preferred := strings.ToLower(strings.TrimSpace(opts.Preferred))
+	switch mode {
+	case "quic", "dns", "stun", "sip":
+		if preferred == "" {
+			preferred = mode
+		}
+		mode = "sugar"
+	case "none", "manual":
+		mode = "manual"
+	case "", "sugar":
+		mode = "sugar"
+	default:
+		mode = "sugar"
+	}
+	manual := mode == "manual"
+
+	var out map[string]any
+	if manual {
+		proto, _, i1, i2, i3, i4, i5 := GenerateInitPacketsDetailed(preferred)
+		dev := GenerateDeviceParamsForProtocol(opts.AWG3, proto)
+		out = map[string]any{
+			"jc": dev.JC, "jmin": dev.JMin, "jmax": dev.JMax,
+			"s1": dev.S1, "s2": dev.S2, "s3": dev.S3, "s4": dev.S4,
+			"h1": dev.H1, "h2": dev.H2, "h3": dev.H3, "h4": dev.H4,
+			"i1": i1, "i2": i2, "i3": i3, "i4": i4, "i5": i5,
+			"signature_protocol": proto,
+		}
+	} else {
+		dev := GenerateDeviceParams(opts.AWG3)
+		masq := GenerateMasquerade()
+		ip := preferred
+		if ip == "" || ip == "none" || ip == "manual" || ip == "sugar" {
+			ip = masq.IP
+		}
+		switch ip {
+		case "quic", "dns", "stun", "sip":
+		default:
+			ip = masq.IP
+		}
+		out = map[string]any{
+			"jc": dev.JC, "jmin": dev.JMin, "jmax": dev.JMax,
+			"s1": dev.S1, "s2": dev.S2, "s3": dev.S3, "s4": dev.S4,
+			"h1": dev.H1, "h2": dev.H2, "h3": dev.H3, "h4": dev.H4,
+			"ip": ip, "ib": masq.IB,
+		}
+		if id := strings.TrimSpace(opts.PreserveID); id != "" {
+			out["id"] = id
+		}
+	}
+
+	if opts.AWG3 {
 		p3, err := GenerateAWG3Params()
 		if err != nil {
 			return nil, err
 		}
-		// HP requires padding floors ≥12
 		for _, k := range []string{"s1", "s2", "s3", "s4"} {
 			n, _ := out[k].(int)
 			if n < 12 {
@@ -200,6 +332,42 @@ func Bundle(awg3 bool) (map[string]any, error) {
 		out["max_handshake_attempts"] = p3.MaxHandshakeAttempts
 	}
 	return out, nil
+}
+
+// BundleFromExisting regenerates junk/CPS preserving sugar vs manual style of prev.
+func BundleFromExisting(awg3 bool, prev map[string]any, modeOverride string) (map[string]any, error) {
+	mode := strings.ToLower(strings.TrimSpace(modeOverride))
+	preserveID := ""
+	preferred := ""
+	if mode == "" {
+		if HasManualCPS(prev) {
+			mode = "manual"
+			if prev != nil {
+				preferred = strings.TrimSpace(fmt.Sprint(prev["signature_protocol"]))
+				if preferred == "<nil>" {
+					preferred = ""
+				}
+			}
+		} else {
+			mode = "sugar"
+			if prev != nil {
+				preferred = strings.ToLower(strings.TrimSpace(fmt.Sprint(prev["ip"])))
+				if preferred == "<nil>" {
+					preferred = ""
+				}
+				preserveID = strings.TrimSpace(fmt.Sprint(prev["id"]))
+				if preserveID == "<nil>" {
+					preserveID = ""
+				}
+			}
+		}
+	}
+	return BundleWith(BundleOpts{
+		AWG3:       awg3,
+		Mode:       mode,
+		Preferred:  preferred,
+		PreserveID: preserveID,
+	})
 }
 
 // ApplyToEndpoint copies AWG map onto a wireguard endpoint object.

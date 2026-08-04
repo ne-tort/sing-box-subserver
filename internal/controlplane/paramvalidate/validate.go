@@ -113,6 +113,11 @@ func Validate(pp domain.ProtocolPreset, params map[string]string) error {
 	return nil
 }
 
+// Visible reports whether a param field applies under the current params.
+func Visible(pp domain.ProtocolPreset, field string, params map[string]string) bool {
+	return visible(pp, field, params)
+}
+
 func visible(pp domain.ProtocolPreset, field string, params map[string]string) bool {
 	meta, ok := pp.ParamMeta[field]
 	if !ok || len(meta.VisibleWhen) == 0 {

@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "tag": "hy2_custom",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2-custom",
+    "hy2-constructor"
+  ],
+  "short_name": "Hy2 custom",
+  "status": "lab",
+  "custom_preset": true,
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2 конструктор",
+      "description": "Лабораторный Hy2: obfs (salamander/gecko), bandwidth, masquerade и realm через params."
+    },
+    "en": {
+      "title": "Hysteria2 constructor",
+      "description": "Lab Hy2: obfs (salamander/gecko), bandwidth caps, masquerade, and realm via params."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "obfs",
+    "masquerade",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC/H3; obfs may break demux match",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "peer_secret_fields": {
+    "obfs_password": "password",
+    "realm_token": "password"
+  },
+  "optional_param_fields": [
+    "obfs_type",
+    "up_mbps",
+    "down_mbps",
+    "masquerade_mode",
+    "masquerade_dir",
+    "masquerade_url",
+    "ignore_client_bandwidth",
+    "realm_mode",
+    "realm_server_url",
+    "realm_id"
+  ],
+  "param_meta": {
+    "obfs_type": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "salamander",
+        "gecko",
+        "gecko_compact"
+      ],
+      "default": "none",
+      "ui_group": "obfs",
+      "ui_order": 1,
+      "title": {
+        "en": "Obfuscation",
+        "ru": "Обфускация"
+      },
+      "description": {
+        "en": "none | salamander | gecko | gecko_compact (peer-symmetric password).",
+        "ru": "none | salamander | gecko | gecko_compact (peer password)."
+      }
+    },
+    "up_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 10,
+      "min": 1,
+      "max": 10000,
+      "title": {
+        "en": "Upload Mbps",
+        "ru": "Upload Мбит/с"
+      },
+      "description": {
+        "en": "Server/client upload bandwidth cap.",
+        "ru": "Лимит upload (Mbps)."
+      }
+    },
+    "down_mbps": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "100",
+      "ui_group": "core",
+      "ui_order": 11,
+      "min": 1,
+      "max": 10000,
+      "title": {
+        "en": "Download Mbps",
+        "ru": "Download Мбит/с"
+      },
+      "description": {
+        "en": "Server/client download bandwidth cap.",
+        "ru": "Лимит download (Mbps)."
+      }
+    },
+    "ignore_client_bandwidth": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 12,
+      "title": {
+        "en": "Ignore client bandwidth",
+        "ru": "Игнорировать bandwidth клиента"
+      },
+      "description": {
+        "en": "Hy2 ignore_client_bandwidth on inbound.",
+        "ru": "ignore_client_bandwidth на inbound."
+      }
+    },
+    "masquerade_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "string",
+        "file",
+        "proxy"
+      ],
+      "default": "none",
+      "ui_group": "advanced",
+      "ui_order": 20,
+      "title": {
+        "en": "Masquerade mode",
+        "ru": "Режим masquerade"
+      },
+      "description": {
+        "en": "HTTP masquerade on invalid auth (inbound-only).",
+        "ru": "HTTP masquerade при неверном auth (только inbound)."
+      }
+    },
+    "masquerade_dir": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "advanced",
+      "ui_order": 21,
+      "visible_when": [
+        {
+          "key": "masquerade_mode",
+          "equals": "file"
+        }
+      ],
+      "title": {
+        "en": "Masquerade directory",
+        "ru": "Каталог masquerade"
+      },
+      "description": {
+        "en": "Static files root for file masquerade.",
+        "ru": "Корень статики для file masquerade."
+      }
+    },
+    "masquerade_url": {
+      "type": "string",
+      "widget": "text",
+      "default": "https://www.cloudflare.com",
+      "ui_group": "advanced",
+      "ui_order": 22,
+      "visible_when": [
+        {
+          "key": "masquerade_mode",
+          "equals": "proxy"
+        }
+      ],
+      "title": {
+        "en": "Masquerade proxy URL",
+        "ru": "URL proxy masquerade"
+      },
+      "description": {
+        "en": "Upstream URL for proxy masquerade.",
+        "ru": "Upstream URL для proxy masquerade."
+      }
+    },
+    "realm_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "on"
+      ],
+      "default": "none",
+      "ui_group": "advanced",
+      "ui_order": 30,
+      "title": {
+        "en": "Realm",
+        "ru": "Realm"
+      },
+      "description": {
+        "en": "Enable Hysteria realm{} (needs external realm control plane).",
+        "ru": "Включить realm{} (нужна внешняя панель realm)."
+      }
+    },
+    "realm_server_url": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "advanced",
+      "ui_order": 31,
+      "visible_when": [
+        {
+          "key": "realm_mode",
+          "equals": "on"
+        }
+      ],
+      "title": {
+        "en": "Realm server URL",
+        "ru": "URL realm-сервера"
+      },
+      "description": {
+        "en": "Base HTTPS URL of the external Hysteria realm control plane.",
+        "ru": "Базовый HTTPS URL внешней панели Hysteria realm."
+      },
+      "required_guide": {
+        "title": {
+          "en": "External Hysteria realm",
+          "ru": "Внешний Hysteria realm"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Deploy or obtain a Hysteria realm control plane (not generated by this agent).",
+              "ru": "Разверните или получите панель Hysteria realm (агент её не генерирует)."
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the realm base HTTPS URL into Realm server URL.",
+              "ru": "Скопируйте базовый HTTPS URL в «URL realm-сервера»."
+            }
+          },
+          {
+            "text": {
+              "en": "Copy the realm id into Realm ID; peer realm_token is issued per user.",
+              "ru": "Скопируйте id в «ID realm»; peer realm_token выдаётся на пользователя."
+            }
+          }
+        ]
+      }
+    },
+    "realm_id": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "advanced",
+      "ui_order": 32,
+      "visible_when": [
+        {
+          "key": "realm_mode",
+          "equals": "on"
+        }
+      ],
+      "title": {
+        "en": "Realm ID",
+        "ru": "ID realm"
+      },
+      "description": {
+        "en": "Realm identifier from the external control plane.",
+        "ru": "Идентификатор realm из внешней панели."
+      },
+      "required_guide": {
+        "title": {
+          "en": "Realm ID",
+          "ru": "ID realm"
+        },
+        "steps": [
+          {
+            "text": {
+              "en": "Take the realm id from the external Hysteria realm panel after creating a realm.",
+              "ru": "Возьмите id realm во внешней панели после создания realm."
+            }
+          }
+        ]
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "inbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "obfs": {
+      "type": "salamander",
+      "password": "{{peer.obfs_password}}"
+    },
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "ignore_client_bandwidth": true,
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "masquerade": {
+      "type": "file",
+      "directory": "{{param.masquerade_dir}}"
+    },
+    "realm": {
+      "server_url": "{{param.realm_server_url}}",
+      "token": "{{peer.realm_token}}",
+      "realm_id": "{{param.realm_id}}",
+      "stun_servers": [
+        "stun.l.google.com:19302"
+      ]
+    }
+  },
+  "outbound_template": {
+    "type": "hysteria2",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "obfs": {
+      "type": "salamander",
+      "password": "{{peer.obfs_password}}"
+    },
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h3"
+      ]
+    },
+    "up_mbps": 100,
+    "down_mbps": 100,
+    "realm": {
+      "server_url": "{{param.realm_server_url}}",
+      "token": "{{peer.realm_token}}",
+      "realm_id": "{{param.realm_id}}",
+      "stun_servers": [
+        "stun.l.google.com:19302"
+      ]
+    }
+  },
+  "client_notes": {
+    "obfs_type": "none → strip obfs; salamander/gecko → peer.obfs_password",
+    "masquerade_mode": "none|string|file|proxy — inbound-only",
+    "realm_mode": "none|on — peer.realm_token + realm_server_url/realm_id",
+    "bandwidth": "up_mbps/down_mbps via params"
+  }
+}

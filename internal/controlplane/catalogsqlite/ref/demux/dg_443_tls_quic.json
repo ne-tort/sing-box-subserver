@@ -1,0 +1,101 @@
+{
+  "tag": "dg_443_tls_quic",
+  "short_name": "HTTPS Mask",
+  "status": "stable",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS مع Hy2 احتياطي."
+    },
+    "en": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS with Hy2 fallback."
+    },
+    "es": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS con Hy2 de respaldo."
+    },
+    "fa": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS با پشتیبان Hy2."
+    },
+    "fr": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS avec secours Hy2."
+    },
+    "id": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS dengan cadangan Hy2."
+    },
+    "pt-BR": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS com Hy2 de reserva."
+    },
+    "ru": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS с запасным Hy2."
+    },
+    "tr": {
+      "title": "HTTPS Mask",
+      "description": "Hy2 yedekli Naive TLS."
+    },
+    "zh-CN": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS，Hy2 作为备用。"
+    },
+    "zh-TW": {
+      "title": "HTTPS Mask",
+      "description": "Naive TLS，Hy2 作為備用。"
+    }
+  },
+  "slots": [
+    {
+      "id": "tls",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "protocol_only"
+    }
+  ],
+  "scores": {
+    "dpi": 8,
+    "mobile": 7,
+    "setup": 8,
+    "speed": 8
+  },
+  "notes": "Pick naive_quic on TLS to also claim QUIC (H2+H3); separate Hy2 slot is then skipped."
+}

@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "tag": "snell_custom",
+  "protocol": "snell",
+  "aliases": [
+    "snell-custom"
+  ],
+  "short_name": "Snell v5 custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Snell конструктор",
+      "description": "Snell: obfs_mode, obfs_host. Inbound v5 / outbound v4 wire."
+    },
+    "en": {
+      "title": "Snell constructor",
+      "description": "Snell: obfs_mode and obfs_host. Inbound v5 / outbound v4 wire."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "snell AEAD",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "userkey"
+  ],
+  "peer_secret_fields": {
+    "psk": "password"
+  },
+  "inbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "version": 5,
+    "psk": "{{peer.psk}}",
+    "users": [],
+    "obfs_mode": "{{param.obfs_mode}}"
+  },
+  "outbound_template": {
+    "type": "snell",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "version": 4,
+    "psk": "{{peer.psk}}",
+    "userkey": "{{user.userkey}}",
+    "obfs_mode": "{{param.obfs_mode}}",
+    "obfs_host": "{{param.obfs_host}}"
+  },
+  "client_notes": {
+    "version": "inbound v5 ~ outbound v4 wire",
+    "psk": "peer_symmetric",
+    "userkey": "user_symmetric",
+    "params": "optional bindings[].params overrides: obfs_host"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "obfs_host",
+    "version"
+  ],
+  "param_meta": {
+    "obfs_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "http",
+        "tls"
+      ],
+      "default": "http",
+      "ui_group": "obfs",
+      "ui_order": 1,
+      "title": {
+        "en": "Obfs mode",
+        "ru": "Режим obfs"
+      },
+      "description": {
+        "en": "Snell obfs_mode on inbound/outbound.",
+        "ru": "obfs_mode Snell на inbound/outbound."
+      }
+    },
+    "obfs_host": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.bing.com",
+      "ui_group": "obfs",
+      "ui_order": 41,
+      "title": {
+        "en": "Obfs Host",
+        "ru": "Obfs Host"
+      },
+      "description": {
+        "en": "Host header for Snell HTTP/TLS obfs.",
+        "ru": "Host header для Snell HTTP/TLS obfs."
+      },
+      "visible_when": [
+        {
+          "key": "obfs_mode",
+          "in": [
+            "http",
+            "tls"
+          ]
+        }
+      ],
+      "help": {
+        "summary": {
+          "en": "Host header used by Snell obfs (http/tls). Match a believable site; unused when obfs_mode=off.",
+          "ru": "Host header для Snell obfs (http/tls). Под реалистичный сайт; не используется при obfs_mode=off."
+        },
+        "input_hint": {
+          "en": "Hostname without scheme",
+          "ru": "Hostname без схемы"
+        },
+        "format": "www.bing.com"
+      }
+    },
+    "version": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "5",
+        "6"
+      ],
+      "default": "5",
+      "ui_group": "core",
+      "ui_order": 0,
+      "title": {
+        "en": "Version",
+        "ru": "Версия"
+      },
+      "description": {
+        "en": "Snell protocol version (6 forces inbound/outbound version=6).",
+        "ru": "Версия Snell (6 выставляет version=6 на inbound/outbound)."
+      }
+    }
+  },
+  "param_fields": [
+    "obfs_mode"
+  ]
+}

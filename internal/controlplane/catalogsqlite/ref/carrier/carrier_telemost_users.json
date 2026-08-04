@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_telemost_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-telemost-users"
+  ],
+  "short_name": "Carrier Telemost users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Telemost users",
+      "description": "Telemost + auth=users; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Telemost users",
+      "description": "Telemost underlay with per-user credentials."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "telemost"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "telemost",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

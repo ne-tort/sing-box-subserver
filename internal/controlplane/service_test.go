@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/agentcfg"
 	"github.com/ne-tort/sing-box-subserver/internal/configowner"
@@ -296,6 +297,84 @@ func TestConfigDNSRouteAPI(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/dns", bytes.NewReader(bad)))
 	if rr.Code != 400 {
 		t.Fatalf("expected 400 empty servers, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/config/outbounds", nil))
+	if rr.Code != 200 {
+		t.Fatalf("GET outbounds: %d %s", rr.Code, rr.Body.String())
+	}
+	var outGet struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &outGet); err != nil {
+		t.Fatal(err)
+	}
+	if outGet.Data["is_default"] != true {
+		t.Fatalf("expected default outbounds: %v", outGet.Data)
+	}
+	arr, _ := outGet.Data["outbounds"].([]any)
+	if len(arr) != 2 {
+		t.Fatalf("default outbounds len=%d", len(arr))
+	}
+
+	outPut := []byte(`{"outbounds":[{"type":"direct","tag":"direct"},{"type":"block","tag":"block"},{"type":"socks","tag":"socks-out","server":"127.0.0.1","server_port":1080}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/outbounds", bytes.NewReader(outPut)))
+	if rr.Code != 200 {
+		t.Fatalf("PUT outbounds: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/config/outbounds", nil))
+	if err := json.Unmarshal(rr.Body.Bytes(), &outGet); err != nil {
+		t.Fatal(err)
+	}
+	if outGet.Data["is_default"] != false {
+		t.Fatal("expected custom outbounds")
+	}
+	arr, _ = outGet.Data["outbounds"].([]any)
+	if len(arr) != 3 {
+		t.Fatalf("custom outbounds len=%d", len(arr))
+	}
+
+	badOut := []byte(`{"outbounds":[{"type":"direct"}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/config/outbounds", bytes.NewReader(badOut)))
+	if rr.Code != 400 {
+		t.Fatalf("expected 400 missing tag, got %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/v1/controlplane/config/outbounds", nil))
+	if rr.Code != 200 {
+		t.Fatalf("DELETE outbounds: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/config/outbounds", nil))
+	if err := json.Unmarshal(rr.Body.Bytes(), &outGet); err != nil {
+		t.Fatal(err)
+	}
+	if outGet.Data["is_default"] != true {
+		t.Fatal("expected default after DELETE")
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/config", nil))
+	if rr.Code != 200 {
+		t.Fatalf("GET config: %d %s", rr.Code, rr.Body.String())
+	}
+	var bulk struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &bulk); err != nil {
+		t.Fatal(err)
+	}
+	if bulk.Data["dns"] == nil || bulk.Data["route"] == nil || bulk.Data["outbounds"] == nil {
+		t.Fatalf("bulk missing blocks: %v", bulk.Data)
+	}
+	isDef, _ := bulk.Data["is_default"].(map[string]any)
+	if isDef["dns"] != false || isDef["route"] != false || isDef["outbounds"] != true {
+		t.Fatalf("bulk is_default=%v", isDef)
 	}
 }
 
@@ -641,6 +720,58 @@ func TestValidateBindingParamsRequiresRoom(t *testing.T) {
 	}
 }
 
+func TestValidateVlessConstructorConflicts(t *testing.T) {
+	t.Parallel()
+	svc := &Service{}
+	base := domain.InboundSet{
+		Name: "vc", Listen: "::", ListenPort: 8443,
+		Bindings: []domain.SetBinding{{
+			Preset: "vless_custom",
+			Params: map[string]string{"transport": "ws", "tls_mode": "tls"},
+		}},
+	}
+	if err := svc.validateSet(base, nil); err != nil {
+		t.Fatalf("ws+tls defaults should pass: %v", err)
+	}
+
+	visionWS := base
+	visionWS.Bindings = []domain.SetBinding{{
+		Preset: "vless_custom",
+		Params: map[string]string{
+			"transport": "ws", "tls_mode": "tls", "flow": "xtls-rprx-vision",
+		},
+	}}
+	err := svc.validateSet(visionWS, nil)
+	if err == nil || !strings.Contains(err.Error(), "cp_param") {
+		t.Fatalf("vision+ws want conflict, got %v", err)
+	}
+
+	visionMux := base
+	visionMux.Bindings = []domain.SetBinding{{
+		Preset: "vless_custom",
+		Params: map[string]string{
+			"transport": "tcp", "tls_mode": "tls",
+			"flow": "xtls-rprx-vision", "multiplex": "smux",
+		},
+	}}
+	err = svc.validateSet(visionMux, nil)
+	if err == nil || !strings.Contains(err.Error(), "cp_param_conflict") {
+		t.Fatalf("vision+mux want conflict, got %v", err)
+	}
+
+	visionOK := base
+	visionOK.Bindings = []domain.SetBinding{{
+		Preset: "vless_custom",
+		Params: map[string]string{
+			"transport": "tcp", "tls_mode": "reality", "flow": "xtls-rprx-vision",
+		},
+	}}
+	if err := svc.validateSet(visionOK, nil); err != nil {
+		t.Fatalf("vision+tcp+reality should pass: %v", err)
+	}
+}
+
+
 func TestEnsureDERPCurve25519CredsAndPeer(t *testing.T) {
 	t.Parallel()
 	svc := &Service{}
@@ -869,7 +1000,7 @@ func TestSubVariantTagProfileFilters(t *testing.T) {
 				"preset":"vless-tcp",
 				"subscription_tags":["mobile"],
 				"enabled_user_variants":["flow-none","flow-udp-vision"],
-				"enabled_client_profiles":["ios"]
+				"enabled_client_profiles":["pkt-xudp"]
 			}
 		]
 	}`)
@@ -885,7 +1016,7 @@ func TestSubVariantTagProfileFilters(t *testing.T) {
 	}
 
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/sub/"+tok+"?variant=flow-udp-vision&tag=mobile&profile=ios", nil))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/sub/"+tok+"?variant=flow-udp-vision&tag=mobile&profile=pkt-xudp", nil))
 	if rr.Code != 200 {
 		t.Fatalf("sub filters: %d %s", rr.Code, rr.Body.String())
 	}
@@ -901,9 +1032,12 @@ func TestSubVariantTagProfileFilters(t *testing.T) {
 	if ob["flow"] != "xtls-rprx-vision-udp443" {
 		t.Fatalf("flow=%v", ob["flow"])
 	}
+	if ob["packet_encoding"] != "xudp" {
+		t.Fatalf("packet_encoding=%v want xudp", ob["packet_encoding"])
+	}
 
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/sub/"+tok+"?profile=android", nil))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/sub/"+tok+"?profile=pkt-packetaddr", nil))
 	if rr.Code != 200 {
 		t.Fatalf("sub profile miss: %d %s", rr.Code, rr.Body.String())
 	}
@@ -1448,4 +1582,219 @@ func envUserIDFromCreate(t *testing.T, mux *http.ServeMux) string {
 	}
 	t.Fatal("ruser id not found")
 	return ""
+}
+
+func TestSmokeNoActiveSet(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/smoke", bytes.NewReader([]byte(`{}`))))
+	if rr.Code != 422 {
+		t.Fatalf("want 422 got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestSmokeAfterActivate(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "127.0.0.1", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	setBody := []byte(`{"name":"sm1","listen":"127.0.0.1","listen_port":19443,"presets":["vless-tcp"]}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
+	if rr.Code != 201 {
+		t.Fatalf("create set: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets/sm1/activate", nil))
+	if rr.Code != 200 {
+		t.Fatalf("activate: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/smoke", bytes.NewReader([]byte(`{"timeout_ms":1500}`))))
+	if rr.Code != 200 {
+		t.Fatalf("smoke: %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Results []map[string]any `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if !env.OK || len(env.Data.Results) == 0 {
+		t.Fatalf("expected results, body=%s", rr.Body.String())
+	}
+	found := false
+	for _, r := range env.Data.Results {
+		if r["preset"] == "vless-tcp" || r["preset"] == "vless_tcp" {
+			found = true
+			if r["inbound_tag"] != "cp-in-sm1-vless-tcp" && r["inbound_tag"] != "cp-in-sm1-vless_tcp" {
+				// binding may use alias
+				tag, _ := r["inbound_tag"].(string)
+				if !strings.Contains(tag, "sm1") {
+					t.Fatalf("inbound_tag=%v", r["inbound_tag"])
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no vless result: %s", rr.Body.String())
+	}
+
+	// Last report persisted + GET /smoke/last.
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/smoke/last", nil))
+	if rr.Code != 200 {
+		t.Fatalf("smoke last: %d %s", rr.Code, rr.Body.String())
+	}
+	var lastEnv struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			FinishedAt string           `json:"finished_at"`
+			Results    []map[string]any `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &lastEnv); err != nil {
+		t.Fatal(err)
+	}
+	if !lastEnv.OK || lastEnv.Data.FinishedAt == "" || len(lastEnv.Data.Results) == 0 {
+		t.Fatalf("last report: %s", rr.Body.String())
+	}
+
+	// Sets list enriched with smoke summary.
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/sets", nil))
+	var setsEnv struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &setsEnv); err != nil {
+		t.Fatal(err)
+	}
+	enriched := false
+	for _, set := range setsEnv.Data {
+		if set["name"] != "sm1" {
+			continue
+		}
+		if set["smoke"] != nil {
+			enriched = true
+		}
+		bindings, _ := set["bindings"].([]any)
+		for _, raw := range bindings {
+			b, _ := raw.(map[string]any)
+			if b["smoke"] != nil {
+				enriched = true
+			}
+		}
+	}
+	if !enriched {
+		t.Fatalf("expected smoke enrichment on set: %s", rr.Body.String())
+	}
+
+	// Concurrent smoke → 409 busy.
+	started := make(chan struct{})
+	done := make(chan int, 1)
+	go func() {
+		close(started)
+		rr2 := httptest.NewRecorder()
+		mux.ServeHTTP(rr2, httptest.NewRequest(http.MethodPost, "/v1/controlplane/smoke", bytes.NewReader([]byte(`{"timeout_ms":2500}`))))
+		done <- rr2.Code
+	}()
+	<-started
+	time.Sleep(20 * time.Millisecond)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/smoke", bytes.NewReader([]byte(`{"timeout_ms":1500}`))))
+	busyCode := rr.Code
+	firstCode := <-done
+	if busyCode != 409 && firstCode != 409 {
+		t.Fatalf("expected one 409 busy; got concurrent=%d other=%d", busyCode, firstCode)
+	}
+
+	// Smoke user hidden from list.
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/users", nil))
+	var usersEnv struct {
+		Data []map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &usersEnv)
+	for _, u := range usersEnv.Data {
+		if u["name"] == "__cp_smoke__" {
+			t.Fatal("smoke user must be hidden from list")
+		}
+	}
+}
+
+func TestSmokeLastEmpty(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &agentcfg.Config{
+		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
+		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "10.0.0.1", ExpiryTickSec: 60},
+	}
+	cs, err := configstore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := obs.Setup("error")
+	sup := supervisor.NewWithOptions(cs, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
+	owner, err := configowner.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
+	mux := http.NewServeMux()
+	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc { return http.HandlerFunc(next) })
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/smoke/last", nil))
+	if rr.Code != 200 {
+		t.Fatalf("want 200 got %d %s", rr.Code, rr.Body.String())
+	}
+	var env struct {
+		OK   bool `json:"ok"`
+		Data any  `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if !env.OK || env.Data != nil {
+		t.Fatalf("want null data: %s", rr.Body.String())
+	}
 }

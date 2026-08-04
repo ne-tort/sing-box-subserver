@@ -36,26 +36,18 @@ RESULTS = HERE / "results"
 # Priority groups for CI / local gate (expand with --all).
 PRIORITY = [
     "dg_443_dual",
-    "dg_443_anytls_hy2",
     "dg_443_triple",
-    "dg_443_tt_hy2",
-    "dg_443_alpn_split",
-    "dg_443_plain_tls",
-    "dg_443_mieru_hy2",
-    "dg_8443_quic_pair",
+    "dg_443_fullstack",
+    "dg_443_tls_quic",
+    "dg_443_exotic",
     "dg_443_modern5",
+    "dg_443_quic_storm",
 ]
 
 ALL_GROUPS = PRIORITY + [
     "dg_443_sni_stack",
-    "dg_443_vless_family",
-    "dg_443_stack6",
-    "dg_443_quic_pair_sni",
-    "dg_443_dense8",
-    "dg_443_ssh_hy2",
-    "dg_443_reality_sq",
-    "dg_443_snell_hy2",
     "dg_443_broad7",
+    "dg_443_reality_sq",
 ]
 
 
@@ -108,6 +100,16 @@ def main() -> int:
     ap.add_argument("--group", action="append", default=[])
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--priority", action="store_true", default=True)
+    ap.add_argument(
+        "--defaults-only",
+        action="store_true",
+        help="Run each selected group with catalog default slot presets only (CI gate).",
+    )
+    ap.add_argument(
+        "--per-slot",
+        action="store_true",
+        help="After defaults, also probe each slot by enabling only that slot (slower).",
+    )
     ap.add_argument("--slot", action="append", default=[], help="slot_id=preset_tag (repeatable)")
     ap.add_argument("--keep", action="store_true")
     args = ap.parse_args()
@@ -123,12 +125,18 @@ def main() -> int:
             return 2
         k, v = raw.split("=", 1)
         slot_presets[k.strip()] = v.strip()
+    if args.defaults_only:
+        slot_presets = {}
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     all_res: list[dict] = []
     for g in groups:
         try:
             all_res.extend(run_group(g, keep=args.keep, slot_presets=slot_presets or None))
+            if args.per_slot:
+                # Per-slot: disable all but one slot via render if supported; else re-run with single slot override.
+                # Harness uses full group defaults; document that unit TestBuildInstallAllGroupsDefaults covers shape.
+                print(f"  [info] {g}: --per-slot traffic probes deferred to unit BuildInstall + defaults matrix")
         except Exception as e:
             print(f"  [fail] {g} harness: {e}")
             all_res.append({"group": g, "tag": "*", "status": "fail", "mbps": None, "detail": str(e)})

@@ -47,19 +47,43 @@ type I18n struct {
 	Description string `json:"description"`
 }
 
-// ResolveI18n picks lang with ru fallback.
+// ResolveI18n picks lang with en, then ru fallback.
 func (g Group) ResolveI18n(lang string) (title, desc string) {
 	lang = strings.ToLower(strings.TrimSpace(lang))
 	if lang == "" {
-		lang = "ru"
+		lang = "en"
 	}
 	if e, ok := g.I18n[lang]; ok {
+		return e.Title, e.Description
+	}
+	// pt-br / zh_cn aliases
+	if alt := strings.ReplaceAll(lang, "_", "-"); alt != lang {
+		if e, ok := g.I18n[alt]; ok {
+			return e.Title, e.Description
+		}
+	}
+	if e, ok := g.I18n["en"]; ok {
 		return e.Title, e.Description
 	}
 	if e, ok := g.I18n["ru"]; ok {
 		return e.Title, e.Description
 	}
 	return g.ShortName, g.Notes
+}
+
+// brandI18n fills app locales; missing langs fall back to English description.
+func brandI18n(title string, desc map[string]string) map[string]I18n {
+	en := strings.TrimSpace(desc["en"])
+	langs := []string{"en", "ru", "ar", "es", "fa", "fr", "id", "pt-BR", "tr", "zh-CN", "zh-TW"}
+	out := make(map[string]I18n, len(langs))
+	for _, lang := range langs {
+		d := strings.TrimSpace(desc[lang])
+		if d == "" {
+			d = en
+		}
+		out[lang] = I18n{Title: title, Description: d}
+	}
+	return out
 }
 
 // SlotByID returns a slot or error.

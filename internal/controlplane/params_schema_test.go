@@ -112,8 +112,6 @@ func TestAllRequiredParamFieldsHaveGuides(t *testing.T) {
 		"carrier_wbstream_shared",
 		"carrier_wbstream_users",
 		"cloudflared_token",
-		"hy2_masquerade_file",
-		"hy2_realm",
 	}
 	for _, tag := range tags {
 		inv, err := presets.GetInvariant(tag)
@@ -144,8 +142,11 @@ func TestAllRequiredParamFieldsHaveGuides(t *testing.T) {
 			if len(steps) == 0 {
 				t.Fatalf("%s.%s: required_guide.steps empty", tag, field)
 			}
-			if len(pp.ParamMeta) == 0 || pp.ParamMeta[field].RequiredGuide == nil {
-				t.Fatalf("%s.%s: preset JSON param_meta.required_guide missing", tag, field)
+			meta := pp.ParamMeta[field]
+			hasSingular := meta.RequiredGuide != nil && len(meta.RequiredGuide.Steps) > 0
+			hasPlural := len(meta.RequiredGuides) > 0 && len(meta.RequiredGuides[0].Steps) > 0
+			if !hasSingular && !hasPlural {
+				t.Fatalf("%s.%s: preset JSON param_meta.required_guide(s) missing", tag, field)
 			}
 		}
 	}

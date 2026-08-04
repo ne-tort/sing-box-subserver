@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_telemost_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-telemost",
+    "carrier-telemost-shared"
+  ],
+  "short_name": "Carrier Telemost",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Telemost",
+      "description": "Yandex Telemost: guest join без Яндекс-логина. params.room=https://telemost.yandex.ru/j/<id>."
+    },
+    "en": {
+      "title": "Carrier Telemost shared",
+      "description": "Yandex Telemost SFU underlay, shared auth. Room URL from Telemost; good when Jitsi is blocked."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "telemost"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "room": "ops creates the meeting in Telemost UI; CP only joins by URL"
+  },
+  "param_values": {
+    "provider": "telemost",
+    "auth_mode": "shared",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

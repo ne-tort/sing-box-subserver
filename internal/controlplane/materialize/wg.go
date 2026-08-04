@@ -83,7 +83,7 @@ func hostIndexFromCred(v any) (int, bool) {
 	}
 }
 
-// BuildWireGuardEndpoint builds the singleton hub endpoint, or nil if disabled.
+// BuildWireGuardEndpoint builds the singleton hub endpoint (sugar JSON), or nil if disabled.
 func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost string) (map[string]any, error) {
 	hub.Normalize()
 	if !hub.Enabled {
@@ -115,6 +115,7 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 	if err != nil {
 		return nil, err
 	}
+	ep["subnet"] = hub.Subnet
 	ep["address"] = []any{hubAddr}
 	ep["private_key"] = hub.HubPrivateKey
 	ep["listen_port"] = hub.ListenPort
@@ -140,6 +141,11 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 	if hub.DownMbps > 0 {
 		ep["down_mbps"] = hub.DownMbps
 	}
+	if hub.PeerRelay {
+		ep["peer_relay"] = true
+	} else {
+		delete(ep, "peer_relay")
+	}
 
 	if hub.Profile != domain.WgProfilePlain {
 		wgawg.ApplyToEndpoint(ep, hub.AWG, hub.Profile)
@@ -155,9 +161,11 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 		}
 	}
 
+	exitID := strings.TrimSpace(hub.ExitUserID)
 	peers := make([]any, 0, len(users))
 	seenIndex := map[int]string{}
 	seenPub := map[string]string{}
+	exitFound := exitID == ""
 	for _, u := range users {
 		creds := wgCredsFromUser(u, hub.Profile)
 		if creds == nil {
@@ -180,14 +188,18 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 		}
 		seenIndex[idx] = u.Name
 		seenPub[pub] = u.Name
-		allowed, err := hub.PeerAllowedIP(idx)
+		hostIP, err := hub.PeerHostIP(idx)
 		if err != nil {
 			return nil, fmt.Errorf("user %q: %w", u.Name, err)
 		}
 		peer := map[string]any{
 			"public_key":                    pub,
-			"allowed_ips":                   []any{allowed},
-			"persistent_keepalive_interval": 0,
+			"ip":                            hostIP,
+			"persistent_keepalive_interval": hub.PeerKeepalive,
+		}
+		if exitID != "" && u.ID == exitID {
+			peer["exit_node"] = true
+			exitFound = true
 		}
 		if up := BytesPerSecToMbps(u.SpeedUpBytesPerSec); up > 0 {
 			peer["up_mbps"] = up
@@ -197,12 +209,15 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 		}
 		peers = append(peers, peer)
 	}
+	if exitID != "" && !exitFound {
+		return nil, fmt.Errorf("cp_invalid_wg: exit_user_id %q has no WG peer", exitID)
+	}
 	ep["peers"] = peers
 	_ = publicHost
 	return ep, nil
 }
 
-// RenderWireGuardClientEndpoint builds a client-side wireguard endpoint for subscription.
+// RenderWireGuardClientEndpoint builds a client-side sugar wireguard endpoint for subscription.
 func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHost string) (map[string]any, error) {
 	hub.Normalize()
 	if !hub.Enabled {
@@ -223,23 +238,14 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	if !ok {
 		return nil, fmt.Errorf("missing or invalid wg_host_index")
 	}
-	localIP, err := hub.PeerAllowedIP(idx)
+	localAddr, err := hub.PeerInterfaceAddress(idx)
 	if err != nil {
 		return nil, err
 	}
-	localAddr := strings.TrimSuffix(localIP, "/32") + "/32"
 
 	server := publicHost
 	if server == "" {
 		server = "127.0.0.1"
-	}
-
-	var peerAllowed []any
-	if hub.InternetAllowed() {
-		peerAllowed = []any{"0.0.0.0/0", "::/0"}
-	} else {
-		// Subnet route: reach hub + other peers; not a hub AllowedIPs expansion.
-		peerAllowed = []any{hub.Subnet}
 	}
 
 	mtu := 1408
@@ -249,10 +255,15 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 		mtu = 1280
 	}
 
+	clientKA := hub.ClientKeepalive
+	if clientKA <= 0 {
+		clientKA = 25
+	}
 	ep := map[string]any{
 		"type":        "wireguard",
 		"tag":         "cp-wg",
 		"mtu":         mtu,
+		"subnet":      hub.Subnet,
 		"address":     []any{localAddr},
 		"private_key": priv,
 		"peers": []any{
@@ -260,10 +271,16 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 				"address":                       server,
 				"port":                          hub.ListenPort,
 				"public_key":                    hub.HubPublicKey,
-				"allowed_ips":                   peerAllowed,
-				"persistent_keepalive_interval": 25,
+				"persistent_keepalive_interval": clientKA,
 			},
 		},
+	}
+	exitID := strings.TrimSpace(hub.ExitUserID)
+	isExitPeer := exitID != "" && user.ID == exitID
+	if isExitPeer {
+		ep["advertise_exit_node"] = true
+	} else if hub.InternetAllowed() {
+		ep["use_exit_node"] = true
 	}
 	if hub.Profile != domain.WgProfilePlain {
 		wgawg.ApplyToEndpoint(ep, hub.AWG, hub.Profile)

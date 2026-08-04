@@ -14,7 +14,7 @@ import (
 
 func sampleUser(name string, index int, pub string) domain.User {
 	return domain.User{
-		Name: name, Enabled: true, CreatedAt: time.Now().UTC(),
+		ID: "id-" + name, Name: name, Enabled: true, CreatedAt: time.Now().UTC(),
 		Creds: map[string]map[string]any{
 			"wg": {
 				"private_key":   "PRIV-" + name,
@@ -60,10 +60,13 @@ func TestScenario_AWG2RequiresMasqueradeNoISlots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"jc", "jmin", "s1", "h1", "id", "ip", "ib"} {
+	for _, k := range []string{"jc", "jmin", "s1", "h1", "ip", "ib"} {
 		if ep[k] == nil || ep[k] == "" {
 			t.Fatalf("missing %s", k)
 		}
+	}
+	if _, ok := ep["id"]; ok {
+		t.Fatal("id must come from Reality SNI override, not Bundle")
 	}
 	for _, k := range []string{"i1", "i2", "i3", "i4", "i5", "header_protection_key"} {
 		if _, ok := ep[k]; ok {
@@ -86,7 +89,7 @@ func TestScenario_AWG3HasHPAndMasquerade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ep["header_protection_key"] == nil || ep["id"] == nil {
+	if ep["header_protection_key"] == nil || ep["ip"] == nil {
 		t.Fatalf("%v", ep)
 	}
 }
@@ -115,8 +118,11 @@ func TestScenario_StickyIndexSurvivesSubnetChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	p1 := ep1["peers"].([]any)[0].(map[string]any)
-	if p1["allowed_ips"].([]any)[0] != "10.8.0.7/32" {
-		t.Fatalf("%v", p1["allowed_ips"])
+	if p1["ip"] != "10.8.0.7" {
+		t.Fatalf("%v", p1["ip"])
+	}
+	if _, ok := p1["allowed_ips"]; ok {
+		t.Fatalf("allowed_ips must be absent in sugar: %v", p1)
 	}
 	hub.Subnet = "10.9.0.0/24"
 	ep2, err := BuildWireGuardEndpoint(hub, []domain.User{u}, "edge")
@@ -124,12 +130,15 @@ func TestScenario_StickyIndexSurvivesSubnetChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	p2 := ep2["peers"].([]any)[0].(map[string]any)
-	if p2["allowed_ips"].([]any)[0] != "10.9.0.7/32" {
-		t.Fatalf("sticky index must rebase: %v", p2["allowed_ips"])
+	if p2["ip"] != "10.9.0.7" {
+		t.Fatalf("sticky index must rebase: %v", p2["ip"])
 	}
 	addrs := ep2["address"].([]any)
-	if addrs[0] != "10.9.0.1/24" {
+	if addrs[0] != "10.9.0.1" {
 		t.Fatalf("hub addr=%v", addrs)
+	}
+	if ep2["subnet"] != "10.9.0.0/24" {
+		t.Fatalf("subnet=%v", ep2["subnet"])
 	}
 }
 
@@ -163,11 +172,11 @@ func TestScenario_DuplicatePublicKeyRejected(t *testing.T) {
 	}
 }
 
-func TestScenario_SystemOptInAndForwardRequiresSystem(t *testing.T) {
+func TestScenario_SystemOptInAndPeerRelay(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
 		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		System: true, Name: "wg0", ForwardAllow: true,
+		System: true, Name: "wg0", PeerRelay: true,
 		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
 	}
 	ep, err := BuildWireGuardEndpoint(hub, nil, "edge")
@@ -177,10 +186,17 @@ func TestScenario_SystemOptInAndForwardRequiresSystem(t *testing.T) {
 	if ep["system"] != true || ep["name"] != "wg0" {
 		t.Fatalf("%v", ep)
 	}
-	bad := hub
-	bad.System = false
-	if err := bad.Validate(); err == nil {
-		t.Fatal("forward_allow without system must fail validate")
+	if ep["peer_relay"] != true {
+		t.Fatalf("peer_relay missing: %v", ep)
+	}
+	hubOff := hub
+	hubOff.PeerRelay = false
+	epOff, err := BuildWireGuardEndpoint(hubOff, nil, "edge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := epOff["peer_relay"]; ok {
+		t.Fatalf("peer_relay should be omitted when false: %v", epOff)
 	}
 }
 
@@ -195,10 +211,19 @@ func TestScenario_ClientInternetAllowRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	addrs := ep["address"].([]any)
+	if len(addrs) != 1 || addrs[0] != "10.8.0.3" {
+		t.Fatalf("client iface addr=%v", addrs)
+	}
+	if ep["subnet"] != "10.8.0.0/24" {
+		t.Fatalf("subnet=%v", ep["subnet"])
+	}
+	if ep["use_exit_node"] != true {
+		t.Fatalf("want use_exit_node: %v", ep)
+	}
 	peer := ep["peers"].([]any)[0].(map[string]any)
-	ips := peer["allowed_ips"].([]any)
-	if len(ips) != 2 || ips[0] != "0.0.0.0/0" {
-		t.Fatalf("full tunnel=%v", ips)
+	if _, ok := peer["allowed_ips"]; ok {
+		t.Fatalf("allowed_ips must be absent: %v", peer)
 	}
 	off := false
 	hub.InternetAllow = &off
@@ -206,10 +231,53 @@ func TestScenario_ClientInternetAllowRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer2 := ep2["peers"].([]any)[0].(map[string]any)
-	ips2 := peer2["allowed_ips"].([]any)
-	if len(ips2) != 1 || ips2[0] != "10.8.0.0/24" {
-		t.Fatalf("subnet-only=%v", ips2)
+	if _, ok := ep2["use_exit_node"]; ok {
+		t.Fatalf("overlay-only must omit use_exit_node: %v", ep2)
+	}
+}
+
+func TestScenario_ExitNodeSugar(t *testing.T) {
+	t.Parallel()
+	exit := sampleUser("exit", 4, "PUBE")
+	other := sampleUser("a", 2, "PUBA")
+	hub := domain.WgHub{
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
+		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		ExitUserID: exit.ID,
+	}
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{other, exit}, "edge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep["peer_relay"] != true {
+		t.Fatalf("exit forces peer_relay: %v", ep)
+	}
+	var exitPeer map[string]any
+	for _, raw := range ep["peers"].([]any) {
+		p := raw.(map[string]any)
+		if p["ip"] == "10.8.0.4" {
+			exitPeer = p
+		}
+	}
+	if exitPeer == nil || exitPeer["exit_node"] != true {
+		t.Fatalf("exit peer=%v", exitPeer)
+	}
+	clientExit, err := RenderWireGuardClientEndpoint(exit, hub, "edge.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clientExit["advertise_exit_node"] != true {
+		t.Fatalf("%v", clientExit)
+	}
+	if _, ok := clientExit["use_exit_node"]; ok {
+		t.Fatalf("exit client must not use_exit_node: %v", clientExit)
+	}
+	clientOther, err := RenderWireGuardClientEndpoint(other, hub, "edge.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clientOther["use_exit_node"] != true {
+		t.Fatalf("%v", clientOther)
 	}
 }
 
@@ -291,8 +359,11 @@ func TestScenario_CredsUnderAwgKeyOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := ep["peers"].([]any)[0].(map[string]any)
-	if p["allowed_ips"].([]any)[0] != "10.8.0.9/32" {
+	if p["ip"] != "10.8.0.9" {
 		t.Fatalf("%v", p)
+	}
+	if _, ok := p["allowed_ips"]; ok {
+		t.Fatalf("allowed_ips forbidden: %v", p)
 	}
 	client, err := RenderWireGuardClientEndpoint(u, hub, "edge.example")
 	if err != nil || client == nil {

@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_custom",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-custom",
+    "trojan-constructor"
+  ],
+  "short_name": "Trojan custom",
+  "status": "lab",
+  "custom_preset": true,
+  "i18n": {
+    "ru": {
+      "title": "Trojan конструктор",
+      "description": "Лабораторный Trojan: transport + TLS/Reality/plain, multiplex, WS early-data и fallback через params."
+    },
+    "en": {
+      "title": "Trojan constructor",
+      "description": "Lab Trojan: transport, TLS mode, multiplex, WS early-data, and inbound fallback via params."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp",
+    "tls",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp",
+      "udp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1",
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "Depends on transport/tls_mode",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 6,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_fields": [
+    "transport",
+    "tls_mode"
+  ],
+  "optional_param_fields": [
+    "fingerprint",
+    "transport_path",
+    "transport_host",
+    "service_name",
+    "alpn",
+    "multiplex",
+    "ws_max_early_data",
+    "fallback"
+  ],
+  "param_meta": {
+    "transport": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "tcp",
+        "ws",
+        "grpc",
+        "http",
+        "httpupgrade",
+        "quic"
+      ],
+      "default": "tcp",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {
+        "en": "Transport",
+        "ru": "Транспорт"
+      },
+      "description": {
+        "en": "Trojan underlying transport (sing-box transport.type).",
+        "ru": "Транспорт Trojan (transport.type)."
+      }
+    },
+    "tls_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "tls",
+        "reality"
+      ],
+      "default": "tls",
+      "ui_group": "tls",
+      "ui_order": 2,
+      "title": {
+        "en": "TLS mode",
+        "ru": "Режим TLS"
+      },
+      "description": {
+        "en": "Plain TCP, TLS profile, or Reality assignment.",
+        "ru": "Plain TCP, TLS-профиль CP или Reality."
+      }
+    },
+    "fingerprint": {
+      "type": "string",
+      "widget": "text",
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "visible_when": [
+        {
+          "key": "tls_mode",
+          "equals": "tls"
+        }
+      ],
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Client uTLS fingerprint (ignored for QUIC transport).",
+        "ru": "uTLS fingerprint клиента (не для QUIC)."
+      }
+    },
+    "transport_path": {
+      "type": "string",
+      "widget": "path",
+      "default": "/trojan",
+      "ui_group": "transport",
+      "ui_order": 30,
+      "visible_when": [
+        {
+          "key": "transport",
+          "in": [
+            "ws",
+            "http",
+            "httpupgrade"
+          ]
+        }
+      ],
+      "title": {
+        "en": "Path",
+        "ru": "Path"
+      },
+      "description": {
+        "en": "HTTP/WebSocket path after TLS.",
+        "ru": "HTTP/WebSocket path после TLS."
+      }
+    },
+    "transport_host": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "transport",
+      "ui_order": 31,
+      "visible_when": [
+        {
+          "key": "transport",
+          "in": [
+            "ws",
+            "http",
+            "httpupgrade"
+          ]
+        }
+      ],
+      "title": {
+        "en": "Host header",
+        "ru": "Host header"
+      },
+      "description": {
+        "en": "Host / :authority for WS/HTTP transports.",
+        "ru": "Host / :authority для WS/HTTP."
+      }
+    },
+    "service_name": {
+      "type": "string",
+      "widget": "text",
+      "default": "TrojanService",
+      "ui_group": "transport",
+      "ui_order": 32,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "grpc"
+        }
+      ],
+      "title": {
+        "en": "gRPC service name",
+        "ru": "Имя gRPC service"
+      },
+      "description": {
+        "en": "gRPC Gun service_name for trojan+grpc transport.",
+        "ru": "gRPC Gun service_name для транспорта trojan+grpc."
+      }
+    },
+    "alpn": {
+      "type": "string",
+      "widget": "text",
+      "default": "h2,http/1.1",
+      "ui_group": "tls",
+      "ui_order": 21,
+      "visible_when": [
+        {
+          "key": "tls_mode",
+          "in": [
+            "tls",
+            "reality"
+          ]
+        }
+      ],
+      "title": {
+        "en": "ALPN list",
+        "ru": "Список ALPN"
+      },
+      "description": {
+        "en": "Comma-separated ALPN (h3 for QUIC transport).",
+        "ru": "ALPN через запятую (h3 для QUIC)."
+      }
+    },
+    "multiplex": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "smux"
+      ],
+      "default": "none",
+      "ui_group": "core",
+      "ui_order": 40,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "tcp"
+        }
+      ],
+      "title": {
+        "en": "Multiplex",
+        "ru": "Multiplex"
+      },
+      "description": {
+        "en": "smux+padding on TCP (inbound/outbound).",
+        "ru": "smux+padding на TCP (inbound/outbound)."
+      }
+    },
+    "ws_max_early_data": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "0",
+      "ui_group": "transport",
+      "ui_order": 33,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "ws"
+        }
+      ],
+      "title": {
+        "en": "WS max early data",
+        "ru": "WS max early data"
+      },
+      "description": {
+        "en": "0 disables; 2048 matches common CDN 0-RTT WS setups.",
+        "ru": "0 отключает; 2048 — типичный CDN 0-RTT WS."
+      }
+    },
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "none",
+      "ui_group": "core",
+      "ui_order": 50,
+      "visible_when": [
+        {
+          "key": "transport",
+          "equals": "tcp"
+        },
+        {
+          "key": "tls_mode",
+          "in": [
+            "tls",
+            "reality"
+          ]
+        }
+      ],
+      "title": {
+        "en": "Inbound fallback",
+        "ru": "Inbound fallback"
+      },
+      "description": {
+        "en": "none | local (127.0.0.1:18080) | host:port. Inbound-only; probes without password see the fallback site.",
+        "ru": "none | local (127.0.0.1:18080) | host:port. Только inbound; пробы без пароля видят fallback-сайт."
+      }
+    }
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true,
+    "udp": true,
+    "quic": true
+  },
+  "inbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ]
+    },
+    "transport": {
+      "type": "{{param.transport}}",
+      "path": "{{param.transport_path}}",
+      "host": "{{param.transport_host}}",
+      "service_name": "{{param.service_name}}",
+      "headers": {
+        "Host": [
+          "{{param.transport_host}}"
+        ]
+      }
+    }
+  },
+  "outbound_template": {
+    "type": "trojan",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "password": "{{user.password}}",
+    "tls": {
+      "enabled": true,
+      "server_name": "{{server}}",
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "utls": {
+        "enabled": true,
+        "fingerprint": "{{param.fingerprint}}"
+      }
+    },
+    "transport": {
+      "type": "{{param.transport}}",
+      "path": "{{param.transport_path}}",
+      "host": "{{param.transport_host}}",
+      "service_name": "{{param.service_name}}",
+      "headers": {
+        "Host": [
+          "{{param.transport_host}}"
+        ]
+      }
+    }
+  },
+  "client_notes": {
+    "constructor": "tls_mode=none strips tls; reality uses CP assignment; multiplex/ws_max_early_data/fallback via params",
+    "fallback": "inbound-only; local = 127.0.0.1:18080",
+    "demux": "compatible_with_demux when tls/reality front; QUIC needs UDP demux slot"
+  }
+}

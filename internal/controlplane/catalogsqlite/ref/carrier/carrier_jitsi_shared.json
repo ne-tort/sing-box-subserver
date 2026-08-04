@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_jitsi_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-jitsi",
+    "carrier-jitsi-shared"
+  ],
+  "short_name": "Carrier Jitsi shared",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Jitsi shared",
+      "description": "SFU Jitsi: join без учётки. params.room=https://host/Room (meet.jit.si или self-host)."
+    },
+    "en": {
+      "title": "Carrier Jitsi shared",
+      "description": "WG-star underlay via Jitsi SFU, shared auth. Requires room URL. Traffic looks like a video call, not a VPN handshake."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "jitsi"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 5
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "room": "required in bindings[].params.room; self-host = your Jitsi host in the URL",
+    "transport": "datachannel|seichannel (vp8channel forbidden for jitsi)"
+  },
+  "param_values": {
+    "provider": "jitsi",
+    "auth_mode": "shared",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

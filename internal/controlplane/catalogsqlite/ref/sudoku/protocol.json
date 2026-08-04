@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku",
+  "singbox_type": "sudoku",
+  "short_name": "Sudoku",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku",
+      "description": "Plain-TCP обфускация (pad/httpmask/aes). Demux always_plain рядом с TLS-стеком."
+    },
+    "en": {
+      "title": "Sudoku",
+      "description": "Plain-TCP obfuscation (pad/httpmask/aes). Demux always_plain beside the TLS stack."
+    }
+  },
+  "default_cred_fields": [
+    "key"
+  ],
+  "notes": {
+    "variants_family": "none",
+    "lx": "with_sudoku"
+  }
+}

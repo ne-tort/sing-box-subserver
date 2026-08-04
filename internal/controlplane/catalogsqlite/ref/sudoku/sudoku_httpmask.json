@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_httpmask",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-httpmask"
+  ],
+  "short_name": "Sudoku HTTP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku HTTPMask",
+      "description": "Sudoku + httpmask legacy (DPI: HTTP-like framing поверх TCP)."
+    },
+    "en": {
+      "title": "Sudoku HTTP mask",
+      "description": "Sudoku with HTTP-looking mask. Still not TLS — first-bytes differ from Reality/Hy2."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key",
+    "httpmask"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP-like sudoku mask",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "param_values": {
+    "aead_method": "chacha20-poly1305",
+    "multiplex": "off",
+    "padding_min": "8",
+    "padding_max": "24",
+    "fallback": "http://127.0.0.1:80",
+    "httpmask_mode": "legacy",
+    "httpmask_path": "/sudoku"
+  }
+}

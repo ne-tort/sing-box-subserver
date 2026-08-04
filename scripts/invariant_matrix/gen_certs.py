@@ -11,15 +11,26 @@ from pathlib import Path
 DEFAULT_CN = "matrix.local"
 
 
-def ensure_certs(certs_dir: Path, cn: str = DEFAULT_CN, force: bool = False) -> tuple[Path, Path]:
+def ensure_certs(
+    certs_dir: Path,
+    cn: str = DEFAULT_CN,
+    force: bool = False,
+    extra_dns: list[str] | None = None,
+) -> tuple[Path, Path]:
     certs_dir.mkdir(parents=True, exist_ok=True)
     cert = certs_dir / "server.crt"
     key = certs_dir / "server.key"
     if cert.is_file() and key.is_file() and not force and _cert_lifetime_days(cert) > 350:
         # Old matrix certs used 3650d; Cronet rejects long-lived leaves.
         force = True
+    base_extra = ["inv-server", "localhost"]
+    if extra_dns:
+        for d in extra_dns:
+            d = str(d).strip()
+            if d and d not in base_extra and d != cn:
+                base_extra.append(d)
     if not (cert.is_file() and key.is_file()) or force:
-        _write_pair(certs_dir, cert, key, cn, extra_dns=["inv-server", "localhost"])
+        _write_pair(certs_dir, cert, key, cn, extra_dns=base_extra)
     # Local Reality handshake target (Docker often cannot reach www.microsoft.com:443).
     hs_cert = certs_dir / "reality-hs.crt"
     hs_key = certs_dir / "reality-hs.key"

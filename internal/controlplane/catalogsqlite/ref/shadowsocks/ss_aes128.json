@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "tag": "ss_aes128",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-tcp"
+  ],
+  "short_name": "SS AES128",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS AES-128-GCM",
+      "description": "Shadowsocks AES-128-GCM multi-user, TCP, без TLS."
+    },
+    "en": {
+      "title": "SS AES-128-GCM",
+      "description": "Shadowsocks AEAD AES-128-GCM. Fast; easy DPI class without TLS wrappers."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 8
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "method": "aes-128-gcm",
+    "network": "tcp",
+    "udp_over_tcp": "false",
+    "multiplex": "none"
+  }
+}

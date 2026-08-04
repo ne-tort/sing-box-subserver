@@ -4,6 +4,7 @@ package materialize
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,7 @@ func applyCustomPresetInboundKnobs(ib map[string]any, preset string, params map[
 	applySudokuCustomKnobs(ib, preset, params)
 	applyMieruCustomKnobs(ib, preset, params)
 	applyDerpCustomKnobs(ib, preset, params, true)
+	applySSHCustomKnobs(ib, preset, params, true)
 	applyCloudflaredCustomKnobs(ib, preset, params)
 	applyCarrierCustomKnobs(ib, preset, params)
 	applyShadowQUICKnobs(ib, params)
@@ -48,6 +50,7 @@ func applyCustomPresetOutboundKnobs(ob map[string]any, preset string, params map
 	applySudokuCustomKnobs(ob, preset, params)
 	applyMieruCustomKnobs(ob, preset, params)
 	applyDerpCustomKnobs(ob, preset, params, false)
+	applySSHCustomKnobs(ob, preset, params, false)
 	applyCarrierCustomKnobs(ob, preset, params)
 	applyShadowQUICKnobs(ob, params)
 	applySnellKnobs(ob, params)
@@ -80,6 +83,10 @@ func applyStockIgnoreClientBandwidth(m map[string]any, params map[string]string)
 	if typ != "hysteria2" {
 		return
 	}
+	if _, hasListen := m["listen"]; !hasListen {
+		delete(m, "ignore_client_bandwidth")
+		return
+	}
 	if strings.TrimSpace(params["ignore_client_bandwidth"]) == "" {
 		return
 	}
@@ -107,6 +114,11 @@ func applySnellKnobs(m map[string]any, params map[string]string) {
 	if typ != "snell" {
 		return
 	}
+	if v := strings.TrimSpace(params["version"]); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 6 {
+			m["version"] = n
+		}
+	}
 	mode := strings.ToLower(strings.TrimSpace(params["obfs_mode"]))
 	if mode == "" {
 		return
@@ -117,6 +129,9 @@ func applySnellKnobs(m map[string]any, params map[string]string) {
 		delete(m, "obfs_host")
 	default:
 		m["obfs_mode"] = mode
+		if host := strings.TrimSpace(params["obfs_host"]); host != "" {
+			m["obfs_host"] = host
+		}
 	}
 }
 
@@ -125,16 +140,46 @@ func applyShadowQUICKnobs(m map[string]any, params map[string]string) {
 	if typ != "shadowquic" {
 		return
 	}
+	_, isInbound := m["listen"]
+	if addr := strings.TrimSpace(params["jls_addr"]); addr != "" && isInbound {
+		up, _ := m["jls_upstream"].(map[string]any)
+		if up == nil {
+			up = map[string]any{}
+			m["jls_upstream"] = up
+		}
+		up["addr"] = addr
+	}
+	if sni := strings.TrimSpace(params["jls_server_name"]); sni != "" {
+		if isInbound {
+			up, _ := m["jls_upstream"].(map[string]any)
+			if up == nil {
+				up = map[string]any{}
+				m["jls_upstream"] = up
+			}
+			up["server_name"] = sni
+		} else {
+			m["server_name"] = sni
+			m["sni"] = sni
+		}
+	}
 	if v := strings.TrimSpace(params["congestion_control"]); v != "" {
 		m["congestion_control"] = v
 	}
 	if strings.TrimSpace(params["zero_rtt"]) != "" {
 		m["zero_rtt"] = strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true")
 	}
-	if _, isInbound := m["listen"]; !isInbound {
+	if !isInbound {
 		if strings.TrimSpace(params["udp_over_stream"]) != "" {
 			m["udp_over_stream"] = strings.EqualFold(strings.TrimSpace(params["udp_over_stream"]), "true")
+		} else {
+			delete(m, "udp_over_stream")
 		}
+	} else {
+		delete(m, "udp_over_stream")
+	}
+	// Outbound must never carry inbound-only jls_upstream.
+	if !isInbound {
+		delete(m, "jls_upstream")
 	}
 }
 
@@ -151,7 +196,8 @@ func applyTuicKnobs(m map[string]any, preset string, params map[string]string) {
 			m["udp_relay_mode"] = v
 		}
 	}
-	if preset != "tuic_custom" {
+	// zero_rtt applies on constructor + SQLite-owned ready presets (param_values).
+	if preset != "tuic_custom" && !catalogsqlite.Owns(preset) {
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(params["zero_rtt"]), "true") {
@@ -162,37 +208,122 @@ func applyTuicKnobs(m map[string]any, preset string, params map[string]string) {
 }
 
 func applyNaiveNetworkKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "naive_custom" {
+	switch {
+	case preset == "naive_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "naive" {
+			return
+		}
+	default:
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(params["network"]), "udp") {
+	netw := normalizeNaiveNetwork(params["network"])
+	_, isIn := m["listen"]
+	if netw == "tcp,udp" {
+		// Product: H3/QUIC always rides with H2 — one inbound listens both.
+		if isIn {
+			m["network"] = []any{"tcp", "udp"}
+			if tls, ok := m["tls"].(map[string]any); tls != nil && ok {
+				tls["alpn"] = []any{"h2", "h3"}
+			}
+		} else {
+			// Outbound split happens in RenderSubscription; default dial is H2.
+			delete(m, "network")
+			delete(m, "quic")
+			delete(m, "quic_congestion_control")
+		}
 		return
 	}
-	m["network"] = "udp"
-	if tls, ok := m["tls"].(map[string]any); ok {
-		tls["alpn"] = []any{"h3"}
+	// tcp = H2 only
+	if isIn {
+		m["network"] = "tcp"
+		if tls, ok := m["tls"].(map[string]any); tls != nil && ok {
+			tls["alpn"] = []any{"h2"}
+		}
+	} else {
+		delete(m, "network")
 	}
-	m["quic_congestion_control"] = "bbr"
-	m["quic"] = true
+	delete(m, "quic")
+	delete(m, "quic_congestion_control")
+}
+
+// normalizeNaiveNetwork maps UI/stock values onto product semantics:
+// tcp = H2 only; anything enabling H3/QUIC becomes tcp+udp (H2 cannot be disabled).
+func normalizeNaiveNetwork(raw string) string {
+	netw := strings.ToLower(strings.TrimSpace(raw))
+	switch netw {
+	case "", "tcp", "h2", "http2":
+		return "tcp"
+	case "udp", "quic", "h3", "http3", "tcp,udp", "tcp+udp", "both", "dual":
+		return "tcp,udp"
+	default:
+		if strings.Contains(netw, "udp") || strings.Contains(netw, "quic") {
+			return "tcp,udp"
+		}
+		return "tcp"
+	}
+}
+
+func naiveNetworkIsDual(params map[string]string) bool {
+	return normalizeNaiveNetwork(params["network"]) == "tcp,udp"
 }
 
 func applyHy2CustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "hy2_custom" {
+	switch {
+	case preset == "hy2_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "hysteria2" {
+			return
+		}
+	default:
 		return
 	}
+	_, hasListen := m["listen"]
+	_, hasServer := m["server"]
+	isOutbound := hasServer && !hasListen
+
 	obfsType := strings.ToLower(strings.TrimSpace(params["obfs_type"]))
 	if obfsType == "" {
 		obfsType = "none"
 	}
-	if obfsType == "none" {
-		delete(m, "obfs")
-	} else {
-		obfs, _ := m["obfs"].(map[string]any)
-		if obfs == nil {
-			obfs = map[string]any{}
-			m["obfs"] = obfs
+	obfsPassword := ""
+	if prev, ok := m["obfs"].(map[string]any); ok && prev != nil {
+		obfsPassword = strings.TrimSpace(fmt.Sprint(prev["password"]))
+		if obfsPassword == "<nil>" {
+			obfsPassword = ""
 		}
-		obfs["type"] = "salamander"
+	}
+	switch obfsType {
+	case "none", "off", "false", "0":
+		delete(m, "obfs")
+	case "salamander":
+		obfs := map[string]any{"type": "salamander"}
+		if obfsPassword != "" {
+			obfs["password"] = obfsPassword
+		}
+		m["obfs"] = obfs
+	case "gecko":
+		obfs := map[string]any{
+			"type":            "gecko",
+			"min_packet_size": 512,
+			"max_packet_size": 1200,
+		}
+		if obfsPassword != "" {
+			obfs["password"] = obfsPassword
+		}
+		m["obfs"] = obfs
+	case "gecko_compact":
+		obfs := map[string]any{
+			"type":            "gecko",
+			"min_packet_size": 100,
+			"max_packet_size": 300,
+		}
+		if obfsPassword != "" {
+			obfs["password"] = obfsPassword
+		}
+		m["obfs"] = obfs
 	}
 
 	if v, ok := parseUintParam(params["up_mbps"]); ok {
@@ -201,40 +332,50 @@ func applyHy2CustomKnobs(m map[string]any, preset string, params map[string]stri
 	if v, ok := parseUintParam(params["down_mbps"]); ok {
 		m["down_mbps"] = v
 	}
-	if _, present := m["ignore_client_bandwidth"]; present || strings.TrimSpace(params["ignore_client_bandwidth"]) != "" {
+	if !isOutbound && strings.TrimSpace(params["ignore_client_bandwidth"]) != "" {
 		m["ignore_client_bandwidth"] = strings.EqualFold(strings.TrimSpace(params["ignore_client_bandwidth"]), "true")
 	}
+	if isOutbound {
+		delete(m, "ignore_client_bandwidth")
+	}
 
-	if _, hasMasq := m["masquerade"]; !hasMasq && strings.TrimSpace(params["masquerade_mode"]) == "" {
-		return
-	}
-	mode := strings.ToLower(strings.TrimSpace(params["masquerade_mode"]))
-	if mode == "" {
-		mode = "none"
-	}
-	switch mode {
-	case "none":
+	if isOutbound {
 		delete(m, "masquerade")
-	case "file":
-		m["masquerade"] = map[string]any{
-			"type":      "file",
-			"directory": strings.TrimSpace(params["masquerade_dir"]),
+	} else {
+		mode := strings.ToLower(strings.TrimSpace(params["masquerade_mode"]))
+		if mode == "" {
+			mode = "none"
 		}
-	case "proxy":
-		url := strings.TrimSpace(params["masquerade_url"])
-		if url == "" {
-			url = "https://www.cloudflare.com"
+		switch mode {
+		case "none", "off", "false", "0":
+			delete(m, "masquerade")
+		case "file":
+			m["masquerade"] = map[string]any{
+				"type":      "file",
+				"directory": strings.TrimSpace(params["masquerade_dir"]),
+			}
+		case "proxy":
+			url := strings.TrimSpace(params["masquerade_url"])
+			if url == "" {
+				url = "https://www.cloudflare.com"
+			}
+			m["masquerade"] = map[string]any{"type": "proxy", "url": url, "rewrite_host": true}
+		case "string":
+			m["masquerade"] = map[string]any{
+				"type":        "string",
+				"status_code": 200,
+				"headers": map[string]any{
+					"Content-Type": []any{"text/html; charset=utf-8"},
+					"Server":       []any{"nginx"},
+				},
+				"content": "<!DOCTYPE html><html><head><title>Welcome</title></head><body><h1>It works!</h1></body></html>",
+			}
 		}
-		m["masquerade"] = map[string]any{"type": "proxy", "url": url, "rewrite_host": true}
-	case "string":
-		m["masquerade"] = map[string]any{
-			"type":        "string",
-			"status_code": 200,
-			"content":     "<html><title>OK</title></html>",
-			"headers": map[string]any{
-				"Content-Type": []any{"text/html; charset=utf-8"},
-			},
-		}
+	}
+
+	realmMode := strings.ToLower(strings.TrimSpace(params["realm_mode"]))
+	if realmMode == "" || realmMode == "none" || realmMode == "off" || realmMode == "false" || realmMode == "0" {
+		delete(m, "realm")
 	}
 }
 
@@ -242,12 +383,24 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 	switch {
 	case preset == "vless_custom", preset == "trojan_custom", preset == "vmess_custom":
 	case catalogsqlite.Owns(preset):
-		// VLESS ready/base from SQLite use constructor templates + knobs.
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok {
+			return
+		}
+		switch proto {
+		case "vless", "vmess", "trojan":
+		default:
+			return
+		}
 	default:
 		return
 	}
+	_, isInbound := m["listen"]
 	cleanupV2RayTransport(m, params)
-	if strings.TrimSpace(params["flow"]) == "" || strings.EqualFold(strings.TrimSpace(params["flow"]), "none") {
+	// Flow is user-symmetric (inbound users / subscription variants), never a root inbound field.
+	if isInbound {
+		delete(m, "flow")
+	} else if strings.TrimSpace(params["flow"]) == "" || strings.EqualFold(strings.TrimSpace(params["flow"]), "none") {
 		delete(m, "flow")
 	} else if v := strings.TrimSpace(params["flow"]); v != "" {
 		m["flow"] = v
@@ -257,14 +410,64 @@ func applyVlessLikeCustomKnobs(m map[string]any, preset string, params map[strin
 			tls["alpn"] = splitCSV(alpn)
 		}
 	}
-	enc := strings.TrimSpace(params["packet_encoding"])
-	if enc == "" || strings.EqualFold(enc, "none") {
+	// packet_encoding is outbound-only; client profiles may clear/override after knobs.
+	if isInbound {
 		delete(m, "packet_encoding")
 	} else {
-		m["packet_encoding"] = enc
+		enc := strings.TrimSpace(params["packet_encoding"])
+		if enc == "" || strings.EqualFold(enc, "none") {
+			delete(m, "packet_encoding")
+		} else {
+			m["packet_encoding"] = enc
+		}
 	}
 	applyVlessMultiplexKnob(m, params)
 	applyVlessWSEarlyDataKnob(m, params)
+	applyTrojanFallbackKnob(m, params)
+}
+
+func applyTrojanFallbackKnob(m map[string]any, params map[string]string) {
+	typ, _ := m["type"].(string)
+	if typ != "trojan" {
+		return
+	}
+	_, isInbound := m["listen"]
+	if !isInbound {
+		delete(m, "fallback")
+		delete(m, "fallback_for_alpn")
+		return
+	}
+	raw := strings.TrimSpace(params["fallback"])
+	mode := strings.ToLower(raw)
+	if mode == "" || mode == "none" || mode == "false" || mode == "0" || mode == "off" {
+		delete(m, "fallback")
+		delete(m, "fallback_for_alpn")
+		return
+	}
+	host := "127.0.0.1"
+	port := 18080
+	if mode != "local" {
+		h, p, err := net.SplitHostPort(raw)
+		if err != nil {
+			delete(m, "fallback")
+			delete(m, "fallback_for_alpn")
+			return
+		}
+		host = strings.TrimSpace(h)
+		n, err := strconv.Atoi(strings.TrimSpace(p))
+		if err != nil || host == "" || n <= 0 || n > 65535 {
+			delete(m, "fallback")
+			delete(m, "fallback_for_alpn")
+			return
+		}
+		port = n
+	}
+	target := map[string]any{"server": host, "server_port": port}
+	m["fallback"] = target
+	m["fallback_for_alpn"] = map[string]any{
+		"h2":        map[string]any{"server": host, "server_port": port},
+		"http/1.1":  map[string]any{"server": host, "server_port": port},
+	}
 }
 
 func applyVlessMultiplexKnob(m map[string]any, params map[string]string) {
@@ -334,6 +537,8 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 	tr["type"] = typ
 	switch typ {
 	case "ws", "httpupgrade":
+		// sing-box WS/HTTPUpgrade have no top-level host; SNI/Host lives in headers.
+		delete(tr, "host")
 		delete(tr, "service_name")
 		delete(tr, "password")
 		delete(tr, "version")
@@ -341,6 +546,12 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 		delete(tr, "service_name")
 		delete(tr, "password")
 		delete(tr, "version")
+		// HTTP transport.host must be a string array.
+		if host := strings.TrimSpace(fmt.Sprint(tr["host"])); host != "" && host != "<nil>" {
+			tr["host"] = []any{host}
+		} else {
+			delete(tr, "host")
+		}
 	case "grpc":
 		delete(tr, "path")
 		delete(tr, "host")
@@ -360,7 +571,9 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 		delete(tr, "headers")
 		delete(tr, "service_name")
 	}
-	pruneEmptyStringKey(tr, "host")
+	if typ != "http" {
+		pruneEmptyStringKey(tr, "host")
+	}
 	pruneEmptyStringKey(tr, "path")
 	pruneEmptyStringKey(tr, "service_name")
 	if headers, ok := tr["headers"].(map[string]any); ok {
@@ -376,23 +589,42 @@ func cleanupV2RayTransport(m map[string]any, params map[string]string) {
 }
 
 func applyShadowsocksCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "shadowsocks_custom" {
+	switch {
+	case preset == "shadowsocks_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "shadowsocks" {
+			return
+		}
+	default:
 		return
+	}
+	if method := strings.TrimSpace(params["method"]); method != "" {
+		m["method"] = method
 	}
 	net := strings.ToLower(strings.TrimSpace(params["network"]))
 	if net == "" {
 		net = "tcp"
 	}
 	m["network"] = net
-	if strings.EqualFold(strings.TrimSpace(params["udp_over_tcp"]), "true") {
+	_, isInbound := m["listen"]
+	if !isInbound && strings.EqualFold(strings.TrimSpace(params["udp_over_tcp"]), "true") {
 		m["udp_over_tcp"] = map[string]any{"enabled": true, "version": 2}
 	} else {
 		delete(m, "udp_over_tcp")
 	}
+	applyVlessMultiplexKnob(m, params)
 }
 
 func applyHysteria1CustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "hysteria_custom" {
+	switch {
+	case preset == "hysteria_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "hysteria" {
+			return
+		}
+	default:
 		return
 	}
 	if v, ok := parseUintParam(params["up_mbps"]); ok {
@@ -402,15 +634,29 @@ func applyHysteria1CustomKnobs(m map[string]any, preset string, params map[strin
 		m["down_mbps"] = v
 	}
 	obfs := strings.TrimSpace(params["obfs"])
-	if obfs == "" || strings.EqualFold(obfs, "none") {
+	if obfs == "" || strings.EqualFold(obfs, "none") || strings.EqualFold(obfs, "false") {
 		delete(m, "obfs")
-	} else {
-		m["obfs"] = obfs
+		return
+	}
+	// "peer" / non-none: keep substituted {{peer.obfs}} when present.
+	if cur := strings.TrimSpace(fmt.Sprint(m["obfs"])); cur == "" || cur == "<nil>" || strings.Contains(cur, "{{") {
+		delete(m, "obfs")
 	}
 }
 
 func applySocksCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
-	if preset != "socks_custom" || inbound {
+	switch {
+	case preset == "socks_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "socks" {
+			return
+		}
+	default:
+		return
+	}
+	if inbound {
+		delete(m, "udp_over_tcp")
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(params["udp_over_tcp"]), "true") {
@@ -421,12 +667,18 @@ func applySocksCustomKnobs(m map[string]any, preset string, params map[string]st
 }
 
 func applyHTTPMixedCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	switch preset {
-	case "http_custom", "mixed_custom":
+	switch {
+	case preset == "http_custom", preset == "mixed_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || (proto != "http" && proto != "mixed") {
+			return
+		}
 	default:
 		return
 	}
-	if preset == "mixed_custom" {
+	proto, _ := catalogsqlite.ProtocolOf(preset)
+	if preset == "mixed_custom" || proto == "mixed" {
 		if ot := strings.ToLower(strings.TrimSpace(params["outbound_type"])); ot == "http" || ot == "socks" {
 			// Only rewrite subscription outbounds (no listen field).
 			if _, isIn := m["listen"]; !isIn {
@@ -455,7 +707,14 @@ func applyHTTPMixedCustomKnobs(m map[string]any, preset string, params map[strin
 }
 
 func applyTrustTunnelCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "trusttunnel_custom" {
+	switch {
+	case preset == "trusttunnel_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "trusttunnel" {
+			return
+		}
+	default:
 		return
 	}
 	tr, _ := m["transport"].(map[string]any)
@@ -505,6 +764,12 @@ func applyAnyTLSCustomKnobs(m map[string]any, preset string, params map[string]s
 		}
 	}
 	if inbound {
+		if scheme := strings.TrimSpace(params["padding_scheme"]); scheme != "" {
+			lines := splitPaddingScheme(scheme)
+			if len(lines) > 0 {
+				m["padding_scheme"] = lines
+			}
+		}
 		return
 	}
 	if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
@@ -535,6 +800,9 @@ func applyShadowTLSCustomKnobs(m map[string]any, preset string, params map[strin
 	if _, ok := m["strict_mode"]; ok || strings.TrimSpace(params["strict_mode"]) != "" {
 		m["strict_mode"] = !strings.EqualFold(strings.TrimSpace(params["strict_mode"]), "false")
 	}
+	if ws := strings.TrimSpace(params["wildcard_sni"]); ws != "" {
+		m["wildcard_sni"] = ws
+	}
 	if fp := strings.TrimSpace(params["fingerprint"]); fp != "" {
 		if tls, ok := m["tls"].(map[string]any); ok && tls != nil {
 			if _, isIn := m["listen"]; !isIn {
@@ -545,8 +813,21 @@ func applyShadowTLSCustomKnobs(m map[string]any, preset string, params map[strin
 }
 
 func applySudokuCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "sudoku_custom" {
+	switch {
+	case preset == "sudoku_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "sudoku" {
+			return
+		}
+	default:
 		return
+	}
+	if v := strings.TrimSpace(params["aead_method"]); v != "" {
+		m["aead_method"] = v
+	}
+	if v := strings.TrimSpace(params["multiplex"]); v != "" {
+		m["multiplex"] = v
 	}
 	if v, ok := parseUintParam(params["padding_min"]); ok {
 		m["padding_min"] = v
@@ -554,25 +835,76 @@ func applySudokuCustomKnobs(m map[string]any, preset string, params map[string]s
 	if v, ok := parseUintParam(params["padding_max"]); ok {
 		m["padding_max"] = v
 	}
+	if fb := strings.TrimSpace(params["fallback"]); fb != "" {
+		if _, isIn := m["listen"]; isIn {
+			m["fallback"] = fb
+		}
+	}
+	mode := strings.ToLower(strings.TrimSpace(params["httpmask_mode"]))
+	if mode == "" || mode == "off" || mode == "none" || mode == "false" {
+		delete(m, "httpmask")
+	} else {
+		pathRoot := strings.TrimSpace(params["httpmask_path"])
+		if pathRoot == "" {
+			pathRoot = "/sudoku"
+		}
+		m["httpmask"] = map[string]any{
+			"disable":   false,
+			"mode":      mode,
+			"path_root": pathRoot,
+		}
+	}
 }
 
 func applyMieruCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	typ, _ := m["type"].(string)
-	if typ != "mieru" && preset != "mieru_custom" {
-		return
+	switch {
+	case preset == "mieru_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "mieru" {
+			return
+		}
+	default:
+		typ, _ := m["type"].(string)
+		if typ != "mieru" {
+			return
+		}
+	}
+	if v := strings.TrimSpace(params["transport"]); v != "" {
+		m["transport"] = v
 	}
 	if v, ok := parseUintParam(params["mtu"]); ok {
 		m["mtu"] = v
 	}
-	if strings.TrimSpace(fmt.Sprint(m["traffic_pattern"])) == "" {
+	_, isInbound := m["listen"]
+	if !isInbound {
+		if mux := strings.TrimSpace(params["multiplexing"]); mux != "" {
+			m["multiplexing"] = mux
+		}
+	}
+	if tp := strings.TrimSpace(params["traffic_pattern"]); tp != "" {
+		m["traffic_pattern"] = tp
+	} else {
 		delete(m, "traffic_pattern")
 	}
 }
 
 func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
-	typ, _ := m["type"].(string)
-	if typ != "derp" && preset != "derp_custom" {
-		return
+	switch {
+	case preset == "derp_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "derp" {
+			return
+		}
+	default:
+		typ, _ := m["type"].(string)
+		if typ != "derp" {
+			return
+		}
+	}
+	if p := strings.TrimSpace(params["path"]); p != "" {
+		m["path"] = p
 	}
 	if strings.TrimSpace(params["websocket"]) != "" {
 		m["websocket"] = strings.EqualFold(strings.TrimSpace(params["websocket"]), "true")
@@ -586,6 +918,59 @@ func applyDerpCustomKnobs(m map[string]any, preset string, params map[string]str
 				tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
 			}
 		}
+	}
+}
+
+func applySSHCustomKnobs(m map[string]any, preset string, params map[string]string, inbound bool) {
+	switch {
+	case preset == "ssh_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "ssh" {
+			return
+		}
+	default:
+		return
+	}
+	if v := strings.TrimSpace(params["server_version"]); v != "" && inbound {
+		m["server_version"] = v
+	}
+	if v := strings.TrimSpace(params["client_version"]); v != "" && !inbound {
+		m["client_version"] = v
+	}
+	if inbound {
+		delete(m, "udp_over_tcp")
+		delete(m, "private_key")
+		delete(m, "password")
+		return
+	}
+	auth := strings.ToLower(strings.TrimSpace(params["auth_mode"]))
+	if auth == "" {
+		auth = "password"
+	}
+	if auth == "pubkey" {
+		delete(m, "password")
+		// Drop empty private_key placeholders.
+		if pk, ok := m["private_key"].([]any); ok {
+			clean := make([]any, 0, len(pk))
+			for _, item := range pk {
+				if strings.TrimSpace(fmt.Sprint(item)) != "" {
+					clean = append(clean, item)
+				}
+			}
+			if len(clean) == 0 {
+				delete(m, "private_key")
+			} else {
+				m["private_key"] = clean
+			}
+		}
+	} else {
+		delete(m, "private_key")
+	}
+	if strings.EqualFold(strings.TrimSpace(params["udp_over_tcp"]), "true") {
+		m["udp_over_tcp"] = map[string]any{"enabled": true, "version": 2}
+	} else {
+		delete(m, "udp_over_tcp")
 	}
 }
 
@@ -620,7 +1005,14 @@ func applyCloudflaredCustomKnobs(m map[string]any, preset string, params map[str
 // applyCarrierCustomKnobs maps constructor provider/token onto carrier objects.
 // Enum value jitsi_sei → provider=jitsi + transport=seichannel.
 func applyCarrierCustomKnobs(m map[string]any, preset string, params map[string]string) {
-	if preset != "carrier_custom" {
+	switch {
+	case preset == "carrier_custom":
+	case catalogsqlite.Owns(preset):
+		proto, ok := catalogsqlite.ProtocolOf(preset)
+		if !ok || proto != "carrier" {
+			return
+		}
+	default:
 		return
 	}
 	raw := strings.ToLower(strings.TrimSpace(params["provider"]))
@@ -637,14 +1029,28 @@ func applyCarrierCustomKnobs(m map[string]any, preset string, params map[string]
 		transport = "seichannel"
 	case "telemost", "wbstream":
 		transport = "vp8channel"
+	case "peer", "vk":
+		transport = ""
 	}
 	m["provider"] = provider
+	auth := strings.ToLower(strings.TrimSpace(params["auth_mode"]))
+	if auth == "" {
+		auth = "shared"
+	}
+	// Top-level auth exists only on inbound templates.
+	if _, ok := m["auth"]; ok {
+		m["auth"] = auth
+	}
 	link, _ := m["link"].(map[string]any)
 	if link == nil {
 		link = map[string]any{}
 		m["link"] = link
 	}
-	link["transport"] = transport
+	if transport != "" {
+		link["transport"] = transport
+	} else {
+		delete(link, "transport")
+	}
 	if tok := strings.TrimSpace(params["token"]); tok != "" {
 		link["token"] = tok
 	} else if provider != "wbstream" {
@@ -652,6 +1058,29 @@ func applyCarrierCustomKnobs(m map[string]any, preset string, params map[string]
 	}
 	if key := strings.TrimSpace(params["key"]); key != "" {
 		link["key"] = key
+	} else {
+		delete(link, "key")
+	}
+	if room := strings.TrimSpace(params["room"]); room != "" {
+		link["room"] = room
+	} else if provider == "peer" || provider == "vk" {
+		delete(link, "room")
+	}
+	if v := strings.TrimSpace(params["vk_hash"]); v != "" {
+		link["vk_hash"] = v
+	} else {
+		delete(link, "vk_hash")
+	}
+	if v := strings.TrimSpace(params["wrap_password"]); v != "" {
+		link["wrap_password"] = v
+	} else {
+		delete(link, "wrap_password")
+	}
+	// Drop empty string placeholders left by templates.
+	for _, k := range []string{"room", "key", "token", "vk_hash", "wrap_password", "peer", "server", "server_port"} {
+		if strings.TrimSpace(fmt.Sprint(link[k])) == "" || fmt.Sprint(link[k]) == "<nil>" {
+			delete(link, k)
+		}
 	}
 }
 
@@ -669,6 +1098,21 @@ func parseUintParam(s string) (uint64, bool) {
 
 func splitCSV(s string) []any {
 	parts := strings.Split(s, ",")
+	out := make([]any, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// splitPaddingScheme accepts newline- or semicolon-separated AnyTLS padding_scheme lines.
+func splitPaddingScheme(s string) []any {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, ";", "\n")
+	parts := strings.Split(s, "\n")
 	out := make([]any, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)

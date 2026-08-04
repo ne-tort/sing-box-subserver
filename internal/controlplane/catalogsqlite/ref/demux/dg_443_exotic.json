@@ -1,0 +1,132 @@
+{
+  "tag": "dg_443_exotic",
+  "short_name": "Oddball",
+  "status": "stable",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "Oddball",
+      "description": "مزيج غريب: Naive و Hy2 و plain."
+    },
+    "en": {
+      "title": "Oddball",
+      "description": "Exotic mix: Naive, Hy2, and plain."
+    },
+    "es": {
+      "title": "Oddball",
+      "description": "Mezcla exótica: Naive, Hy2 y plain."
+    },
+    "fa": {
+      "title": "Oddball",
+      "description": "ترکیب غیرمعمول: Naive، Hy2 و plain."
+    },
+    "fr": {
+      "title": "Oddball",
+      "description": "Mélange exotique : Naive, Hy2 et plain."
+    },
+    "id": {
+      "title": "Oddball",
+      "description": "Campuran eksotis: Naive, Hy2, dan plain."
+    },
+    "pt-BR": {
+      "title": "Oddball",
+      "description": "Mistura exótica: Naive, Hy2 e plain."
+    },
+    "ru": {
+      "title": "Oddball",
+      "description": "Экзотика: Naive, Hy2 и plain."
+    },
+    "tr": {
+      "title": "Oddball",
+      "description": "Egzotik karışım: Naive, Hy2 ve plain."
+    },
+    "zh-CN": {
+      "title": "Oddball",
+      "description": "非常规组合：Naive、Hy2 与 plain。"
+    },
+    "zh-TW": {
+      "title": "Oddball",
+      "description": "非常規組合：Naive、Hy2 與 plain。"
+    }
+  },
+  "slots": [
+    {
+      "id": "reality",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tls",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "protocol_only"
+    },
+    {
+      "id": "plain",
+      "role": "tcp_plain",
+      "default_preset": "sudoku_pad",
+      "substitutes": [
+        "sudoku_pad",
+        "sudoku_httpmask",
+        "sudoku_aes",
+        "sudoku_aes256",
+        "sudoku_mux",
+        "mieru_tcp",
+        "ssh_password",
+        "snell_v5",
+        "snell_v5_tls",
+        "snell_v6"
+      ],
+      "match_hint": "always_plain"
+    }
+  ],
+  "scores": {
+    "dpi": 7,
+    "mobile": 5,
+    "setup": 6,
+    "speed": 7
+  },
+  "notes": "Naive as TLS base; plain sudoku/mieru/ssh via substitutes."
+}

@@ -50,9 +50,9 @@ GET /v1/controlplane/demux-groups/{tag}/substitutions?lang=en
 
 Bootstrap hint: default filter **stable** (`hints.demux_groups_list`).
 
-Substitutions options carry `demux_compat` + `fits_interchange`. Prefer defaults on stable groups (`dg_443_dual` → `vless_reality` + `hy2`).
+Substitutions options carry `demux_compat` + `fits_interchange`. Prefer defaults on stable groups (`dg_443_dual` / Bypasser → `vless_reality` + `hy2`).
 
-`dg_443_alpn_split`: tag kept for API stability; match is **SNI-only** — PreferredALPN only sets inbound `tls.alpn`.
+TLS multi-slot groups assign unique `demux_sni` per Reality/TLS/`sni_pool` QUIC slot; PreferredALPN only sets inbound `tls.alpn`.
 
 **Tests:** `test_01_bootstrap_meta.py::test_demux_groups_match_meta_ux`, `test_04_demux_groups.py`  
 **Scenario:** [../scenarios/03-demux-443-dual.md](../scenarios/03-demux-443-dual.md)

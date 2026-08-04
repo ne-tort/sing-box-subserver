@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "tag": "shadowtls_v3",
+  "protocol": "shadowtls",
+  "aliases": [
+    "shadowtls",
+    "shadowtls-v3"
+  ],
+  "short_name": "ShadowTLS v3",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowTLS v3",
+      "description": "ShadowTLS v3: handshake к внешнему HTTPS (google.com), strict_mode; DPI видит обычный TLS ClientHello к handshake server."
+    },
+    "en": {
+      "title": "ShadowTLS v3",
+      "description": "ShadowTLS v3: TLS-mimic handshake + password. Set handshake_server to a plausible SNI target."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_mimic"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello → handshake server",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "client_notes": {
+    "handshake": "SNI/handshake server must be reachable from the edge; outbound tls.server_name usually matches",
+    "detour": "often front SS/VLESS behind ShadowTLS — CP currently exposes a standalone proxy",
+    "params": "optional bindings[].params overrides: handshake_server"
+  },
+  "optional_param_fields": [
+    "handshake_server",
+    "strict_mode",
+    "fingerprint"
+  ],
+  "param_meta": {
+    "handshake_server": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.apple.com",
+      "ui_group": "tls",
+      "ui_order": 20,
+      "title": {
+        "en": "Handshake server",
+        "ru": "Handshake server"
+      },
+      "description": {
+        "en": "ShadowTLS v3 handshake mimic target (SNI).",
+        "ru": "Цель mimic handshake ShadowTLS v3 (SNI)."
+      }
+    },
+    "strict_mode": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "true",
+      "ui_group": "core",
+      "ui_order": 20,
+      "title": {
+        "en": "Strict mode",
+        "ru": "Strict mode"
+      },
+      "description": {
+        "en": "Reject handshakes that fail ShadowTLS strict checks.",
+        "ru": "Отклонять handshake, не прошедшие strict-проверки ShadowTLS."
+      },
+      "help": {
+        "summary": {
+          "en": "When true, ShadowTLS drops clients that fail strict handshake validation.",
+          "ru": "При true ShadowTLS отбрасывает клиенты, не прошедшие strict handshake validation."
+        },
+        "input_hint": {
+          "en": "true|false",
+          "ru": "true|false"
+        },
+        "format": "true"
+      }
+    },
+    "fingerprint": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ],
+      "default": "chrome",
+      "ui_group": "tls",
+      "ui_order": 90,
+      "title": {
+        "en": "uTLS fingerprint",
+        "ru": "uTLS fingerprint"
+      },
+      "description": {
+        "en": "Outbound uTLS ClientHello fingerprint.",
+        "ru": "uTLS fingerprint ClientHello на outbound."
+      },
+      "help": {
+        "summary": {
+          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
+          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
+        },
+        "input_hint": {
+          "en": "chrome|firefox|…",
+          "ru": "chrome|firefox|…"
+        },
+        "format": "chrome"
+      }
+    }
+  },
+  "param_values": {
+    "wildcard_sni": "off",
+    "strict_mode": "true",
+    "fingerprint": "chrome",
+    "handshake_server": "www.microsoft.com:443"
+  }
+}

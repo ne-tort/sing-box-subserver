@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic_jls",
+  "protocol": "shadowquic",
+  "aliases": [
+    "shadowquic",
+    "shadowquic-jls"
+  ],
+  "short_name": "SQ JLS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC JLS",
+      "description": "UDP/QUIC ShadowQUIC: JLS upstream camouflage, ALPN h3, congestion bbr."
+    },
+    "en": {
+      "title": "ShadowQUIC JLS",
+      "description": "ShadowQUIC with JLS SNI camouflage. Align jls_server_name with demux_sni or the front will fail."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "jls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello → JLS upstream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_shadowquic"
+  },
+  "client_notes": {
+    "jls_upstream": "must be reachable from the edge; outbound SNI usually matches",
+    "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
+  },
+  "param_values": {
+    "jls_addr": "www.cloudflare.com:443",
+    "jls_server_name": "www.cloudflare.com",
+    "congestion_control": "bbr",
+    "zero_rtt": "false",
+    "udp_over_stream": "false"
+  }
+}

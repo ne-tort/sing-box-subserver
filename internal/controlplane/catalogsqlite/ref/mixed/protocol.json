@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "mixed",
+  "singbox_type": "mixed",
+  "short_name": "Mixed",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Mixed",
+      "description": "HTTP CONNECT + SOCKS на одном порту. Утилитарный локальный вход."
+    },
+    "en": {
+      "title": "Mixed",
+      "description": "HTTP CONNECT + SOCKS on one port. Local utility inbound."
+    }
+  },
+  "default_cred_fields": [
+    "username",
+    "password"
+  ],
+  "notes": {
+    "variants_family": "none"
+  }
+}

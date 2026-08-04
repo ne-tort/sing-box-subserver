@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_vk_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-vk-users"
+  ],
+  "short_name": "Carrier VK users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier VK users",
+      "description": "VK WRAP self-host + auth=users; outbound password=user.secret, WRAP=peer/wrap_password."
+    },
+    "en": {
+      "title": "Carrier VK users",
+      "description": "VK underlay with per-user credentials."
+    }
+  },
+  "traits": [
+    "udp",
+    "users_auth",
+    "wg_star",
+    "needs_listen",
+    "self_host",
+    "vk"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "vk",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [],
+  "optional_param_fields": [
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password",
+    "key",
+    "token",
+    "room"
+  ]
+}

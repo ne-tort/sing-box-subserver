@@ -52,7 +52,7 @@
     "uuid_udp"
   ],
   "default_user_variants": [
-    "flow-none"
+    "flow-xtls-rprx-vision"
   ],
   "default_client_profiles": [
     "pkt-xudp"
@@ -125,7 +125,7 @@
         "none",
         "xtls-rprx-vision"
       ],
-      "default": "none",
+      "default": "xtls-rprx-vision",
       "ui_group": "core",
       "ui_order": 10,
       "visible_when": [
@@ -212,8 +212,8 @@
         "ru": "Path"
       },
       "description": {
-        "en": "HTTP/WebSocket path.",
-        "ru": "HTTP/WebSocket path."
+        "en": "HTTP or WebSocket path for the chosen transport.",
+        "ru": "Путь HTTP/WebSocket для выбранного транспорта."
       }
     },
     "transport_host": {
@@ -254,11 +254,11 @@
       ],
       "title": {
         "en": "gRPC service name",
-        "ru": "gRPC service name"
+        "ru": "Имя gRPC service"
       },
       "description": {
-        "en": "gRPC Gun service_name.",
-        "ru": "gRPC Gun service_name."
+        "en": "gRPC Gun service_name for vless+grpc transport.",
+        "ru": "gRPC Gun service_name для транспорта vless+grpc."
       },
       "help": {
         "input_hint": {

@@ -1,0 +1,153 @@
+{
+  "tag": "dg_443_fullstack",
+  "short_name": "DPI Killer",
+  "status": "stable",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "DPI Killer",
+      "description": "مجموعة واسعة مع بدائل كثيرة."
+    },
+    "en": {
+      "title": "DPI Killer",
+      "description": "Broad stack with wide fallbacks."
+    },
+    "es": {
+      "title": "DPI Killer",
+      "description": "Pila amplia con muchos respaldos."
+    },
+    "fa": {
+      "title": "DPI Killer",
+      "description": "پشتهٔ گسترده با جایگزین‌های زیاد."
+    },
+    "fr": {
+      "title": "DPI Killer",
+      "description": "Pile large avec de nombreux secours."
+    },
+    "id": {
+      "title": "DPI Killer",
+      "description": "Tumpukan luas dengan banyak cadangan."
+    },
+    "pt-BR": {
+      "title": "DPI Killer",
+      "description": "Pilha ampla com várias reservas."
+    },
+    "ru": {
+      "title": "DPI Killer",
+      "description": "Широкий стек с запасными вариантами."
+    },
+    "tr": {
+      "title": "DPI Killer",
+      "description": "Geniş yığın, bol yedekler."
+    },
+    "zh-CN": {
+      "title": "DPI Killer",
+      "description": "宽覆盖协议栈，备选丰富。"
+    },
+    "zh-TW": {
+      "title": "DPI Killer",
+      "description": "寬覆蓋協議棧，備選豐富。"
+    }
+  },
+  "slots": [
+    {
+      "id": "reality",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tls_h2",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "tls_h1",
+      "role": "tcp_tls",
+      "default_preset": "anytls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "http/1.1"
+      ]
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "protocol_only"
+    },
+    {
+      "id": "plain",
+      "role": "tcp_plain",
+      "default_preset": "mieru_tcp",
+      "substitutes": [
+        "sudoku_pad",
+        "sudoku_httpmask",
+        "sudoku_aes",
+        "sudoku_aes256",
+        "sudoku_mux",
+        "mieru_tcp",
+        "ssh_password",
+        "snell_v5",
+        "snell_v5_tls",
+        "snell_v6"
+      ],
+      "match_hint": "always_plain"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 6,
+    "setup": 5,
+    "speed": 8
+  },
+  "notes": "Flagship stable (5): Reality + Naive/AnyTLS + Hy2 + plain."
+}

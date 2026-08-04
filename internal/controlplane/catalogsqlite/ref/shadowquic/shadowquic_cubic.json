@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic_cubic",
+  "protocol": "shadowquic",
+  "aliases": [
+    "shadowquic-cubic"
+  ],
+  "short_name": "SQ cubic",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC cubic",
+      "description": "ShadowQUIC JLS + congestion_control=cubic (альтернатива BBR на стабильных линках)."
+    },
+    "en": {
+      "title": "ShadowQUIC cubic",
+      "description": "ShadowQUIC with cubic congestion control. Prefer on stable wired paths when BBR underperforms."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "jls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello → JLS upstream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_shadowquic"
+  },
+  "client_notes": {
+    "congestion_control": "cubic via param_values",
+    "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
+  },
+  "param_values": {
+    "jls_addr": "www.cloudflare.com:443",
+    "jls_server_name": "www.cloudflare.com",
+    "congestion_control": "cubic",
+    "zero_rtt": "true",
+    "udp_over_stream": "false"
+  }
+}

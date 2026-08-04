@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "tag": "mieru_tcp",
+  "protocol": "mieru",
+  "aliases": [
+    "mieru",
+    "mieru-tcp"
+  ],
+  "short_name": "Mieru TCP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru TCP",
+      "description": "Mieru TCP transport (DPI: нестандартный TCP stream)."
+    },
+    "en": {
+      "title": "Mieru TCP",
+      "description": "Mieru TCP transport (DPI: non-standard TCP stream)."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "mieru framing",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "requirements": {
+    "build_tag": "with_mieru"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: traffic_pattern"
+  },
+  "param_values": {
+    "transport": "TCP",
+    "multiplexing": "MULTIPLEXING_HIGH",
+    "mtu": "1400",
+    "traffic_pattern": ""
+  }
+}

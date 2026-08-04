@@ -3,6 +3,7 @@
 package controlplane
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,12 @@ func TestEnsureWgUserCreds_StickyAndMirror(t *testing.T) {
 	c2 := out[1].Creds["wg"]
 	if c1["wg_host_index"] == nil || c2["wg_host_index"].(int) != 5 {
 		t.Fatalf("c1=%v c2=%v", c1, c2)
+	}
+	if domain.HostIPOnly(fmt.Sprint(c1["address"])) != fmt.Sprint(c1["address"]) || !strings.HasPrefix(fmt.Sprint(c1["address"]), "10.8.0.") {
+		t.Fatalf("expected derived host address, got %v", c1["address"])
+	}
+	if c2["address"] != "10.8.0.5" {
+		t.Fatalf("sticky index 5 → 10.8.0.5, got %v", c2["address"])
 	}
 	if c1["wg_host_index"] == 5 {
 		t.Fatal("new user must not steal sticky index 5")
@@ -109,8 +116,11 @@ func TestEnsureWgHubSecrets_ClearAWGOnPlain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h2.AWG["id"] == nil || h2.AWG["jc"] == nil {
+	if h2.AWG["ip"] == nil || h2.AWG["jc"] == nil {
 		t.Fatalf("%v", h2.AWG)
+	}
+	if _, ok := h2.AWG["id"]; ok {
+		t.Fatal("id must come from client Reality SNI, not Bundle")
 	}
 	if _, ok := h2.AWG["header_protection_key"]; ok {
 		t.Fatal("awg2 must not have HP")

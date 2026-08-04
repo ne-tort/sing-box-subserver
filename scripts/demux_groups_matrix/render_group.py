@@ -34,7 +34,9 @@ from render import (  # noqa: E402
 from gen_certs import ensure_certs  # noqa: E402
 
 PUBLIC_PORT = int(os.environ.get("DG_PUBLIC_PORT", "1443"))
-DEFAULT_PRESETS = SUBSERVER / "internal" / "controlplane" / "presets" / "data"
+DEFAULT_PRESETS = SUBSERVER / "internal" / "controlplane" / "catalogsqlite" / "ref"
+# Cronet resolves TLS SNI itself; matrix.local often times out under demux/QUIC even with hosts pin.
+NAIVE_PUBLIC_SNI = "www.apple.com"
 
 
 def go_install(group: str, port: int, slot_presets: dict[str, str] | None = None) -> dict[str, Any]:
@@ -63,6 +65,20 @@ def set_tls_server_name(obj: dict[str, Any], sni: str) -> None:
             pass
 
 
+def sanitize_naive_outbound(ob: dict[str, Any]) -> None:
+    """Cronet naive rejects insecure/utls/alpn (mirror materialize.sanitizeNaiveOutboundTLS)."""
+    if str(ob.get("type") or "") != "naive":
+        return
+    tls = ob.get("tls")
+    if not isinstance(tls, dict):
+        return
+    tls.pop("insecure", None)
+    tls.pop("utls", None)
+    tls.pop("alpn", None)
+    tls.pop("reality", None)
+    tls.pop("ech", None)
+
+
 def render_group_workdir(
     group: str,
     *,
@@ -83,6 +99,9 @@ def render_group_workdir(
     preset_sni: dict[str, str] = {}
     # TrustTunnel is picky: hostname + cert CN should align with ClientHello SNI.
     # Force matrix.local for TT slots and rewrite demux match accordingly.
+    # Reality: keep unique demux_sni from go_install (multi-Reality groups need distinct SNIs).
+    # Naive (Cronet): keep a public-resolvable demux_sni. matrix.local + hosts pin is
+    # enough for direct TCP, but demux/QUIC often dies with "name not resolved".
     for b in set_obj.get("bindings") or []:
         pn = str(b.get("preset") or "")
         if pn.startswith("trusttunnel"):
@@ -90,7 +109,14 @@ def render_group_workdir(
                 b["params"] = {}
             b["params"]["demux_sni"] = TLS_SNI
             preset_sni[pn] = TLS_SNI
-    # Rebuild preset_sni map after TT override
+        elif pn.startswith("naive"):
+            if not b.get("params"):
+                b["params"] = {}
+            cur = str((b.get("params") or {}).get("demux_sni") or "").strip()
+            if not cur or cur == TLS_SNI:
+                b["params"]["demux_sni"] = NAIVE_PUBLIC_SNI
+            preset_sni[pn] = str(b["params"]["demux_sni"])
+    # Rebuild preset_sni map after TT/naive override
     for b in set_obj.get("bindings") or []:
         pn = b.get("preset")
         params = b.get("params") or {}
@@ -136,7 +162,16 @@ def render_group_workdir(
 
     certs = workdir / "certs"
     certs.mkdir(exist_ok=True)
-    cert_host, key_host = ensure_certs(certs)
+    # Cronet/naive cannot use insecure: leaf must SAN-match every demux ClientHello SNI.
+    san_extra = {
+        str(v).strip()
+        for v in list(preset_sni.values()) + list(slot_snis.values())
+        if str(v).strip() and str(v).strip() not in (TLS_SNI, "inv-server", "localhost")
+    }
+    if any(str(p.get("tag") or "").startswith("naive") for p in loaded):
+        san_extra.add(NAIVE_PUBLIC_SNI)
+    san_extra_list = sorted(san_extra)
+    cert_host, key_host = ensure_certs(certs, extra_dns=san_extra_list, force=bool(san_extra_list))
     cert_in = "/work/certs/server.crt"
     key_in = "/work/certs/server.key"
 
@@ -204,25 +239,28 @@ def render_group_workdir(
         elif needs_tls_certs(p) or p.get("protocol") == "trusttunnel":
             cell["outbound"]["server_port"] = public_port
             set_tls_server_name(cell["outbound"], sni)
-            if isinstance(cell["outbound"].get("tls"), dict):
+            if isinstance(cell["outbound"].get("tls"), dict) and cell["outbound"].get("type") != "naive":
                 cell["outbound"]["tls"]["insecure"] = True
         else:
             # plain / quic without template tls — still dial public port
             cell["outbound"]["server_port"] = public_port
             if isinstance(cell["outbound"].get("tls"), dict):
                 set_tls_server_name(cell["outbound"], sni)
-                cell["outbound"]["tls"]["insecure"] = True
+                if cell["outbound"].get("type") != "naive":
+                    cell["outbound"]["tls"]["insecure"] = True
 
         # QUIC/Hy2 often need server_name on tls even when protocol_only
         if "quic" in traits_of(p) or "udp" in traits_of(p):
             tls = cell["outbound"].get("tls")
             if isinstance(tls, dict) and sni:
                 tls["server_name"] = sni
-                tls.setdefault("insecure", True)
+                if cell["outbound"].get("type") != "naive":
+                    tls.setdefault("insecure", True)
             tls_ib = cell["inbound"].get("tls")
             if isinstance(tls_ib, dict) and sni:
                 tls_ib["server_name"] = sni
 
+        sanitize_naive_outbound(cell["outbound"])
         cell["demux_sni"] = sni
         cell["public_port"] = public_port
         cells.append(cell)

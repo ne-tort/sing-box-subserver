@@ -3,7 +3,7 @@
 
 Master English is assembled from:
   - scripts/rewrite_priority_locales.py (common, protocols, demux, vless, hy2, wg)
-  - scan of presets/data/*.json (inline i18n + param_meta)
+  - scan of catalogsqlite/ref/*.json (inline i18n + param_meta)
   - existing locales/en + locales/ru on disk (non-stub wins)
 
 Russian master mirrors rewrite + scan + disk, with English fallback for gaps.
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "internal" / "controlplane" / "presets" / "data"
+DATA = ROOT / "internal" / "controlplane" / "catalogsqlite" / "ref"
 LOCALES = ROOT / "internal" / "controlplane" / "presets" / "i18n" / "locales"
 SCRIPTS = ROOT / "scripts"
 

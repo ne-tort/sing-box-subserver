@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_jitsi_sei_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-jitsi-sei-shared"
+  ],
+  "short_name": "Jitsi SEI s",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Jitsi SEI (shared)",
+      "description": "Jitsi SFU transport=seichannel; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Jitsi SEI shared",
+      "description": "Jitsi + SEI channel transport (shared). Use when datachannel path is filtered."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "jitsi",
+    "seichannel"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 5
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "room": "required in bindings[].params.room; self-host = your Jitsi host in the URL",
+    "transport": "datachannel|seichannel (vp8channel forbidden for jitsi)"
+  },
+  "param_values": {
+    "provider": "jitsi_sei",
+    "auth_mode": "shared",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

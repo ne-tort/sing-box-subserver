@@ -82,7 +82,13 @@ func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceAWG bool) (bool, erro
 	}
 	needAWG := h.Profile == domain.WgProfileAWG2 || h.Profile == domain.WgProfileAWG3
 	if needAWG && (forceAWG || len(h.AWG) == 0) {
-		bundle, err := wgawg.Bundle(h.Profile == domain.WgProfileAWG3)
+		var bundle map[string]any
+		var err error
+		if forceAWG && len(h.AWG) > 0 {
+			bundle, err = wgawg.BundleFromExisting(h.Profile == domain.WgProfileAWG3, h.AWG, "")
+		} else {
+			bundle, err = wgawg.Bundle(h.Profile == domain.WgProfileAWG3)
+		}
 		if err != nil {
 			return false, err
 		}
@@ -97,7 +103,16 @@ func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceAWG bool) (bool, erro
 }
 
 // ensureWgUserCreds assigns curve25519 + sticky wg_host_index under shared "wg" creds.
+// Also refreshes derived `address` (host IP, no CIDR) from the current hub subnet.
 func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, error) {
+	hub := domain.DefaultWgHub()
+	if s.store != nil {
+		if loaded, err := s.store.LoadWgHub(); err == nil {
+			hub = loaded
+		}
+	}
+	hub.Normalize()
+
 	// Pass 1: reserve sticky indices so allocation cannot steal them.
 	used := map[int]string{}
 	for _, u := range users {
@@ -153,14 +168,22 @@ func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, e
 		if pubChanged {
 			uc = true
 		}
-		if _, ok := hostIndexFromAny(creds["wg_host_index"]); !ok {
-			idx, err := allocWgHostIndex(used)
+		idx, hasIdx := hostIndexFromAny(creds["wg_host_index"])
+		if !hasIdx {
+			idx, err = allocWgHostIndex(used)
 			if err != nil {
 				return nil, false, err
 			}
 			creds["wg_host_index"] = idx
 			used[idx] = u.Name
 			uc = true
+		}
+		if addr, err := hub.PeerInterfaceAddress(idx); err == nil {
+			want := domain.HostIPOnly(addr)
+			if domain.HostIPOnly(fmt.Sprint(creds["address"])) != want {
+				creds["address"] = want
+				uc = true
+			}
 		}
 		mirrored := false
 		for _, k := range wgCredKeys() {

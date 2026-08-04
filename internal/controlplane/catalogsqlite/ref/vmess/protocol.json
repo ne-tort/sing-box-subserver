@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "tag": "vmess",
+  "singbox_type": "vmess",
+  "short_name": "VMess",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess",
+      "description": "UUID-транспорт VMess. Покрытие разнообразия; для новых Reality-стеков предпочтительнее VLESS."
+    },
+    "en": {
+      "title": "VMess",
+      "description": "UUID VMess transport. Diversity coverage; prefer VLESS for new Reality stacks."
+    }
+  },
+  "default_cred_fields": [
+    "uuid"
+  ],
+  "notes": {
+    "variants_family": "vmess_security"
+  }
+}

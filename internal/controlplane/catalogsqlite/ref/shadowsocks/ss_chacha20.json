@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "tag": "ss_chacha20",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-chacha20"
+  ],
+  "short_name": "SS ChaCha20",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS ChaCha20",
+      "description": "Shadowsocks chacha20-ietf-poly1305, TCP."
+    },
+    "en": {
+      "title": "SS ChaCha20",
+      "description": "Shadowsocks AEAD ChaCha20-Poly1305. Better on mobile CPUs without AES-NI."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD stream (SS ChaCha)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 7,
+    "setup": 8
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "method": "chacha20-ietf-poly1305",
+    "network": "tcp",
+    "udp_over_tcp": "false",
+    "multiplex": "none"
+  }
+}

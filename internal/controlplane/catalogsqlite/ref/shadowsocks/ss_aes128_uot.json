@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "tag": "ss_aes128_uot",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-uot"
+  ],
+  "short_name": "SS UoT",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SS AES-128 + UoT",
+      "description": "AES-128-GCM; outbound udp_over_tcp."
+    },
+    "en": {
+      "title": "SS AES-128 UoT",
+      "description": "SS AES-128 UDP-over-TCP. When UDP SS is filtered."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp_over_tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 7
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "method": "aes-128-gcm",
+    "network": "tcp",
+    "udp_over_tcp": "true",
+    "multiplex": "none"
+  },
+  "client_notes": {
+    "udp_over_tcp": "outbound_only; conflict with multiplex"
+  }
+}

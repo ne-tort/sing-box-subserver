@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_peer_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-peer-users"
+  ],
+  "short_name": "Carrier peer users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier peer users",
+      "description": "Self-host peer + auth=users (device_id/secret ACL)."
+    },
+    "en": {
+      "title": "Carrier peer users",
+      "description": "Peer underlay with per-user credentials."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "needs_listen",
+    "self_host"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 6,
+    "mobile": 3,
+    "setup": 4
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "peer",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [],
+  "optional_param_fields": [
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password",
+    "key",
+    "token",
+    "room"
+  ]
+}

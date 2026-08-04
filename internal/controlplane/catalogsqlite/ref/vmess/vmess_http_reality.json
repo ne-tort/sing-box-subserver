@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_http_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-http-reality"
+  ],
+  "short_name": "VMess HTTP Reality",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess HTTP Reality",
+      "description": "VMess + Reality + HTTP/2 transport."
+    },
+    "en": {
+      "title": "VMess HTTP Reality",
+      "description": "VMess + Reality + HTTP transport."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "reality",
+    "http"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS (Reality) → HTTP",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "param_values": {
+    "transport": "http",
+    "tls_mode": "reality",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vmess-h2",
+    "transport_host": "{{server}}",
+    "service_name": "VMessService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "client_notes": {
+    "http_path_default": "/vmess-h2"
+  }
+}

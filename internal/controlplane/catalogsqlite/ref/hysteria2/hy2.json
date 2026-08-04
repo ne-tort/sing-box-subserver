@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tag": "hy2",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2"
+  ],
+  "short_name": "Hy2",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2",
+      "description": "Hysteria2 UDP/QUIC + TLS."
+    },
+    "en": {
+      "title": "Hysteria2",
+      "description": "Hysteria2 over QUIC/TLS."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC/H3 ClientHello",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 9,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "param_values": {
+    "obfs_type": "none",
+    "up_mbps": "100",
+    "down_mbps": "100",
+    "ignore_client_bandwidth": "true",
+    "masquerade_mode": "none",
+    "masquerade_dir": "",
+    "masquerade_url": "https://www.cloudflare.com",
+    "realm_mode": "none",
+    "realm_server_url": "",
+    "realm_id": ""
+  }
+}

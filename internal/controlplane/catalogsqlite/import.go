@@ -13,8 +13,9 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
-func importVlessRef(conn *sql.DB) error {
-	entries, err := fs.ReadDir(vlessRefFS, "ref/vless")
+func importProtocolRef(conn *sql.DB, protocol string) error {
+	dir := path.Join("ref", protocol)
+	entries, err := fs.ReadDir(catalogRefFS, dir)
 	if err != nil {
 		return err
 	}
@@ -25,7 +26,10 @@ func importVlessRef(conn *sql.DB) error {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		raw, err := fs.ReadFile(vlessRefFS, path.Join("ref/vless", e.Name()))
+		if e.Name() == "variants.json" {
+			continue
+		}
+		raw, err := fs.ReadFile(catalogRefFS, path.Join(dir, e.Name()))
 		if err != nil {
 			return err
 		}
@@ -39,7 +43,7 @@ func importVlessRef(conn *sql.DB) error {
 		if err := json.Unmarshal(raw, &inv); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
-		if inv.CustomPreset || inv.Tag == "vless_custom" {
+		if inv.CustomPreset || inv.Tag == protocol+"_custom" {
 			base = inv
 			base.CustomPreset = true
 			continue
@@ -47,9 +51,15 @@ func importVlessRef(conn *sql.DB) error {
 		ready = append(ready, inv)
 	}
 	if proto.Tag == "" || base.Tag == "" {
-		return fmt.Errorf("vless ref incomplete: protocol=%q base=%q", proto.Tag, base.Tag)
+		return fmt.Errorf("%s ref incomplete: protocol=%q base=%q", protocol, proto.Tag, base.Tag)
+	}
+	if proto.Tag != protocol {
+		return fmt.Errorf("%s protocol.json tag=%q", protocol, proto.Tag)
 	}
 	if err := insertProtocol(conn, proto); err != nil {
+		return err
+	}
+	if err := insertVariantsSeed(conn, protocol); err != nil {
 		return err
 	}
 	if err := insertBase(conn, base); err != nil {
@@ -100,37 +110,43 @@ INSERT INTO preset_bases(
 }
 
 func insertReady(conn *sql.DB, base, inv domain.InvariantPreset) error {
-	overrides := inferReadyOverrides(inv.Tag, inv)
-	useOwnTpl := readyNeedsOwnTemplates(inv.Tag)
-	var inTpl, outTpl, epTpl any
-	if useOwnTpl {
-		b, _ := json.Marshal(inv.InboundTemplate)
-		inTpl = string(b)
-		b, _ = json.Marshal(inv.OutboundTemplate)
-		outTpl = string(b)
-		if len(inv.EndpointTemplate) > 0 {
-			b, _ = json.Marshal(inv.EndpointTemplate)
-			epTpl = string(b)
-		}
+	if len(inv.ParamValues) == 0 {
+		return fmt.Errorf("ready %s: missing explicit param_values (no heuristic overrides)", inv.Tag)
 	}
+	// Ready presets always share base constructor templates; never store own stock templates.
 	row, err := marshalPresetRow(inv)
 	if err != nil {
 		return err
 	}
+	var credGen, peer, paramFields, optFields any
+	if inv.CredGenerators != nil {
+		credGen = row.credGen
+	}
+	if inv.PeerSecretFields != nil {
+		peer = row.peer
+	}
+	if inv.ParamFields != nil {
+		paramFields = row.paramFields
+	}
+	if inv.OptionalParamFields != nil {
+		optFields = row.optFields
+	}
 	_, err = conn.Exec(`
 INSERT INTO ready_presets(
   tag,protocol,short_name,status,aliases_json,traits_json,scores_json,demux_hints_json,
-  requirements_json,cred_fields_json,default_user_variants_json,default_client_profiles_json,
+  requirements_json,cred_fields_json,cred_generators_json,peer_secret_fields_json,
+  param_fields_json,optional_param_fields_json,
+  default_user_variants_json,default_client_profiles_json,
   i18n_json,client_notes_json,inbound_template_json,outbound_template_json,endpoint_template_json
-) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)`,
 		inv.Tag, inv.Protocol, inv.ShortName, inv.Status,
 		row.aliases, row.traits, row.scores, row.demux, row.reqs,
-		row.creds, row.variants, row.profiles,
-		row.i18n, row.notes, inTpl, outTpl, epTpl)
+		row.creds, credGen, peer, paramFields, optFields, row.variants, row.profiles,
+		row.i18n, row.notes)
 	if err != nil {
 		return err
 	}
-	for k, v := range overrides {
+	for k, v := range inv.ParamValues {
 		if _, err := conn.Exec(`INSERT INTO ready_param_values(ready_tag,key,value) VALUES(?,?,?)`, inv.Tag, k, v); err != nil {
 			return err
 		}
@@ -156,11 +172,11 @@ func registerAliases(conn *sql.DB, tag string, aliases []string) error {
 }
 
 type presetJSONRow struct {
-	aliases, traits, scores, demux, reqs       string
-	creds, credGen, peer                       string
-	paramFields, optFields, paramMeta          string
-	variants, profiles, i18n, notes            string
-	inTpl, outTpl, epTpl                       string
+	aliases, traits, scores, demux, reqs      string
+	creds, credGen, peer                      string
+	paramFields, optFields, paramMeta         string
+	variants, profiles, i18n, notes           string
+	inTpl, outTpl, epTpl                      string
 }
 
 func marshalPresetRow(inv domain.InvariantPreset) (presetJSONRow, error) {
@@ -231,83 +247,4 @@ func marshalPresetRow(inv domain.InvariantPreset) (presetJSONRow, error) {
 		return r, err
 	}
 	return r, nil
-}
-
-func readyNeedsOwnTemplates(tag string) bool {
-	// All VLESS ready presets use the base constructor templates + param overrides.
-	return false
-}
-
-// inferReadyOverrides maps a legacy stock VLESS tag onto base constructor params.
-func inferReadyOverrides(tag string, inv domain.InvariantPreset) map[string]string {
-	out := map[string]string{
-		"transport":         "tcp",
-		"tls_mode":          "tls",
-		"flow":              "none",
-		"packet_encoding":   "xudp",
-		"fingerprint":       "chrome",
-		"transport_path":    "/vless",
-		"transport_host":    "{{server}}",
-		"service_name":      "GunService",
-		"alpn":              "h2,http/1.1",
-		"multiplex":         "none",
-		"ws_max_early_data": "0",
-	}
-	switch {
-	case strings.Contains(tag, "_ws_"):
-		out["transport"] = "ws"
-		out["ws_max_early_data"] = "2048"
-	case strings.Contains(tag, "_grpc_"):
-		out["transport"] = "grpc"
-	case strings.Contains(tag, "_httpupgrade_"):
-		out["transport"] = "httpupgrade"
-	case strings.Contains(tag, "_http_"):
-		out["transport"] = "http"
-	case strings.Contains(tag, "_quic_"):
-		out["transport"] = "quic"
-		out["alpn"] = "h3"
-	case strings.Contains(tag, "_hysteria_"):
-		out["transport"] = "hysteria"
-		out["alpn"] = "h3"
-	case tag == "vless_tcp":
-		out["transport"] = "tcp"
-		out["tls_mode"] = "none"
-	case tag == "vless_tls":
-		out["transport"] = "tcp"
-		out["tls_mode"] = "tls"
-	case tag == "vless_tls_mux":
-		out["transport"] = "tcp"
-		out["tls_mode"] = "tls"
-		out["multiplex"] = "smux"
-	case tag == "vless_reality":
-		out["transport"] = "tcp"
-		out["tls_mode"] = "reality"
-	}
-	if strings.Contains(tag, "reality") {
-		out["tls_mode"] = "reality"
-	} else if tag != "vless_tcp" && out["tls_mode"] != "none" {
-		if strings.Contains(tag, "tls") || out["tls_mode"] == "tls" {
-			out["tls_mode"] = "tls"
-		}
-	}
-	// Stock path defaults → constructor keys.
-	if m := inv.ParamMeta["ws_path"]; m.Default != "" {
-		out["transport_path"] = m.Default
-	}
-	if m := inv.ParamMeta["hu_path"]; m.Default != "" {
-		out["transport_path"] = m.Default
-	}
-	if m := inv.ParamMeta["http_path"]; m.Default != "" {
-		out["transport_path"] = m.Default
-	}
-	if v := inv.ClientNotes["ws_path_default"]; v != "" {
-		out["transport_path"] = v
-	}
-	if v := inv.ClientNotes["hu_path_default"]; v != "" {
-		out["transport_path"] = v
-	}
-	if v := inv.ClientNotes["http_path_default"]; v != "" {
-		out["transport_path"] = v
-	}
-	return out
 }

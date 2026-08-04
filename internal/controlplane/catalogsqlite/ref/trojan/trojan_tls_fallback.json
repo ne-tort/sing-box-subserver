@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_tls_fallback",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-fallback"
+  ],
+  "short_name": "Trojan fb",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Trojan TLS + fallback",
+      "description": "Trojan+TLS с fallback на 127.0.0.1:18080 (нужен локальный HTTP)."
+    },
+    "en": {
+      "title": "Trojan TLS fallback",
+      "description": "Trojan+TLS with fallback to 127.0.0.1:18080 (local HTTP required)."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "fallback"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1",
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello → Trojan or HTTP fallback",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "transport": "tcp",
+    "tls_mode": "tls",
+    "fingerprint": "chrome",
+    "transport_path": "/trojan",
+    "transport_host": "{{server}}",
+    "service_name": "TrojanService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0",
+    "fallback": "local"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "fallback": "inbound-only; run local HTTP on :18080 or set fallback=host:port"
+  }
+}

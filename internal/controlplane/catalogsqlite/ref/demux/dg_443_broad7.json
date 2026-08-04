@@ -1,0 +1,176 @@
+{
+  "tag": "dg_443_broad7",
+  "short_name": "Full Arsenal",
+  "status": "lab",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "Full Arsenal",
+      "description": "أكبر مزيج lab."
+    },
+    "en": {
+      "title": "Full Arsenal",
+      "description": "Largest lab mix."
+    },
+    "es": {
+      "title": "Full Arsenal",
+      "description": "La mezcla lab más completa."
+    },
+    "fa": {
+      "title": "Full Arsenal",
+      "description": "کامل‌ترین ترکیب lab."
+    },
+    "fr": {
+      "title": "Full Arsenal",
+      "description": "Le plus grand mix lab."
+    },
+    "id": {
+      "title": "Full Arsenal",
+      "description": "Campuran lab terbesar."
+    },
+    "pt-BR": {
+      "title": "Full Arsenal",
+      "description": "Maior mistura lab."
+    },
+    "ru": {
+      "title": "Full Arsenal",
+      "description": "Самый полный lab-набор."
+    },
+    "tr": {
+      "title": "Full Arsenal",
+      "description": "En geniş lab karışımı."
+    },
+    "zh-CN": {
+      "title": "Full Arsenal",
+      "description": "最完整的 lab 组合。"
+    },
+    "zh-TW": {
+      "title": "Full Arsenal",
+      "description": "最完整的 lab 組合。"
+    }
+  },
+  "slots": [
+    {
+      "id": "r1",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "r2",
+      "role": "tcp_reality",
+      "default_preset": "vless_grpc_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "t1",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "t2",
+      "role": "tcp_tls",
+      "default_preset": "vless_grpc_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "plain",
+      "role": "tcp_plain",
+      "default_preset": "mieru_tcp",
+      "substitutes": [
+        "sudoku_pad",
+        "sudoku_httpmask",
+        "sudoku_aes",
+        "sudoku_aes256",
+        "sudoku_mux",
+        "mieru_tcp",
+        "ssh_password",
+        "snell_v5",
+        "snell_v5_tls",
+        "snell_v6"
+      ],
+      "match_hint": "always_plain"
+    },
+    {
+      "id": "hy2",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tuic",
+      "role": "quic",
+      "default_preset": "tuic",
+      "substitutes": [
+        "tuic",
+        "tuic_0rtt"
+      ],
+      "match_hint": "sni_pool"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 5,
+    "setup": 3,
+    "speed": 7
+  },
+  "notes": "Largest lab set (7). Prefer Vision Pack / DPI Killer unless you need two QUIC + plain."
+}

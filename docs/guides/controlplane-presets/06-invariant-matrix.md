@@ -24,7 +24,7 @@ Env: `MIN_MBPS` (default `0.5`), `IPERF_TIME` (default `5`), `LX_BIN`, `INVMATRI
 
 Сеть: `invmatrix_net`. Бинарь: `.tools/lx-client/sing-box` (linux) **и** рядом `libcronet.so` для naive outbound (`python ../ensure_lx_client.py`). Image `sui-lx-iperf:local`.
 
-Naive: Cronet нужен **только клиенту** (outbound, `with_naive_outbound`+purego). Inbound на агенте — pure-Go; в `build/tags.server` тег naive outbound **не** добавляем.
+Naive inbound на агенте — pure-Go. Naive outbound (`with_naive_outbound`+`with_purego`) нужен клиенту и агенту: CP smoke крутит ephemeral client-box на агенте. В образе агента рядом с бинарём лежит `libcronet.so` (glibc; runtime = debian).
 
 ## Status legend
 

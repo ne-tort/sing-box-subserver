@@ -34,7 +34,7 @@ flowchart LR
 
 1. `log` — level from agent default or fixed `warn`.
 2. For each active set (stable name sort for determinism):
-   - If `demux_template` present: demux inbound on set listen/port; protocol inbounds inject-only (no public bind conflict).
+   - If `demux_template` present: demux inbound on set listen/port; protocol inbounds listen on private `127.0.0.1` ports and demux **dials** them (no public bind conflict).
    - If demux null: single protocol inbound binds set listen/port.
 3. Expand logical set `bindings[]` (or compatibility `presets[]`) into physical preset inbounds.
 4. Attach `users[]` on each protocol inbound from eligible users' `creds[preset]` (lazy backfill first).
@@ -46,18 +46,18 @@ flowchart LR
      - Shadowsocks: random single-user `password` (unguessable per Apply); `users` omitted.
      - SOCKS/HTTP: one inert `cp-inert` user with random password (empty users would be an open proxy).
      - Trojan/VLESS/…: empty `users[]` (auth rejects).
-5. `outbounds` — at least `direct` (and `block` if required by route).
-5. `route` / `dns` — minimal defaults so validate succeeds.
-6. If TLS profile mode is `acme_*`: emit `certificate_providers` with tag `cp-tls`.
-7. Attach TLS to each TLS-capable inbound (`certificate_path`/`key_path` or `certificate_provider`) — see [11-tls](11-tls.md).
-8. For `reality` trait presets:
+5. `outbounds` — from `config_fragments.outbounds` or default `direct`+`block` (client-owned full array when overridden).
+6. `route` / `dns` — from fragments or minimal defaults so validate succeeds.
+7. If TLS profile mode is `acme_*`: emit `certificate_providers` with tag `cp-tls`.
+8. Attach TLS to each TLS-capable inbound (`certificate_path`/`key_path` or `certificate_provider`) — see [11-tls](11-tls.md).
+9. For `reality` trait presets:
    - choose sticky assignment `{set}/{preset}` from validated profile pool,
    - generate key material per inbound (private/public key + short_id) on first use,
    - render inbound `tls.reality` and subscription outbound `tls.reality`.
-9. Persist sticky assignments and reuse them across rematerialize until profile becomes invalid/unavailable.
-10. Omit Clash experimental; omit panel-only objects.
+10. Persist sticky assignments and reuse them across rematerialize until profile becomes invalid/unavailable.
+11. Omit Clash experimental; omit panel-only objects.
 
-Exact default dns/route JSON is fixed in implementation tests as golden files.
+Default dns / route / outbounds JSON is defined inline in `domain.Default*Fragment()` (see unit tests).
 
 ## Idempotency
 
@@ -78,6 +78,7 @@ Canonical JSON bytes → SHA-256. If equal to last-good / last materialize and b
 | Expiry / traffic reset tick | yes if eligibility set changed |
 | TLS profile PUT (mode/spec change) | yes; Force reload if PEM rewritten or mode switched |
 | TLS POST regenerate (self_signed) | yes; Force reload (paths unchanged but PEM bytes new) |
+| PUT/DELETE config dns / route / outbounds | yes when CP owns dataplane (`rematerializeIfOwner`) |
 
 ## Failure behavior
 
@@ -85,4 +86,4 @@ Validate/Apply errors surface to activate/PATCH callers; previous last-good rema
 
 ## Relation to demux
 
-Requires sing-box-lx demux inject (SPEC 037) when templates include demux. Activate without demux works with server tags alone.
+Requires sing-box-lx demux dial/forward when templates include demux. Activate without demux works with server tags alone.

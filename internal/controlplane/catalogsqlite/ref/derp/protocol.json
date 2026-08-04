@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "tag": "derp",
+  "singbox_type": "derp",
+  "short_name": "DERP",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "DERP",
+      "description": "Tailscale-compatible DERP. Нишевый UDP/TLS путь, не для общего обхода."
+    },
+    "en": {
+      "title": "DERP",
+      "description": "Tailscale-compatible DERP. Niche UDP/TLS path, not general bypass."
+    }
+  },
+  "default_cred_fields": [
+    "private_key",
+    "public_key"
+  ],
+  "notes": {
+    "variants_family": "none",
+    "lx": "with_derp"
+  }
+}

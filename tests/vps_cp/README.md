@@ -52,4 +52,4 @@ $env:CP_SSH_HOST='163.5.180.181'
 python -m pytest tests/vps_cp/test_07_client_remote.py -v --tb=short
 ```
 
-Known gaps: ShadowQUIC not in `tags.server.controlplane`; gRPC Reality stays `demux_lab`; last-deactivate idle claim is best-effort.
+Known gaps: gRPC Reality stays `demux_lab`; last-deactivate idle claim is best-effort. ShadowQUIC / Sudoku / TrustTunnel are in `tags.server.controlplane`.

@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "tag": "mieru_custom",
+  "protocol": "mieru",
+  "aliases": [
+    "mieru-custom"
+  ],
+  "short_name": "Mieru TCP custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru конструктор",
+      "description": "Mieru: transport TCP/UDP, multiplexing, MTU, traffic_pattern."
+    },
+    "en": {
+      "title": "Mieru constructor",
+      "description": "Mieru: TCP/UDP transport, multiplexing, MTU, traffic_pattern."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "mieru framing",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "inbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "transport": "{{param.transport}}",
+    "users": [],
+    "mtu": "{{param.mtu}}",
+    "user_hint_is_mandatory": false,
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "outbound_template": {
+    "type": "mieru",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "transport": "{{param.transport}}",
+    "username": "{{user.name}}",
+    "password": "{{user.password}}",
+    "multiplexing": "{{param.multiplexing}}",
+    "handshake_mode": "HANDSHAKE_STANDARD",
+    "mtu": "{{param.mtu}}",
+    "traffic_pattern": "{{param.traffic_pattern}}"
+  },
+  "requirements": {
+    "build_tag": "with_mieru"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: traffic_pattern"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "multiplexing",
+    "mtu",
+    "traffic_pattern"
+  ],
+  "param_meta": {
+    "transport": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "TCP",
+        "UDP"
+      ],
+      "default": "TCP",
+      "ui_group": "transport",
+      "ui_order": 1,
+      "title": {
+        "en": "Transport",
+        "ru": "Транспорт"
+      },
+      "description": {
+        "en": "Mieru transport TCP|UDP.",
+        "ru": "Транспорт Mieru TCP|UDP."
+      }
+    },
+    "multiplexing": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "MULTIPLEXING_OFF",
+        "MULTIPLEXING_LOW",
+        "MULTIPLEXING_MIDDLE",
+        "MULTIPLEXING_HIGH"
+      ],
+      "default": "MULTIPLEXING_HIGH",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "Multiplexing",
+        "ru": "Multiplexing"
+      },
+      "description": {
+        "en": "Outbound multiplexing profile.",
+        "ru": "Профиль multiplexing на outbound."
+      }
+    },
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "1400",
+      "ui_group": "core",
+      "ui_order": 3,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "Mieru MTU.",
+        "ru": "MTU Mieru."
+      }
+    },
+    "traffic_pattern": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 44,
+      "title": {
+        "en": "Traffic pattern",
+        "ru": "Паттерн трафика"
+      },
+      "description": {
+        "en": "Mieru traffic shaping profile name.",
+        "ru": "Имя профиля shaping трафика Mieru."
+      },
+      "default": ""
+    }
+  },
+  "param_fields": [
+    "transport"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel_h3",
+  "protocol": "trusttunnel",
+  "aliases": [
+    "trusttunnel-h3"
+  ],
+  "short_name": "TT H3",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TrustTunnel HTTP/3",
+      "description": "TrustTunnel: upstream_protocol http3 (QUIC/UDP only)."
+    },
+    "en": {
+      "title": "TrustTunnel H3",
+      "description": "TrustTunnel over HTTP/3 QUIC. UDP demux substitute next to Hy2/TUIC."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls_custom",
+    "http3"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello (H3 TrustTunnel)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "build_tag": "with_trusttunnel",
+    "udp": true,
+    "quic": true
+  },
+  "param_values": {
+    "mode": "h3",
+    "anti_dpi": "false",
+    "enable_protocol_fallback": "false",
+    "enable_udp": "true",
+    "force_http1_connect": "false"
+  }
+}

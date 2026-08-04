@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "tag": "socks_uot",
+  "protocol": "socks",
+  "aliases": [
+    "socks-uot"
+  ],
+  "short_name": "SOCKS UoT",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SOCKS + UDP-over-TCP",
+      "description": "SOCKS5 auth; outbound включает udp_over_tcp."
+    },
+    "en": {
+      "title": "SOCKS5 UoT",
+      "description": "SOCKS5 with UDP-over-TCP. Utility when UDP associate is blocked."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp_over_tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SOCKS5 handshake",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 8
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {},
+  "param_values": {
+    "udp_over_tcp": "true"
+  },
+  "client_notes": {
+    "udp_over_tcp": "outbound-only"
+  }
+}

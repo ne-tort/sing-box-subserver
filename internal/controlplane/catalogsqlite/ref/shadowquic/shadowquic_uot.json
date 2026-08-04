@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic_uot",
+  "protocol": "shadowquic",
+  "aliases": [
+    "shadowquic-uot"
+  ],
+  "short_name": "SQ UoS",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC UDP-over-stream",
+      "description": "ShadowQUIC JLS + outbound udp_over_stream (UDP поверх stream)."
+    },
+    "en": {
+      "title": "ShadowQUIC UoT",
+      "description": "ShadowQUIC UDP-over-TCP variant when raw UDP is filtered."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "jls",
+    "uot"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC ClientHello → JLS upstream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_shadowquic"
+  },
+  "client_notes": {
+    "jls_upstream": "must be reachable from the edge; outbound SNI usually matches",
+    "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
+  },
+  "param_values": {
+    "jls_addr": "www.cloudflare.com:443",
+    "jls_server_name": "www.cloudflare.com",
+    "congestion_control": "bbr",
+    "zero_rtt": "false",
+    "udp_over_stream": "true"
+  }
+}

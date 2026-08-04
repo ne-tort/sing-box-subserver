@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "tag": "ssh_custom",
+  "protocol": "ssh",
+  "aliases": [
+    "ssh-custom"
+  ],
+  "short_name": "SSH pass custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "SSH конструктор",
+      "description": "SSH: server_version (banner) и client_version на outbound."
+    },
+    "en": {
+      "title": "SSH constructor",
+      "description": "SSH: server_version banner and outbound client_version."
+    }
+  },
+  "traits": [
+    "tcp",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "ssh_banner",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "SSH-2.0 banner",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "inbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "users": [],
+    "server_version": "{{param.server_version}}"
+  },
+  "outbound_template": {
+    "type": "ssh",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "user": "{{user.username}}",
+    "password": "{{user.password}}",
+    "private_key": [
+      "{{user.private_key}}"
+    ],
+    "client_version": "{{param.client_version}}"
+  },
+  "requirements": {
+    "build_tag": "with_ssh"
+  },
+  "client_notes": {
+    "users": "inbound SSHUser.user ← creds.username",
+    "params": "optional bindings[].params overrides: server_version"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "server_version",
+    "client_version",
+    "auth_mode",
+    "udp_over_tcp"
+  ],
+  "param_meta": {
+    "server_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 43,
+      "title": {
+        "en": "SSH banner",
+        "ru": "SSH-баннер"
+      },
+      "description": {
+        "en": "SSH version banner shown to clients.",
+        "ru": "SSH version banner для клиентов."
+      },
+      "help": {
+        "summary": {
+          "en": "SSH identification string (banner) returned on connect. Keep OpenSSH-like unless you need a specific fingerprint.",
+          "ru": "Строка идентификации SSH (banner) при connect. Держите OpenSSH-like, если не нужен особый fingerprint."
+        },
+        "input_hint": {
+          "en": "SSH-2.0-…",
+          "ru": "SSH-2.0-…"
+        },
+        "format": "SSH-2.0-OpenSSH_8.9"
+      }
+    },
+    "client_version": {
+      "type": "string",
+      "widget": "text",
+      "default": "SSH-2.0-OpenSSH_8.9",
+      "ui_group": "banner",
+      "ui_order": 44,
+      "title": {
+        "en": "Client version",
+        "ru": "Версия клиента"
+      },
+      "description": {
+        "en": "Outbound SSH client_version string.",
+        "ru": "Строка client_version на outbound."
+      }
+    },
+    "auth_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "password",
+        "pubkey"
+      ],
+      "default": "password",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "Auth mode",
+        "ru": "Режим auth"
+      },
+      "description": {
+        "en": "Password or public-key auth for SSH outbound/inbound users.",
+        "ru": "Пароль или pubkey для SSH."
+      }
+    },
+    "udp_over_tcp": {
+      "type": "bool",
+      "widget": "toggle",
+      "default": "false",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "UDP-over-TCP",
+        "ru": "UDP-over-TCP"
+      },
+      "description": {
+        "en": "Enable outbound UDP-over-TCP v2 for SSH tunnels.",
+        "ru": "Включить outbound UDP-over-TCP v2 для SSH-туннелей."
+      }
+    }
+  }
+}

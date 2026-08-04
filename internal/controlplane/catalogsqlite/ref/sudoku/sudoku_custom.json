@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_custom",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-custom"
+  ],
+  "short_name": "Sudoku AES custom",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku конструктор",
+      "description": "Sudoku: AEAD method, multiplex, padding, fallback URL."
+    },
+    "en": {
+      "title": "Sudoku constructor",
+      "description": "Sudoku: AEAD method, multiplex, padding bounds, fallback URL."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key",
+    "custom"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku AES stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "peer_secret_fields": {
+    "key": "password"
+  },
+  "inbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "listen": "{{listen}}",
+    "listen_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "{{param.aead_method}}",
+    "padding_min": "{{param.padding_min}}",
+    "padding_max": "{{param.padding_max}}",
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "handshake_timeout": 5,
+    "fallback": "{{param.fallback}}",
+    "suspicious_action": "fallback",
+    "multiplex": "{{param.multiplex}}"
+  },
+  "outbound_template": {
+    "type": "sudoku",
+    "tag": "{{tag}}",
+    "server": "{{server}}",
+    "server_port": 0,
+    "key": "{{peer.key}}",
+    "aead_method": "{{param.aead_method}}",
+    "padding_min": "{{param.padding_min}}",
+    "padding_max": "{{param.padding_max}}",
+    "table_type": "prefer_entropy",
+    "enable_pure_downlink": true,
+    "multiplex": "{{param.multiplex}}"
+  },
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "custom_preset": true,
+  "optional_param_fields": [
+    "fallback",
+    "multiplex",
+    "padding_min",
+    "padding_max",
+    "httpmask_mode",
+    "httpmask_path"
+  ],
+  "param_meta": {
+    "aead_method": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "aes-128-gcm",
+        "aes-256-gcm",
+        "chacha20-ietf-poly1305",
+        "chacha20-poly1305"
+      ],
+      "default": "aes-128-gcm",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "AEAD method",
+        "ru": "Метод AEAD"
+      },
+      "description": {
+        "en": "Sudoku aead_method (peer-symmetric).",
+        "ru": "Sudoku aead_method (симметрично)."
+      }
+    },
+    "multiplex": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "auto",
+        "on"
+      ],
+      "default": "off",
+      "ui_group": "core",
+      "ui_order": 2,
+      "title": {
+        "en": "Multiplex",
+        "ru": "Multiplex"
+      },
+      "description": {
+        "en": "Sudoku multiplex: off, auto, or on (v2).",
+        "ru": "Sudoku multiplex: off, auto или on (v2)."
+      }
+    },
+    "padding_min": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "3",
+      "ui_group": "advanced",
+      "ui_order": 10,
+      "title": {
+        "en": "Padding min",
+        "ru": "Мин. padding"
+      },
+      "description": {
+        "en": "Minimum padding bytes added to sudoku frames.",
+        "ru": "Минимум байт padding в кадрах sudoku."
+      }
+    },
+    "padding_max": {
+      "type": "uint16",
+      "widget": "text",
+      "default": "12",
+      "ui_group": "advanced",
+      "ui_order": 11,
+      "title": {
+        "en": "Padding max",
+        "ru": "Макс. padding"
+      },
+      "description": {
+        "en": "Maximum padding bytes (must be ≥ padding_min).",
+        "ru": "Максимум байт padding (не меньше padding_min)."
+      }
+    },
+    "fallback": {
+      "type": "string",
+      "widget": "text",
+      "default": "http://127.0.0.1:80",
+      "ui_group": "core",
+      "ui_order": 40,
+      "title": {
+        "en": "Fallback URL",
+        "ru": "Fallback URL"
+      },
+      "description": {
+        "en": "Plain HTTP fallback when auth fails (Snell/Sudoku).",
+        "ru": "Plain HTTP fallback при неверном auth (Snell/Sudoku)."
+      },
+      "help": {
+        "summary": {
+          "en": "HTTP(S) fallback URL shown to probes that fail Sudoku auth.",
+          "ru": "HTTP(S) fallback URL для проб, не прошедших Sudoku auth."
+        },
+        "input_hint": {
+          "en": "http(s)://host[:port]/path]",
+          "ru": "http(s)://host[:port]/path]"
+        },
+        "format": "http://127.0.0.1:80"
+      }
+    },
+    "httpmask_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "legacy"
+      ],
+      "default": "off",
+      "ui_group": "core",
+      "ui_order": 50,
+      "title": {
+        "en": "HTTP mask",
+        "ru": "HTTP mask"
+      },
+      "description": {
+        "en": "off or legacy httpmask mode.",
+        "ru": "off или legacy httpmask."
+      }
+    },
+    "httpmask_path": {
+      "type": "string",
+      "widget": "text",
+      "default": "/sudoku",
+      "ui_group": "core",
+      "ui_order": 51,
+      "title": {
+        "en": "HTTP mask path",
+        "ru": "Путь HTTP mask"
+      },
+      "description": {
+        "en": "HTTP-mask path root (sudoku httpmask.path).",
+        "ru": "Корневой path для HTTP-mask (sudoku httpmask.path)."
+      }
+    }
+  },
+  "param_fields": [
+    "aead_method"
+  ]
+}

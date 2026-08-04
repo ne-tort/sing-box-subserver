@@ -219,6 +219,9 @@ type InvariantPreset struct {
 	CustomPreset          bool                     `json:"custom_preset,omitempty"`
 	DefaultUserVariants   []string                 `json:"default_user_variants,omitempty"`
 	DefaultClientProfiles []string                 `json:"default_client_profiles,omitempty"`
+	// ParamValues are explicit constructor knobs for ready presets (SQLite SoT).
+	// Base/custom presets leave this empty and use ParamMeta defaults instead.
+	ParamValues           map[string]string        `json:"param_values,omitempty"`
 	InboundTemplate       map[string]any           `json:"inbound_template,omitempty"`
 	OutboundTemplate      map[string]any           `json:"outbound_template,omitempty"`
 	EndpointTemplate      map[string]any           `json:"endpoint_template,omitempty"`

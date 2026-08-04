@@ -74,6 +74,9 @@ func InboundRegistry() *inbound.Registry {
 	registerCarrierInbound(registry)
 	registerDemuxInbound(registry)
 	registerDERPInbound(registry)
+	registerShadowQUICInbound(registry)
+	registerSudokuInbound(registry)
+	registerTrustTunnelInbound(registry)
 
 	return registry
 }
@@ -103,6 +106,9 @@ func OutboundRegistry() *outbound.Registry {
 	registerMieruOutbound(registry)
 	registerCarrierOutbound(registry)
 	registerDERPOutbound(registry)
+	registerShadowQUICOutbound(registry)
+	registerSudokuOutbound(registry)
+	registerTrustTunnelOutbound(registry)
 
 	hysteria.RegisterOutbound(registry)
 	tuic.RegisterOutbound(registry)

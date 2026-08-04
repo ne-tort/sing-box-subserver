@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_aes256",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-aes256"
+  ],
+  "short_name": "Sudoku AES-256",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku AES-256-GCM",
+      "description": "Sudoku shared key + aes-256-gcm + entropy table."
+    },
+    "en": {
+      "title": "Sudoku AES-256",
+      "description": "Sudoku AES-256-GCM. Heavier AEAD than aes-128; same framing."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku AES-256 stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "param_values": {
+    "aead_method": "aes-256-gcm",
+    "multiplex": "off",
+    "padding_min": "3",
+    "padding_max": "12",
+    "fallback": "http://127.0.0.1:80",
+    "httpmask_mode": "off",
+    "httpmask_path": "/sudoku"
+  }
+}

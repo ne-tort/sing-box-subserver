@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_vk_shared",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-vk",
+    "carrier-vk-shared"
+  ],
+  "short_name": "Carrier VK shared",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier VK shared",
+      "description": "Self-host VK WRAP/DTLS (не vk.ru/call). server/port ← set; опц. params.vk_hash."
+    },
+    "en": {
+      "title": "Carrier VK shared",
+      "description": "VK calls underlay, shared auth. Needs VK-specific room/hash params from the provider flow."
+    }
+  },
+  "traits": [
+    "udp",
+    "shared_auth",
+    "wg_star",
+    "needs_listen",
+    "self_host",
+    "vk"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {
+    "vk": "userspace WRAP inbound; params.vk_hash = user:pass@turn-host:port (optional)"
+  },
+  "param_values": {
+    "provider": "vk",
+    "auth_mode": "shared",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [],
+  "optional_param_fields": [
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password",
+    "key",
+    "token",
+    "room"
+  ]
+}

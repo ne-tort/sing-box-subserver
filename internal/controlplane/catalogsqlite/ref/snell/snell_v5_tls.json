@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "tag": "snell_v5_tls",
+  "protocol": "snell",
+  "aliases": [
+    "snell-v5-tls",
+    "snell-tls"
+  ],
+  "short_name": "Snell v5 TLS obfs",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Snell v5 TLS obfs",
+      "description": "Snell v5: peer PSK + userkey; obfs_mode=tls (камуфляж TLS ClientHello)."
+    },
+    "en": {
+      "title": "Snell v5 TLS obfs",
+      "description": "Snell v5 with TLS obfuscation. Stronger first-bytes mimic than HTTP obfs."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_mimic"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "TLS-like Snell obfs",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "userkey"
+  ],
+  "peer_secret_fields": {
+    "psk": "password"
+  },
+  "client_notes": {
+    "version": "inbound v5 ~ outbound v4 wire",
+    "obfs": "obfs_mode=tls; set believable obfs_host"
+  },
+  "optional_param_fields": [
+    "obfs_host",
+    "obfs_mode"
+  ],
+  "param_meta": {
+    "obfs_host": {
+      "type": "string",
+      "widget": "text",
+      "default": "www.bing.com",
+      "ui_group": "obfs",
+      "ui_order": 41,
+      "title": {
+        "en": "Obfs Host",
+        "ru": "Obfs Host"
+      },
+      "description": {
+        "en": "Host header / SNI-like target for Snell TLS obfs.",
+        "ru": "Host / SNI-подобный target для Snell TLS obfs."
+      }
+    },
+    "obfs_mode": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "off",
+        "http",
+        "tls"
+      ],
+      "default": "tls",
+      "ui_group": "obfs",
+      "ui_order": 40,
+      "title": {
+        "en": "Obfs mode",
+        "ru": "Режим obfs"
+      },
+      "description": {
+        "en": "Snell obfs_mode: off|http|tls.",
+        "ru": "Snell obfs_mode: off|http|tls."
+      }
+    }
+  },
+  "param_values": {
+    "obfs_mode": "tls",
+    "obfs_host": "www.bing.com"
+  }
+}

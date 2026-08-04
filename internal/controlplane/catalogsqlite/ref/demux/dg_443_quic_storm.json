@@ -1,0 +1,88 @@
+{
+  "tag": "dg_443_quic_storm",
+  "short_name": "QUIC Storm",
+  "status": "lab",
+  "suggested_port": 443,
+  "networks": [
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "QUIC Storm",
+      "description": "ملفّا QUIC."
+    },
+    "en": {
+      "title": "QUIC Storm",
+      "description": "Two QUIC profiles."
+    },
+    "es": {
+      "title": "QUIC Storm",
+      "description": "Dos perfiles QUIC."
+    },
+    "fa": {
+      "title": "QUIC Storm",
+      "description": "دو پروفایل QUIC."
+    },
+    "fr": {
+      "title": "QUIC Storm",
+      "description": "Deux profils QUIC."
+    },
+    "id": {
+      "title": "QUIC Storm",
+      "description": "Dua profil QUIC."
+    },
+    "pt-BR": {
+      "title": "QUIC Storm",
+      "description": "Dois perfis QUIC."
+    },
+    "ru": {
+      "title": "QUIC Storm",
+      "description": "Два QUIC-профиля."
+    },
+    "tr": {
+      "title": "QUIC Storm",
+      "description": "İki QUIC profili."
+    },
+    "zh-CN": {
+      "title": "QUIC Storm",
+      "description": "两个 QUIC 配置。"
+    },
+    "zh-TW": {
+      "title": "QUIC Storm",
+      "description": "兩個 QUIC 設定。"
+    }
+  },
+  "slots": [
+    {
+      "id": "hy2",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tuic",
+      "role": "quic",
+      "default_preset": "tuic",
+      "substitutes": [
+        "tuic",
+        "tuic_0rtt"
+      ],
+      "match_hint": "sni_pool"
+    }
+  ],
+  "scores": {
+    "dpi": 7,
+    "mobile": 5,
+    "setup": 6,
+    "speed": 9
+  }
+}

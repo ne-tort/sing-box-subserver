@@ -43,45 +43,6 @@
   "peer_secret_fields": {
     "hy_auth": "password"
   },
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": [],
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h3"
-      ]
-    },
-    "transport": {
-      "type": "hysteria",
-      "password": "{{peer.hy_auth}}",
-      "version": 2
-    }
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "uuid": "{{user.uuid}}",
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h3"
-      ]
-    },
-    "transport": {
-      "type": "hysteria",
-      "password": "{{peer.hy_auth}}",
-      "version": 2
-    },
-    "packet_encoding": "xudp"
-  },
   "requirements": {
     "tls_profile": true,
     "udp": true,
@@ -99,5 +60,18 @@
     "hy_auth": "peer_symmetric: set.peer_secrets[preset/hy_auth] (Xray hysteriaSettings.auth)",
     "vs_hy2": "not type:hysteria2; no up_mbps/obfs/salamander — password+version=2 only",
     "utls": "uTLS is incompatible with transport quic/hysteria"
+  },
+  "param_values": {
+    "transport": "hysteria",
+    "tls_mode": "tls",
+    "flow": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h3",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
   }
 }

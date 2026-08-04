@@ -13,6 +13,7 @@ TAGS="$(tr -d '\r\n' < build/tags.server.traffic.controlplane)"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
   -ldflags="-s -w -checklinkname=0" -tags "$TAGS" \
   -o dist/subserver-traffic-cp-linux ./cmd/subserver
+bash scripts/ensure_libcronet.sh amd64
 
 echo "== compose up =="
 docker compose -f "$COMPOSE" down -v >/dev/null 2>&1 || true

@@ -41,77 +41,6 @@
   "cred_fields": [
     "uuid"
   ],
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": [],
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ]
-    },
-    "transport": {
-      "type": "http",
-      "host": [
-        "{{param.http_host}}"
-      ],
-      "path": "{{param.http_path}}",
-      "method": "PUT",
-      "headers": {
-        "User-Agent": [
-          "Mozilla/5.0"
-        ],
-        "Accept-Language": [
-          "en-US,en;q=0.9"
-        ]
-      },
-      "idle_timeout": "15s",
-      "ping_timeout": "15s"
-    }
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ],
-      "utls": {
-        "enabled": true,
-        "fingerprint": "chrome"
-      }
-    },
-    "transport": {
-      "type": "http",
-      "host": [
-        "{{param.http_host}}"
-      ],
-      "path": "{{param.http_path}}",
-      "method": "PUT",
-      "headers": {
-        "User-Agent": [
-          "Mozilla/5.0"
-        ],
-        "Accept-Language": [
-          "en-US,en;q=0.9"
-        ]
-      },
-      "idle_timeout": "15s",
-      "ping_timeout": "15s"
-    },
-    "uuid": "{{user.uuid}}",
-    "packet_encoding": "xudp"
-  },
   "requirements": {
     "tls_profile": true,
     "reality_assignment": true
@@ -126,75 +55,17 @@
     "params": "optional bindings[].params overrides: http_host, http_path",
     "http_path_default": "/vless-h2"
   },
-  "optional_param_fields": [
-    "http_path",
-    "http_host",
-    "fingerprint"
-  ],
-  "param_meta": {
-    "http_path": {
-      "type": "string",
-      "widget": "path",
-      "default": "/",
-      "ui_group": "transport",
-      "ui_order": 30,
-      "title": {
-        "en": "HTTP path",
-        "ru": "HTTP path"
-      },
-      "description": {
-        "en": "HTTP path for VLESS HTTP transport.",
-        "ru": "HTTP path для VLESS HTTP."
-      }
-    },
-    "http_host": {
-      "type": "string",
-      "widget": "text",
-      "ui_group": "transport",
-      "ui_order": 31,
-      "title": {
-        "en": "HTTP Host",
-        "ru": "HTTP Host"
-      },
-      "description": {
-        "en": "Host header for HTTP transport.",
-        "ru": "Host header для HTTP."
-      }
-    },
-    "fingerprint": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "ios",
-        "android",
-        "random"
-      ],
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 90,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Outbound uTLS ClientHello fingerprint.",
-        "ru": "uTLS fingerprint ClientHello на outbound."
-      },
-      "help": {
-        "summary": {
-          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
-          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
-        },
-        "input_hint": {
-          "en": "chrome|firefox|…",
-          "ru": "chrome|firefox|…"
-        },
-        "format": "chrome"
-      }
-    }
+  "param_values": {
+    "transport": "http",
+    "tls_mode": "reality",
+    "flow": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless-h2",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
   }
 }

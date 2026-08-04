@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "tag": "carrier",
+  "singbox_type": "carrier",
+  "short_name": "Carrier",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier",
+      "description": "WG-star в underlay легитимного SFU (Jitsi/Telemost/…). Нужен room URL. Не demux-priority."
+    },
+    "en": {
+      "title": "Carrier",
+      "description": "WG-star inside a real SFU call (Jitsi/Telemost/…). Needs room URL. Not demux-priority."
+    }
+  },
+  "default_cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "notes": {
+    "variants_family": "none",
+    "lx": "with_carrier"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "tag": "trusttunnel_h2",
+  "protocol": "trusttunnel",
+  "aliases": [
+    "trusttunnel",
+    "trusttunnel-h2"
+  ],
+  "short_name": "TT H2",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "TrustTunnel HTTP/2",
+      "description": "TrustTunnel: anti_dpi, H2 transport, auth users; TLS через CP (custom tls block)."
+    },
+    "en": {
+      "title": "TrustTunnel H2",
+      "description": "TrustTunnel over HTTP/2 TLS. TCP demux TLS substitute; anti-DPI oriented."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls_custom",
+    "http2"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello then H2 TrustTunnel",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "build_tag": "with_trusttunnel"
+  },
+  "client_notes": {
+    "tls": "TrustTunnel TLS is a separate block (not InboundTLSOptions); CP injects PEM at materialize"
+  },
+  "param_values": {
+    "mode": "h2",
+    "anti_dpi": "true",
+    "enable_protocol_fallback": "false",
+    "enable_udp": "true",
+    "force_http1_connect": "false"
+  }
+}

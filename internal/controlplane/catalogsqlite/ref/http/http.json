@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "tag": "http",
+  "protocol": "http",
+  "aliases": [],
+  "short_name": "HTTP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "HTTP CONNECT",
+      "description": "HTTP CONNECT прокси без TLS."
+    },
+    "en": {
+      "title": "HTTP CONNECT",
+      "description": "Utility HTTP CONNECT proxy. Not anti-DPI; local/service use."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "http",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "HTTP CONNECT/methods",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 1,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 9
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {},
+  "param_values": {
+    "tls_mode": "none",
+    "fingerprint": "chrome"
+  }
+}

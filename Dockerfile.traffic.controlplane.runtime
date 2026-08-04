@@ -1,9 +1,12 @@
 # Runtime-only image for traffic+controlplane local matrix.
 # Expects a prebuilt linux binary at dist/subserver-traffic-cp-linux
-# (see scripts/traffic_matrix_docker.ps1 / .sh).
-FROM alpine:3.21
-RUN apk add --no-cache ca-certificates wget || true
+# (see scripts/traffic_matrix_docker.ps1 / .sh) and dist/libcronet.so.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/lib/subserver
 COPY dist/subserver-traffic-cp-linux /usr/local/bin/subserver
-RUN chmod +x /usr/local/bin/subserver && mkdir -p /var/lib/subserver
+COPY dist/libcronet.so /usr/local/bin/libcronet.so
+RUN chmod +x /usr/local/bin/subserver
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/subserver", "-config", "/etc/subserver/agent.yaml"]

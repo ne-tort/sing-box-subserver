@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "tag": "hysteria2",
+  "singbox_type": "hysteria2",
+  "short_name": "Hysteria2",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2",
+      "description": "QUIC/H3 на UDP:443. Быстрый на lossy/мобильных. Salamander/gecko меняют first-bytes (ломает demux по quic). Masquerade — HTTP-обман при неверном auth."
+    },
+    "en": {
+      "title": "Hysteria2",
+      "description": "QUIC/H3 on UDP:443. Fast on lossy/mobile. Salamander/gecko alter first-bytes (breaks demux quic match). Masquerade = HTTP decoy on bad auth."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ],
+  "notes": {
+    "variants_family": "none"
+  }
+}

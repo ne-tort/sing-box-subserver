@@ -38,41 +38,9 @@
     "uuid_xtls",
     "uuid_udp"
   ],
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": [],
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ]
-    }
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "uuid": "{{user.uuid}}",
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ],
-      "utls": {
-        "enabled": true,
-        "fingerprint": "chrome"
-      }
-    },
-    "packet_encoding": "xudp"
-  },
+  "default_user_variants": [
+    "flow-xtls-rprx-vision"
+  ],
   "requirements": {
     "tls_profile": true
   },
@@ -80,46 +48,19 @@
     "pkt-xudp"
   ],
   "client_notes": {
-    "variants": "flow-none / xtls-rprx-vision / udp-vision — separate inbound users"
+    "variants": "default Vision; flow-none / udp-vision via enabled_user_variants"
   },
-  "optional_param_fields": [
-    "fingerprint"
-  ],
-  "param_meta": {
-    "fingerprint": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "ios",
-        "android",
-        "random"
-      ],
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 90,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Outbound uTLS ClientHello fingerprint.",
-        "ru": "uTLS fingerprint ClientHello на outbound."
-      },
-      "help": {
-        "summary": {
-          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
-          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
-        },
-        "input_hint": {
-          "en": "chrome|firefox|…",
-          "ru": "chrome|firefox|…"
-        },
-        "format": "chrome"
-      }
-    }
+  "param_values": {
+    "transport": "tcp",
+    "tls_mode": "tls",
+    "flow": "xtls-rprx-vision",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
   }
 }

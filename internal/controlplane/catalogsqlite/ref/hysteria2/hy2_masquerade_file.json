@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "tag": "hy2_masquerade_file",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2-masquerade-file"
+  ],
+  "short_name": "Hy2 mask file",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2 Masquerade file",
+      "description": "Hy2 + file masquerade (нужен masquerade_dir)."
+    },
+    "en": {
+      "title": "Hysteria2 Masquerade file",
+      "description": "Hy2 + file masquerade (requires masquerade_dir)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "masquerade"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC/H3 file masquerade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 9,
+    "mobile": 5,
+    "setup": 3
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "param_values": {
+    "obfs_type": "none",
+    "up_mbps": "100",
+    "down_mbps": "100",
+    "ignore_client_bandwidth": "true",
+    "masquerade_mode": "file",
+    "masquerade_dir": "",
+    "masquerade_url": "https://www.cloudflare.com",
+    "realm_mode": "none",
+    "realm_server_url": "",
+    "realm_id": ""
+  },
+  "client_notes": {
+    "masquerade_dir": "required operator param"
+  }
+}

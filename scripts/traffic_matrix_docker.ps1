@@ -18,6 +18,8 @@ $buildEc = $LASTEXITCODE
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
 Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
 if ($buildEc -ne 0) { throw "host go build failed" }
+& "$PSScriptRoot\ensure_libcronet.ps1" -Arch amd64
+if ($LASTEXITCODE -ne 0) { throw "ensure_libcronet failed" }
 
 Write-Host "== compose up (runtime image + prebuilt binary) =="
 docker compose -f $Compose down -v 2>$null | Out-Null

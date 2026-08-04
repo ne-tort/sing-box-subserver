@@ -43,69 +43,6 @@
   "default_client_profiles": [
     "pkt-xudp"
   ],
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": [],
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ]
-    },
-    "transport": {
-      "type": "ws",
-      "path": "{{param.ws_path}}",
-      "headers": {
-        "Host": [
-          "{{param.ws_host}}"
-        ],
-        "User-Agent": [
-          "Mozilla/5.0"
-        ]
-      },
-      "max_early_data": 2048,
-      "early_data_header_name": "Sec-WebSocket-Protocol"
-    }
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "uuid": "{{user.uuid}}",
-    "tls": {
-      "enabled": true,
-      "server_name": "{{server}}",
-      "alpn": [
-        "h2",
-        "http/1.1"
-      ],
-      "utls": {
-        "enabled": true,
-        "fingerprint": "chrome"
-      }
-    },
-    "transport": {
-      "type": "ws",
-      "path": "{{param.ws_path}}",
-      "headers": {
-        "Host": [
-          "{{param.ws_host}}"
-        ],
-        "User-Agent": [
-          "Mozilla/5.0"
-        ]
-      },
-      "max_early_data": 2048,
-      "early_data_header_name": "Sec-WebSocket-Protocol"
-    },
-    "packet_encoding": "xudp"
-  },
   "requirements": {
     "tls_profile": true
   },
@@ -115,75 +52,17 @@
     "params": "optional bindings[].params overrides: ws_host, ws_path",
     "ws_path_default": "/vless-ws"
   },
-  "optional_param_fields": [
-    "ws_path",
-    "ws_host",
-    "fingerprint"
-  ],
-  "param_meta": {
-    "ws_path": {
-      "type": "string",
-      "widget": "path",
-      "default": "/vless-ws",
-      "ui_group": "transport",
-      "ui_order": 30,
-      "title": {
-        "en": "WebSocket path",
-        "ru": "WebSocket path"
-      },
-      "description": {
-        "en": "HTTP path for VLESS WebSocket.",
-        "ru": "HTTP path для VLESS WebSocket."
-      }
-    },
-    "ws_host": {
-      "type": "string",
-      "widget": "text",
-      "ui_group": "transport",
-      "ui_order": 31,
-      "title": {
-        "en": "WebSocket Host",
-        "ru": "WebSocket Host"
-      },
-      "description": {
-        "en": "Host header for WebSocket (defaults to server name).",
-        "ru": "Host header для WebSocket (по умолчанию server)."
-      }
-    },
-    "fingerprint": {
-      "type": "enum",
-      "widget": "select",
-      "enum": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "ios",
-        "android",
-        "random"
-      ],
-      "default": "chrome",
-      "ui_group": "tls",
-      "ui_order": 90,
-      "title": {
-        "en": "uTLS fingerprint",
-        "ru": "uTLS fingerprint"
-      },
-      "description": {
-        "en": "Outbound uTLS ClientHello fingerprint.",
-        "ru": "uTLS fingerprint ClientHello на outbound."
-      },
-      "help": {
-        "summary": {
-          "en": "Outbound uTLS fingerprint. Override the template default (usually chrome).",
-          "ru": "uTLS fingerprint на outbound. Переопределяет default шаблона (обычно chrome)."
-        },
-        "input_hint": {
-          "en": "chrome|firefox|…",
-          "ru": "chrome|firefox|…"
-        },
-        "format": "chrome"
-      }
-    }
+  "param_values": {
+    "transport": "ws",
+    "tls_mode": "tls",
+    "flow": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless-ws",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "2048"
   }
 }

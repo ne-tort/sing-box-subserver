@@ -284,7 +284,7 @@ func (s *Service) loadRealityConfig() (domain.RealityConfig, error) {
 	}
 	now := time.Now().UTC()
 	cfg = domain.RealityConfig{
-		EffectiveProfiles: defaultRealityProfiles(),
+		EffectiveProfiles: normalizedRealityDefaults(),
 		UpdatedAt:         &now,
 	}
 	if err := s.store.SaveRealityConfig(cfg); err != nil {
@@ -343,6 +343,14 @@ func (s *Service) refreshRealityConfig(ctx context.Context, force bool) (domain.
 		return domain.RealityConfig{}, false, err
 	}
 	if !force && cfg.UpdatedAt != nil && time.Since(*cfg.UpdatedAt) < realityValidationInterval {
+		fixed, nChanged := normalizeRealityPoolInPlace(cfg.EffectiveProfiles)
+		cfg.EffectiveProfiles = fixed
+		if nChanged {
+			if err := s.store.SaveRealityConfig(cfg); err != nil {
+				return domain.RealityConfig{}, false, err
+			}
+			return cfg, true, nil
+		}
 		return cfg, false, nil
 	}
 	defaults := s.validateRealityPool(ctx, defaultRealityProfiles())
@@ -385,6 +393,26 @@ func normalizedRealityDefaults() []domain.RealityEndpoint {
 		out = append(out, ep)
 	}
 	return out
+}
+
+func normalizeRealityPoolInPlace(in []domain.RealityEndpoint) ([]domain.RealityEndpoint, bool) {
+	if len(in) == 0 {
+		return in, false
+	}
+	out := make([]domain.RealityEndpoint, 0, len(in))
+	changed := false
+	for _, raw := range in {
+		ep, err := normalizeRealityEndpoint(raw)
+		if err != nil {
+			changed = true
+			continue
+		}
+		if ep != raw {
+			changed = true
+		}
+		out = append(out, ep)
+	}
+	return out, changed
 }
 
 func sameRealityPool(a, b []domain.RealityEndpoint) bool {
@@ -450,6 +478,17 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 		if !ok || a.SNI == "" {
 			continue
 		}
+		if strings.TrimSpace(a.HandshakeServer) == "" || a.HandshakePort == 0 {
+			if strings.TrimSpace(a.HandshakeServer) == "" {
+				a.HandshakeServer = a.SNI
+			}
+			if a.HandshakePort == 0 {
+				a.HandshakePort = 443
+			}
+			a.UpdatedAt = now
+			assignments[it.key] = a
+			changed = true
+		}
 		valid := poolContainsEndpoint(profiles, domain.RealityEndpoint{
 			SNI:             a.SNI,
 			HandshakeServer: a.HandshakeServer,
@@ -497,6 +536,10 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 			// duplicate SNI — fall through
 		}
 		ep, err := pickRealityEndpoint(profiles, preferSNI, usedSNI, key)
+		if err != nil {
+			return nil, false, err
+		}
+		ep, err = normalizeRealityEndpoint(ep)
 		if err != nil {
 			return nil, false, err
 		}

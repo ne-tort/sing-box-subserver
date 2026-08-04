@@ -425,6 +425,18 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		return InstallResult{}, fmt.Errorf("cp_invalid_demux_group: all slots disabled for group %q", g.Tag)
 	}
 
+	// When a TLS slot runs Naive with H3 enabled, it claims QUIC matching — drop separate QUIC members.
+	if tlsSlotClaimsQUIC(g, slotPreset) {
+		for _, slot := range g.Slots {
+			if slot.Role == RoleQUIC {
+				delete(slotPreset, slot.ID)
+			}
+		}
+		if len(slotPreset) == 0 {
+			return InstallResult{}, fmt.Errorf("cp_invalid_demux_group: all slots disabled for group %q", g.Tag)
+		}
+	}
+
 	// Unique presets across slots (same preset twice is ambiguous for tags).
 	seenPreset := map[string]string{}
 	for sid, pn := range slotPreset {
@@ -563,7 +575,7 @@ func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]
 		case RoleTCPReality:
 			out[slot.ID] = nextFrom(realitySNIPool, &realityIdx)
 		case RoleTCPTLS:
-			if slot.MatchHint == "alpn" || slot.MatchHint == "sni_pool" || slot.MatchHint == "" {
+			if slot.MatchHint == "alpn" || slot.MatchHint == "sni_pool" || slot.MatchHint == "tls_and_quic" || slot.MatchHint == "" {
 				out[slot.ID] = nextFrom(defaultSNIPool, &tlsIdx)
 			}
 		case RoleQUIC:
@@ -625,18 +637,40 @@ func buildDemuxTemplate(g Group, slotPreset map[string]string, ports map[string]
 	// Order: specific SNI/ALPN → protocol class → plain catch-all → reject
 	var plainSlot *Slot
 	var quicProtocolOnly []Slot
+	naiveQUICClaimed := false
 	for i := range g.Slots {
 		slot := g.Slots[i]
 		if strings.TrimSpace(slotPreset[slot.ID]) == "" {
 			continue
 		}
+		pn := slotPreset[slot.ID]
 		switch {
+		case slot.MatchHint == "tls_and_quic" || (slot.Role == RoleTCPTLS && naivePresetEnablesQUIC(pn)):
+			port := ports[pn]
+			sni := snis[slot.ID]
+			if sni == "" {
+				return nil, fmt.Errorf("slot %q requires SNI for demux match", slot.ID)
+			}
+			rules = append(rules, map[string]any{
+				"name":   "tls-" + slot.ID,
+				"match":  map[string]any{"tls": map[string]any{"sni": []any{sni}}},
+				"action": dialAction(port),
+			})
+			// Only advertise QUIC when the chosen preset still enables H3.
+			if naivePresetEnablesQUIC(pn) {
+				naiveQUICClaimed = true
+				rules = append(rules, map[string]any{
+					"name":   "quic-" + slot.ID,
+					"match":  map[string]any{"protocol": "quic"},
+					"action": dialAction(port),
+				})
+			}
 		case slot.Role == RoleTCPPlain || slot.MatchHint == "always_plain":
 			plainSlot = &g.Slots[i]
 		case slot.Role == RoleQUIC && slot.MatchHint == "protocol_only":
 			quicProtocolOnly = append(quicProtocolOnly, slot)
 		default:
-			rule, err := slotRule(slot, slotPreset[slot.ID], ports, snis)
+			rule, err := slotRule(slot, pn, ports, snis)
 			if err != nil {
 				return nil, err
 			}
@@ -644,18 +678,20 @@ func buildDemuxTemplate(g Group, slotPreset map[string]string, ports map[string]
 		}
 	}
 	// One protocol:quic rule (first protocol_only QUIC slot) — demux first-match.
-	if len(quicProtocolOnly) > 0 {
-		slot := quicProtocolOnly[0]
-		pn := slotPreset[slot.ID]
-		port := ports[pn]
-		rules = append(rules, map[string]any{
-			"name":   "quic-" + slot.ID,
-			"match":  map[string]any{"protocol": "quic"},
-			"action": dialAction(port),
-		})
-		for _, extra := range quicProtocolOnly[1:] {
-			// Additional protocol_only QUIC cannot be reached after first quic rule.
-			_ = extra
+	// Skip when Naive H2+H3 already claimed protocol=quic.
+	if !naiveQUICClaimed {
+		if len(quicProtocolOnly) > 1 {
+			return nil, fmt.Errorf("cp_invalid_group: at most one protocol_only QUIC slot allowed (got %d)", len(quicProtocolOnly))
+		}
+		if len(quicProtocolOnly) > 0 {
+			slot := quicProtocolOnly[0]
+			pn := slotPreset[slot.ID]
+			port := ports[pn]
+			rules = append(rules, map[string]any{
+				"name":   "quic-" + slot.ID,
+				"match":  map[string]any{"protocol": "quic"},
+				"action": dialAction(port),
+			})
 		}
 	}
 	if plainSlot != nil {
@@ -724,6 +760,40 @@ func dialAction(port uint16) map[string]any {
 			"port":    port,
 		},
 	}
+}
+
+// naivePresetEnablesQUIC reports whether a naive (or dual-capable) preset still listens UDP/H3.
+func naivePresetEnablesQUIC(preset string) bool {
+	inv, err := presets.GetInvariant(preset)
+	if err != nil || inv.ParamMeta == nil {
+		return false
+	}
+	meta, ok := inv.ParamMeta["network"]
+	if !ok {
+		return false
+	}
+	def := strings.ToLower(strings.TrimSpace(meta.Default))
+	switch def {
+	case "udp", "quic", "h3", "tcp,udp", "tcp+udp", "both", "dual":
+		return true
+	default:
+		return strings.Contains(def, "udp") || strings.Contains(def, "quic")
+	}
+}
+
+func tlsSlotClaimsQUIC(g Group, slotPreset map[string]string) bool {
+	for _, slot := range g.Slots {
+		pn := strings.TrimSpace(slotPreset[slot.ID])
+		if pn == "" {
+			continue
+		}
+		if slot.MatchHint == "tls_and_quic" || slot.Role == RoleTCPTLS {
+			if naivePresetEnablesQUIC(pn) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SubstitutionsView is API payload for UI slot picker.
@@ -859,7 +929,7 @@ func demuxCompatForPreset(tag string, role Role, matchHint string) string {
 	case strings.HasPrefix(t, "trusttunnel"):
 		return "demux_lab"
 	case strings.HasPrefix(t, "shadowquic"):
-		// JLS + demux dial still lab; with_shadowquic not in tags.server.controlplane.
+		// JLS + demux dial (with_shadowquic in tags.server.controlplane).
 		return "demux_lab"
 	case t == "vless_ws_reality":
 		// Wave E matrix (2026-07-30): member + demux front OK with allow_lab path;

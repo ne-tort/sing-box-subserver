@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_httpupgrade_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-httpupgrade-reality"
+  ],
+  "short_name": "VMess HUp Reality",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess HTTPUpgrade Reality",
+      "description": "VMess + Reality + HTTPUpgrade."
+    },
+    "en": {
+      "title": "VMess HTTPUpgrade Reality",
+      "description": "VMess + Reality + HTTPUpgrade."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "reality",
+    "httpupgrade"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS (Reality) → HTTPUpgrade",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "param_values": {
+    "transport": "httpupgrade",
+    "tls_mode": "reality",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vmess-hu",
+    "transport_host": "{{server}}",
+    "service_name": "VMessService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "client_notes": {
+    "hu_path_default": "/vmess-hu"
+  }
+}

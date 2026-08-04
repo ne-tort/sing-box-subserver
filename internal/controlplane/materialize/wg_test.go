@@ -71,9 +71,14 @@ func TestBuildWireGuardEndpointPlainAndAWG(t *testing.T) {
 		t.Fatalf("peers=%d", len(peers))
 	}
 	p0 := peers[0].(map[string]any)
-	ips, _ := p0["allowed_ips"].([]any)
-	if len(ips) != 1 || ips[0] != "10.8.0.7/32" {
-		t.Fatalf("allowed_ips=%v", ips)
+	if p0["ip"] != "10.8.0.7" {
+		t.Fatalf("ip=%v", p0["ip"])
+	}
+	if _, ok := p0["allowed_ips"]; ok {
+		t.Fatalf("allowed_ips=%v", p0)
+	}
+	if ep["subnet"] != "10.8.0.0/24" {
+		t.Fatalf("subnet=%v", ep["subnet"])
 	}
 	if p0["up_mbps"] != 1 {
 		t.Fatalf("up_mbps=%v", p0["up_mbps"])
@@ -131,8 +136,11 @@ func TestBuildIncludesEndpoints(t *testing.T) {
 		t.Fatal("awg3 HP missing")
 	}
 	addrs, _ := ep["address"].([]any)
-	if len(addrs) != 1 || addrs[0] != "10.9.0.1/24" {
+	if len(addrs) != 1 || addrs[0] != "10.9.0.1" {
 		t.Fatalf("address=%v", addrs)
+	}
+	if ep["subnet"] != "10.9.0.0/24" {
+		t.Fatalf("subnet=%v", ep["subnet"])
 	}
 }
 
@@ -161,12 +169,18 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 	}
 	ep := eps[0].(map[string]any)
 	addrs, _ := ep["address"].([]any)
-	if addrs[0] != "10.8.0.3/32" {
+	if addrs[0] != "10.8.0.3" {
 		t.Fatalf("local=%v", addrs)
+	}
+	if ep["use_exit_node"] != true {
+		t.Fatalf("use_exit_node=%v", ep["use_exit_node"])
 	}
 	peers := ep["peers"].([]any)
 	p0 := peers[0].(map[string]any)
 	if p0["public_key"] != "HUBPUB" || p0["port"] != float64(51820) {
 		t.Fatalf("%v", p0)
+	}
+	if _, ok := p0["allowed_ips"]; ok {
+		t.Fatalf("allowed_ips=%v", p0)
 	}
 }

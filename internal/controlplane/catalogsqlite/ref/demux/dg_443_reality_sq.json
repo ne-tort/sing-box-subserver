@@ -1,0 +1,91 @@
+{
+  "tag": "dg_443_reality_sq",
+  "short_name": "Shadow Lane",
+  "status": "lab",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "Shadow Lane",
+      "description": "Reality مع QUIC lab."
+    },
+    "en": {
+      "title": "Shadow Lane",
+      "description": "Reality with lab QUIC."
+    },
+    "es": {
+      "title": "Shadow Lane",
+      "description": "Reality con QUIC lab."
+    },
+    "fa": {
+      "title": "Shadow Lane",
+      "description": "Reality با QUIC lab."
+    },
+    "fr": {
+      "title": "Shadow Lane",
+      "description": "Reality avec QUIC lab."
+    },
+    "id": {
+      "title": "Shadow Lane",
+      "description": "Reality dengan QUIC lab."
+    },
+    "pt-BR": {
+      "title": "Shadow Lane",
+      "description": "Reality com QUIC lab."
+    },
+    "ru": {
+      "title": "Shadow Lane",
+      "description": "Reality с lab QUIC."
+    },
+    "tr": {
+      "title": "Shadow Lane",
+      "description": "Lab QUIC’li Reality."
+    },
+    "zh-CN": {
+      "title": "Shadow Lane",
+      "description": "Reality 搭配 lab QUIC。"
+    },
+    "zh-TW": {
+      "title": "Shadow Lane",
+      "description": "Reality 搭配 lab QUIC。"
+    }
+  },
+  "slots": [
+    {
+      "id": "tcp",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "tuic"
+      ],
+      "match_hint": "protocol_only"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 5,
+    "setup": 5,
+    "speed": 8
+  },
+  "notes": "ShadowQUIC is demux_lab; default Hy2. Salamander obfs is not used in demux."
+}

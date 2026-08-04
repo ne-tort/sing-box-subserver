@@ -1,0 +1,113 @@
+{
+  "tag": "dg_443_triple",
+  "short_name": "DPI Triple",
+  "status": "stable",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "DPI Triple",
+      "description": "Reality و Naive TLS و Hy2."
+    },
+    "en": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS, and Hy2."
+    },
+    "es": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS y Hy2."
+    },
+    "fa": {
+      "title": "DPI Triple",
+      "description": "Reality، Naive TLS و Hy2."
+    },
+    "fr": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS et Hy2."
+    },
+    "id": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS, dan Hy2."
+    },
+    "pt-BR": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS e Hy2."
+    },
+    "ru": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS и Hy2."
+    },
+    "tr": {
+      "title": "DPI Triple",
+      "description": "Reality, Naive TLS ve Hy2."
+    },
+    "zh-CN": {
+      "title": "DPI Triple",
+      "description": "Reality、Naive TLS 与 Hy2。"
+    },
+    "zh-TW": {
+      "title": "DPI Triple",
+      "description": "Reality、Naive TLS 與 Hy2。"
+    }
+  },
+  "slots": [
+    {
+      "id": "reality",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tls",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "quic",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "protocol_only"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 7,
+    "setup": 7,
+    "speed": 8
+  }
+}

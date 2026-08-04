@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "tuic",
+  "singbox_type": "tuic",
+  "short_name": "TUIC",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "TUIC",
+      "description": "QUIC/TLS v5. Замена Hy2 в UDP-слоте demux; 0-RTT — отдельный пресет."
+    },
+    "en": {
+      "title": "TUIC",
+      "description": "QUIC/TLS v5. Hy2 substitute in demux UDP slot; 0-RTT is a separate preset."
+    }
+  },
+  "default_cred_fields": [
+    "uuid",
+    "password"
+  ],
+  "notes": {
+    "variants_family": "tuic_udp_relay"
+  }
+}

@@ -10,7 +10,8 @@ import (
 func TestCatalogAllSlotsHaveKnownMatchMeta(t *testing.T) {
 	t.Parallel()
 	known := map[string]struct{}{
-		"tls.sni": {}, "tls.alpn": {}, "protocol.quic": {}, "protocol.quic+sni": {}, "always": {},
+		"tls.sni": {}, "tls.alpn": {}, "tls.sni+protocol.quic": {},
+		"protocol.quic": {}, "protocol.quic+sni": {}, "always": {},
 	}
 	for _, g := range All() {
 		meta := BuildGroupMatchMeta(g)
@@ -169,31 +170,27 @@ func TestGroupMatchPlanTriple(t *testing.T) {
 	}
 }
 
-func TestGroupMatchPlanALPNSplit(t *testing.T) {
+func TestGroupMatchPlanHTTPSMask(t *testing.T) {
 	t.Parallel()
-	g, err := Get("dg_443_alpn_split")
+	g, err := Get("dg_443_tls_quic")
 	if err != nil {
 		t.Fatal(err)
 	}
 	meta := BuildGroupMatchMeta(g)
-	// Catalog uses sni_pool + PreferredALPN (inbound hint); demux match is still tls.sni.
-	for _, step := range meta.Plan {
-		if step.SlotID == "h2" || step.SlotID == "h1" {
-			if step.MatchShape != "tls.sni" {
-				t.Fatalf("slot %s shape=%s want tls.sni", step.SlotID, step.MatchShape)
-			}
-		}
+	if len(meta.Plan) != 2 {
+		t.Fatalf("plan=%d", len(meta.Plan))
 	}
-	for _, slot := range g.Slots {
-		if slot.ID == "h2" && len(slot.PreferredALPN) == 0 {
-			t.Fatal("h2 should expose preferred_alpn")
-		}
+	if meta.Plan[0].MatchShape != "tls.sni" {
+		t.Fatalf("first=%s want tls.sni", meta.Plan[0].MatchShape)
+	}
+	if meta.Plan[1].MatchShape != "protocol.quic" {
+		t.Fatalf("second=%s want protocol.quic", meta.Plan[1].MatchShape)
 	}
 }
 
 func TestGroupMatchPlanPlainCatchAll(t *testing.T) {
 	t.Parallel()
-	g, err := Get("dg_443_plain_tls")
+	g, err := Get("dg_443_exotic")
 	if err != nil {
 		t.Fatal(err)
 	}

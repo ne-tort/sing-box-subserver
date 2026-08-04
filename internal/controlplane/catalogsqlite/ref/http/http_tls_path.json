@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "tag": "http_tls_path",
+  "protocol": "http",
+  "aliases": [
+    "http-tls-path"
+  ],
+  "short_name": "HTTP path",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "HTTP TLS + path/headers",
+      "description": "HTTP CONNECT+TLS; path/headers как note для камуфляжа."
+    },
+    "en": {
+      "title": "HTTP CONNECT TLS path",
+      "description": "HTTP CONNECT over TLS with path routing note. For fronts that split by URL path."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello then HTTP CONNECT",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 4,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 7
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true
+  },
+  "param_values": {
+    "tls_mode": "tls",
+    "fingerprint": "chrome"
+  },
+  "client_notes": {
+    "path": "outbound_only camouflage"
+  }
+}

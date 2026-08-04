@@ -39,7 +39,7 @@ local product surface behind `with_controlplane`.
 
 | Term | Meaning |
 |------|---------|
-| **Protocol preset / invariant** | Named inbound+outbound JSON templates + traits + i18n + scores; files under `presets/data/<protocol>/` |
+| **Protocol preset / invariant** | Named inbound+outbound JSON templates + traits + i18n + scores; authored under `catalogsqlite/ref/<protocol>/`, shipped in embedded `catalog.sqlite` |
 | **Inbound set** | Named ordered list of presets + listen + demux template for **one** port |
 | **Active set** | One of possibly many sets currently materializing into the box (when mode=controlplane) |
 | **Local user** | Agent-local account; static per-preset creds; optional expiry / traffic hooks |
@@ -50,8 +50,9 @@ local product surface behind `with_controlplane`.
 ## Demux sets (product picture)
 
 An **inbound set** binds one or more protocol variants on a single public listen.
-Demux template is **optional**: with demux, rules match sniffed traits and inject into
-in-process inbounds; without demux, exactly one preset binds the port directly.
+Demux template is **optional**: with demux, rules match sniffed traits and **dial**
+member inbounds on `127.0.0.1` private ports; without demux, exactly one preset binds
+the port directly.
 
 Many sets may be **active** on **different** ports at once. A second set on the same
 `listen_port` is refused (`409`).
@@ -63,8 +64,8 @@ flowchart LR
   ina[Inbound_preset_A]
   inb[Inbound_preset_B]
   client --> demux
-  demux -->|inject| ina
-  demux -->|inject| inb
+  demux -->|dial| ina
+  demux -->|dial| inb
 ```
 
 ## Success picture

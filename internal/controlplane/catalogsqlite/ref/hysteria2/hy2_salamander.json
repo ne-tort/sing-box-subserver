@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "tag": "hy2_salamander",
+  "protocol": "hysteria2",
+  "aliases": [
+    "hysteria2-salamander"
+  ],
+  "short_name": "Hy2 salam.",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Hysteria2 Salamander",
+      "description": "Hy2 + Salamander obfs (меняет first-bytes QUIC)."
+    },
+    "en": {
+      "title": "Hysteria2 Salamander",
+      "description": "Hy2 + Salamander obfuscation (alters QUIC first-bytes)."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "tls",
+    "obfs"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "obfuscated QUIC (salamander)",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 8,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "requirements": {
+    "tls_profile": true,
+    "udp": true,
+    "quic": true
+  },
+  "param_values": {
+    "obfs_type": "salamander",
+    "up_mbps": "100",
+    "down_mbps": "100",
+    "ignore_client_bandwidth": "true",
+    "masquerade_mode": "none",
+    "masquerade_dir": "",
+    "masquerade_url": "https://www.cloudflare.com",
+    "realm_mode": "none",
+    "realm_server_url": "",
+    "realm_id": ""
+  },
+  "client_notes": {
+    "obfs": "peer.obfs_password"
+  }
+}

@@ -3,24 +3,23 @@
 package presets
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/catalogsqlite"
 )
 
-func TestLegacyVlessJSONRemovedFromEmbed(t *testing.T) {
-	if _, err := dataFS.Open("data/vless/protocol.json"); err == nil {
-		t.Fatal("legacy presets/data/vless still embedded")
+func TestLegacyJSONCatalogRemoved(t *testing.T) {
+	dataDir := filepath.Join("data")
+	if st, err := os.Stat(dataDir); err == nil && st.IsDir() {
+		t.Fatal("legacy presets/data directory must be deleted")
 	}
-	ensureLoaded()
-	mustOK()
-	if _, ok := protocolBy["vless"]; ok {
-		t.Fatal("JSON loader still registered protocol vless")
+	if _, err := os.Stat(filepath.Join("data", "index.json")); err == nil {
+		t.Fatal("legacy presets/data/index.json must be deleted")
 	}
-	for _, inv := range invariants {
-		if inv.Protocol == "vless" || inv.Tag == "vless_custom" || inv.Tag == "vless_ws_tls" {
-			t.Fatalf("JSON invariants still contain vless entry %q", inv.Tag)
-		}
+	if _, err := os.Stat("loader.go"); err == nil {
+		t.Fatal("legacy presets/loader.go must be deleted")
 	}
 	if !catalogsqlite.Owns("vless_ws_tls") {
 		t.Fatal("vless_ws_tls must be owned by catalogsqlite")
@@ -36,6 +35,6 @@ func TestLegacyVlessJSONRemovedFromEmbed(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("Protocols() must still expose vless from catalogsqlite")
+		t.Fatal("Protocols() must expose vless from catalogsqlite")
 	}
 }

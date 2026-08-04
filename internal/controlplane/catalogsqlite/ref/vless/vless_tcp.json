@@ -38,24 +38,25 @@
     "uuid_udp"
   ],
   "default_user_variants": [
-    "flow-none",
-    "flow-xtls-rprx-vision"
+    "flow-none"
   ],
-  "inbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "listen": "{{listen}}",
-    "listen_port": 0,
-    "users": []
-  },
-  "outbound_template": {
-    "type": "vless",
-    "tag": "{{tag}}",
-    "server": "{{server}}",
-    "server_port": 0,
-    "uuid": "{{user.uuid}}"
-  },
+  "default_client_profiles": [
+    "pkt-xudp"
+  ],
   "client_notes": {
-    "variants": "flow-none / xtls-rprx-vision / udp-vision — separate inbound users"
+    "variants": "plaintext TCP — Vision needs TLS/Reality; default flow-none"
+  },
+  "param_values": {
+    "transport": "tcp",
+    "tls_mode": "none",
+    "flow": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vless",
+    "transport_host": "{{server}}",
+    "service_name": "GunService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
   }
 }

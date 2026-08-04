@@ -1,0 +1,136 @@
+{
+  "tag": "dg_443_modern5",
+  "short_name": "Vision Pack",
+  "status": "lab",
+  "suggested_port": 443,
+  "networks": [
+    "tcp",
+    "udp"
+  ],
+  "i18n": {
+    "ar": {
+      "title": "Vision Pack",
+      "description": "Reality مزدوج و Naive و QUIC مزدوج."
+    },
+    "en": {
+      "title": "Vision Pack",
+      "description": "Dual Reality, Naive, and dual QUIC."
+    },
+    "es": {
+      "title": "Vision Pack",
+      "description": "Doble Reality, Naive y doble QUIC."
+    },
+    "fa": {
+      "title": "Vision Pack",
+      "description": "دو Reality، Naive و دو QUIC."
+    },
+    "fr": {
+      "title": "Vision Pack",
+      "description": "Double Reality, Naive et double QUIC."
+    },
+    "id": {
+      "title": "Vision Pack",
+      "description": "Reality ganda, Naive, dan QUIC ganda."
+    },
+    "pt-BR": {
+      "title": "Vision Pack",
+      "description": "Reality duplo, Naive e QUIC duplo."
+    },
+    "ru": {
+      "title": "Vision Pack",
+      "description": "Два Reality, Naive и два QUIC."
+    },
+    "tr": {
+      "title": "Vision Pack",
+      "description": "Çift Reality, Naive ve çift QUIC."
+    },
+    "zh-CN": {
+      "title": "Vision Pack",
+      "description": "双 Reality、Naive 与双 QUIC。"
+    },
+    "zh-TW": {
+      "title": "Vision Pack",
+      "description": "雙 Reality、Naive 與雙 QUIC。"
+    }
+  },
+  "slots": [
+    {
+      "id": "reality",
+      "role": "tcp_reality",
+      "default_preset": "vless_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "reality2",
+      "role": "tcp_reality",
+      "default_preset": "vless_grpc_reality",
+      "substitutes": [
+        "vless_reality",
+        "vless_ws_reality",
+        "vless_grpc_reality",
+        "vless_http_reality",
+        "vless_httpupgrade_reality"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tls",
+      "role": "tcp_tls",
+      "default_preset": "naive_tls",
+      "substitutes": [
+        "naive_tls",
+        "naive_quic",
+        "anytls",
+        "vless_tls",
+        "vless_ws_tls",
+        "vless_grpc_tls",
+        "vless_http_tls",
+        "vless_httpupgrade_tls",
+        "trusttunnel_h2",
+        "trusttunnel_auto"
+      ],
+      "match_hint": "sni_pool",
+      "preferred_alpn": [
+        "h2"
+      ]
+    },
+    {
+      "id": "hy2",
+      "role": "quic",
+      "default_preset": "hy2",
+      "substitutes": [
+        "hy2",
+        "tuic",
+        "tuic_0rtt",
+        "shadowquic_jls",
+        "shadowquic_0rtt",
+        "shadowquic_cubic",
+        "trusttunnel_h3"
+      ],
+      "match_hint": "sni_pool"
+    },
+    {
+      "id": "tuic",
+      "role": "quic",
+      "default_preset": "tuic",
+      "substitutes": [
+        "tuic",
+        "tuic_0rtt"
+      ],
+      "match_hint": "sni_pool"
+    }
+  ],
+  "scores": {
+    "dpi": 9,
+    "mobile": 6,
+    "setup": 5,
+    "speed": 8
+  }
+}

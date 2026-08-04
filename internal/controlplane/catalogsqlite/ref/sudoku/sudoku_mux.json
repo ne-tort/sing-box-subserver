@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "tag": "sudoku_mux",
+  "protocol": "sudoku",
+  "aliases": [
+    "sudoku-mux",
+    "sudoku-multiplex"
+  ],
+  "short_name": "Sudoku mux on",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Sudoku multiplex on",
+      "description": "Sudoku shared key + chacha20-poly1305 + multiplex=on (жёсткий mux)."
+    },
+    "en": {
+      "title": "Sudoku multiplex on",
+      "description": "Sudoku with multiplex forced on. Better for many short streams; higher overhead."
+    }
+  },
+  "traits": [
+    "tcp",
+    "shared_key",
+    "multiplex"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "sudoku mux stream",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "key"
+  ],
+  "requirements": {
+    "build_tag": "with_sudoku"
+  },
+  "client_notes": {
+    "multiplex": "multiplex=on (not auto)",
+    "params": "optional bindings[].params overrides: fallback"
+  },
+  "param_values": {
+    "aead_method": "chacha20-poly1305",
+    "multiplex": "on",
+    "padding_min": "5",
+    "padding_max": "15",
+    "fallback": "http://127.0.0.1:80",
+    "httpmask_mode": "off",
+    "httpmask_path": "/sudoku"
+  }
+}

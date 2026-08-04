@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_tcp",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-tcp"
+  ],
+  "short_name": "VMess TCP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess TCP",
+      "description": "VMess без TLS."
+    },
+    "en": {
+      "title": "VMess TCP",
+      "description": "VMess without TLS. Lab/LAN only."
+    }
+  },
+  "traits": [
+    "tcp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "raw TCP VMess (no TLS)",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 3,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 7
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "param_values": {
+    "transport": "tcp",
+    "tls_mode": "none",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vmess",
+    "transport_host": "{{server}}",
+    "service_name": "VMessService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
+  },
+  "client_notes": {
+    "plain": "no TLS — lab/LAN only"
+  }
+}

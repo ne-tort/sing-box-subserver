@@ -19,7 +19,7 @@ def _cleanup_set(api, name: str) -> None:
 def test_demux_group_install_with_slot_presets(api, artifacts_dir):
     groups = api.data(api.get("/v1/controlplane/demux-groups?lang=en"))
     # Prefer a compact group that fits :443
-    prefer = ("dg_443_dual", "dg_443_triple", "dg_443_alpn_split")
+    prefer = ("dg_443_dual", "dg_443_triple", "dg_443_tls_quic")
     by_tag = {g["tag"]: g for g in groups}
     tag = next((t for t in prefer if t in by_tag), groups[0]["tag"])
     g = by_tag[tag]

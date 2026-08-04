@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_jitsi_sei_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-jitsi-sei-users"
+  ],
+  "short_name": "Jitsi SEI u",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier Jitsi SEI (users)",
+      "description": "Jitsi SFU transport=seichannel; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier Jitsi SEI users",
+      "description": "Jitsi + SEI with per-user creds. Same room requirement as other Carrier presets."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "jitsi",
+    "seichannel"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 4
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "jitsi_sei",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

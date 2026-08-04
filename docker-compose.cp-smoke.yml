@@ -8,6 +8,9 @@ services:
       context: .
       dockerfile: Dockerfile.controlplane.runtime
     container_name: subserver-cp-smoke
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "18081:8080"
       - "18443:8443"

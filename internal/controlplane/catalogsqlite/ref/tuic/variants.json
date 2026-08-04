@@ -1,0 +1,20 @@
+{
+  "protocol": "tuic",
+  "user_variants": [],
+  "client_profiles": [
+    {
+      "name": "udp-native",
+      "scope": "outbound_only",
+      "subscription_default": true,
+      "query_tags": ["profile:udp-native", "tag:udp-native"],
+      "outbound_overrides": {"udp_relay_mode": "native"}
+    },
+    {
+      "name": "udp-quic",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:udp-quic", "tag:udp-quic"],
+      "outbound_overrides": {"udp_relay_mode": "quic"}
+    }
+  ]
+}

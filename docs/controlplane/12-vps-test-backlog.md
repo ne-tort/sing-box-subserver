@@ -8,7 +8,7 @@ Captured from live tests on `163.5.180.181` (2026-07-28).
 - [x] cert-manager domain ACME via TLS-ALPN-01 and HTTP-01 (nginx stopped)
 - [x] cert-manager IP (LE shortlived)
 - [x] `alternative_http_port` + host REDIRECT (host network)
-- [x] presets catalog (13) + demux-recipes API (9) + `cp_invalid_demux`
+- [x] presets catalog + demux-groups API + `cp_invalid_demux`
 - [x] Deploy default = **host network** (`deploy/docker-compose.yml`, install-edge, VPS scripts)
 - [x] cert-manager `material_status.ready` from certmagic PEM presence
 - [x] Management API + `/v1/sub` HTTPS (self_signed / ACME / interim)

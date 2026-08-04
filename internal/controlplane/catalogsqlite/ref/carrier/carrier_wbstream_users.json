@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "tag": "carrier_wbstream_users",
+  "protocol": "carrier",
+  "aliases": [
+    "carrier-wbstream-users"
+  ],
+  "short_name": "Carrier WB users",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Carrier WB users",
+      "description": "WB Stream + auth=users; params.room обязателен."
+    },
+    "en": {
+      "title": "Carrier WB Stream users",
+      "description": "WB stream underlay with per-user credentials."
+    }
+  },
+  "traits": [
+    "tcp",
+    "users_auth",
+    "wg_star",
+    "sfu",
+    "no_registration",
+    "wbstream"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "carrier underlay",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 5,
+    "mobile": 4,
+    "setup": 3
+  },
+  "cred_fields": [
+    "device_id",
+    "secret"
+  ],
+  "requirements": {
+    "build_tag": "with_carrier"
+  },
+  "client_notes": {},
+  "cred_generators": {},
+  "param_values": {
+    "provider": "wbstream",
+    "auth_mode": "users",
+    "room": "",
+    "key": "",
+    "token": "",
+    "vk_hash": "",
+    "wrap_password": ""
+  },
+  "param_fields": [
+    "room"
+  ],
+  "optional_param_fields": [
+    "key",
+    "token",
+    "provider",
+    "auth_mode",
+    "vk_hash",
+    "wrap_password"
+  ]
+}

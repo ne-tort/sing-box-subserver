@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "tag": "ss_aes128_dual",
+  "protocol": "shadowsocks",
+  "aliases": [
+    "shadowsocks-tcp-udp",
+    "ss-aes128-dual"
+  ],
+  "short_name": "SS AES128 TCP+UDP",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "SS AES-128 TCP+UDP",
+      "description": "Shadowsocks AES-128-GCM multi-user, network=tcp,udp (и TCP и UDP на одном inbound)."
+    },
+    "en": {
+      "title": "SS AES-128 TCP+UDP",
+      "description": "Shadowsocks AES-128-GCM with both TCP and UDP enabled on the same inbound."
+    }
+  },
+  "traits": [
+    "tcp",
+    "udp"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp",
+      "udp"
+    ],
+    "looks_like": "raw_tcp",
+    "alpn": [],
+    "sni_required": false,
+    "first_bytes": "AEAD stream / UDP",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 2,
+    "speed": 7,
+    "mobile": 6,
+    "setup": 7
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "method": "aes-128-gcm",
+    "network": "tcp,udp",
+    "udp_over_tcp": "false",
+    "multiplex": "none"
+  }
+}

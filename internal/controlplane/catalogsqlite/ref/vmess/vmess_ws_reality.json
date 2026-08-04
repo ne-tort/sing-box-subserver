@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_ws_reality",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-ws-reality"
+  ],
+  "short_name": "VMess WS Reality",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess WebSocket Reality",
+      "description": "VMess + Reality + WebSocket."
+    },
+    "en": {
+      "title": "VMess WS Reality",
+      "description": "VMess + Reality + WebSocket."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "reality",
+    "ws"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS (Reality) then ws",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 7,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 5
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "param_values": {
+    "transport": "ws",
+    "tls_mode": "reality",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vmess",
+    "transport_host": "{{server}}",
+    "service_name": "VMessService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "0"
+  },
+  "requirements": {
+    "tls_profile": true,
+    "reality_assignment": true
+  },
+  "client_notes": {
+    "ws_path_default": "/vmess"
+  }
+}

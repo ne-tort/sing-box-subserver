@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tag": "trojan_ws_tls",
+  "protocol": "trojan",
+  "aliases": [
+    "trojan-ws-tls"
+  ],
+  "short_name": "Trojan WS",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Trojan WebSocket TLS",
+      "description": "Trojan + TLS + WebSocket."
+    },
+    "en": {
+      "title": "Trojan WS TLS",
+      "description": "Trojan + TLS + WebSocket. CDN-friendly."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "ws"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [],
+    "sni_required": true,
+    "first_bytes": "TLS then ws",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 6,
+    "speed": 6,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "password"
+  ],
+  "param_values": {
+    "transport": "ws",
+    "tls_mode": "tls",
+    "fingerprint": "chrome",
+    "transport_path": "/trojanws",
+    "transport_host": "{{server}}",
+    "service_name": "TrojanService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "none",
+    "ws_max_early_data": "2048",
+    "fallback": "none"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "ws_path_default": "/trojanws",
+    "params": "optional overrides: ws_host, ws_path"
+  }
+}

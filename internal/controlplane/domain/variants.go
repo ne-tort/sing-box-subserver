@@ -46,155 +46,38 @@ type SetBinding struct {
 	Params map[string]string `json:"params,omitempty"`
 }
 
-// Known vless user variants for the initial controlplane variants model.
-var VLESSUserVariantSpecs = []UserVariantSpec{
-	{
-		Name:                       "flow-none",
-		ProtocolFamily:             "vless",
-		Scope:                      FieldScopeUserSymmetric,
-		CredentialField:            "uuid",
-		FlowValue:                  "",
-		RequiresUserSymmetricEntry: true,
-		SubscriptionDefault:        false,
-		QueryTags:                  []string{"variant:flow-none", "flow:none", "tag:flow-none"},
-	},
-	{
-		Name:                       "flow-xtls-rprx-vision",
-		ProtocolFamily:             "vless",
-		Scope:                      FieldScopeUserSymmetric,
-		CredentialField:            "uuid_xtls",
-		FlowValue:                  "xtls-rprx-vision",
-		RequiresUserSymmetricEntry: true,
-		SubscriptionDefault:        true,
-		QueryTags:                  []string{"variant:flow-xtls-rprx-vision", "flow:xtls-rprx-vision", "tag:flow-xtls"},
-	},
-	{
-		Name:                       "flow-udp-vision",
-		ProtocolFamily:             "vless",
-		Scope:                      FieldScopeUserSymmetric,
-		CredentialField:            "uuid_udp",
-		// Xray-compatible Vision that does not intercept UDP/443 (QUIC).
-		// Accepted by client/server via vendor/sing-vmess (lx + hiddify-core).
-		FlowValue:                  "xtls-rprx-vision-udp443",
-		RequiresUserSymmetricEntry: true,
-		SubscriptionDefault:        false,
-		QueryTags:                  []string{"variant:flow-udp-vision", "flow:udp-vision", "tag:flow-udp"},
-	},
+// VariantCatalogProvider supplies protocol-scoped variant/profile catalogs.
+// SQLite-owned protocols (vless, vmess, …) register via SetVariantCatalogProvider.
+type VariantCatalogProvider interface {
+	UserVariants(protocol string) ([]UserVariantSpec, bool)
+	ClientProfiles(protocol string) ([]ClientProfileSpec, bool)
 }
 
-// VLESSClientProfileSpecs are outbound-only packet_encoding choices.
-var VLESSClientProfileSpecs = []ClientProfileSpec{
-	{
-		Name:                "pkt-none",
-		ProtocolFamily:      "vless",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: true,
-		QueryTags:           []string{"profile:pkt-none", "tag:pkt-none"},
-	},
-	{
-		Name:                "pkt-xudp",
-		ProtocolFamily:      "vless",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:pkt-xudp", "tag:pkt-xudp"},
-		OutboundOverrides:   map[string]any{"packet_encoding": "xudp"},
-	},
-	{
-		Name:                "pkt-packetaddr",
-		ProtocolFamily:      "vless",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:pkt-packetaddr", "tag:pkt-packetaddr"},
-		OutboundOverrides:   map[string]any{"packet_encoding": "packetaddr"},
-	},
-}
+var variantCatalogProvider VariantCatalogProvider
 
-// VMessClientProfileSpecs are outbound-only security / packet_encoding choices.
-var VMessClientProfileSpecs = []ClientProfileSpec{
-	{
-		Name:                "sec-auto",
-		ProtocolFamily:      "vmess",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: true,
-		QueryTags:           []string{"profile:sec-auto", "tag:sec-auto"},
-		OutboundOverrides:   map[string]any{"security": "auto"},
-	},
-	{
-		Name:                "sec-aes128",
-		ProtocolFamily:      "vmess",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:sec-aes128", "tag:sec-aes128"},
-		OutboundOverrides:   map[string]any{"security": "aes-128-gcm"},
-	},
-	{
-		Name:                "sec-chacha",
-		ProtocolFamily:      "vmess",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:sec-chacha", "tag:sec-chacha"},
-		OutboundOverrides:   map[string]any{"security": "chacha20-poly1305"},
-	},
-	{
-		Name:                "pkt-xudp",
-		ProtocolFamily:      "vmess",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:pkt-xudp", "tag:pkt-xudp"},
-		OutboundOverrides:   map[string]any{"packet_encoding": "xudp"},
-	},
-}
-
-// TUICClientProfileSpecs are outbound-only udp_relay_mode choices.
-var TUICClientProfileSpecs = []ClientProfileSpec{
-	{
-		Name:                "udp-native",
-		ProtocolFamily:      "tuic",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: true,
-		QueryTags:           []string{"profile:udp-native", "tag:udp-native"},
-		OutboundOverrides:   map[string]any{"udp_relay_mode": "native"},
-	},
-	{
-		Name:                "udp-quic",
-		ProtocolFamily:      "tuic",
-		Scope:               FieldScopeOutboundOnly,
-		SubscriptionDefault: false,
-		QueryTags:           []string{"profile:udp-quic", "tag:udp-quic"},
-		OutboundOverrides:   map[string]any{"udp_relay_mode": "quic"},
-	},
+// SetVariantCatalogProvider installs the catalog backend (called from catalogsqlite).
+func SetVariantCatalogProvider(p VariantCatalogProvider) {
+	variantCatalogProvider = p
 }
 
 // UserVariantCatalog returns the full user-variant catalog for a protocol.
 func UserVariantCatalog(protocol string) []UserVariantSpec {
-	switch protocol {
-	case "vless":
-		out := make([]UserVariantSpec, len(VLESSUserVariantSpecs))
-		copy(out, VLESSUserVariantSpecs)
-		return out
-	default:
-		return nil
+	if p := variantCatalogProvider; p != nil {
+		if out, ok := p.UserVariants(protocol); ok {
+			return out
+		}
 	}
+	return nil
 }
 
 // ClientProfileCatalog returns the full client-profile catalog for a protocol.
 func ClientProfileCatalog(protocol string) []ClientProfileSpec {
-	switch protocol {
-	case "vless":
-		out := make([]ClientProfileSpec, len(VLESSClientProfileSpecs))
-		copy(out, VLESSClientProfileSpecs)
-		return out
-	case "vmess":
-		out := make([]ClientProfileSpec, len(VMessClientProfileSpecs))
-		copy(out, VMessClientProfileSpecs)
-		return out
-	case "tuic":
-		out := make([]ClientProfileSpec, len(TUICClientProfileSpecs))
-		copy(out, TUICClientProfileSpecs)
-		return out
-	default:
-		return nil
+	if p := variantCatalogProvider; p != nil {
+		if out, ok := p.ClientProfiles(protocol); ok {
+			return out
+		}
 	}
+	return nil
 }
 
 // UserVariantsForProtocol returns enabled user variants for a binding.
@@ -328,18 +211,7 @@ func ApplyOutboundOverrides(ob map[string]any, overrides map[string]any) {
 
 // IsKnownClientProfile reports whether name exists in the protocol profile catalog.
 func IsKnownClientProfile(protocol, name string) bool {
-	var catalog []ClientProfileSpec
-	switch protocol {
-	case "vless":
-		catalog = VLESSClientProfileSpecs
-	case "vmess":
-		catalog = VMessClientProfileSpecs
-	case "tuic":
-		catalog = TUICClientProfileSpecs
-	default:
-		return false
-	}
-	for _, cp := range catalog {
+	for _, cp := range ClientProfileCatalog(protocol) {
 		if cp.Name == name {
 			return true
 		}

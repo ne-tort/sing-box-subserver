@@ -13,15 +13,16 @@ data_dir/
     state.json
     tls_profile.json       # self_signed knobs only
     cert_manager.json      # ACME domains + provider settings
-    config_fragments.json  # optional raw dns/route objects
+    config_fragments.json  # optional raw dns/route/outbounds overrides
+    rulesets/              # local .srs/.json for route.rule_set (from PUT route rulesets)
     tls/server.crt|key     # default self-signed PEM
     tls/self_signed.meta.json  # fingerprint of SelfSignedSpec (reuse / reissue)
     tls/slots/             # per-demux_sni self-signed PEMs
     acme/                  # certmagic data_directory for cert-manager
 ```
 
-Presets live in the **binary** (`go:embed` of `internal/controlplane/presets/data/**`). No runtime-editable
-preset files on disk under `data_dir` for v1.
+Presets and demux groups live in the **binary** (embedded `catalogsqlite/data/catalog.sqlite`).
+No runtime-editable preset files on disk under `data_dir`.
 
 ## File rules
 

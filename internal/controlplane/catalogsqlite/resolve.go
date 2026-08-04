@@ -11,9 +11,7 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
-const protocolVLESS = "vless"
-
-// Owns reports whether tag/alias is served from SQLite (VLESS pilot).
+// Owns reports whether tag/alias is served from SQLite catalog.
 func Owns(tagOrAlias string) bool {
 	tagOrAlias = strings.TrimSpace(tagOrAlias)
 	if tagOrAlias == "" {
@@ -28,9 +26,41 @@ func Owns(tagOrAlias string) bool {
 	return err == nil && n > 0
 }
 
-// OwnsProtocol is true for protocols fully cut over to SQLite.
+// OwnsProtocol is true for protocols fully cut over to SQLite (present in protocols table).
 func OwnsProtocol(protocol string) bool {
-	return strings.EqualFold(strings.TrimSpace(protocol), protocolVLESS)
+	protocol = strings.TrimSpace(protocol)
+	if protocol == "" {
+		return false
+	}
+	conn, err := DB()
+	if err != nil {
+		return false
+	}
+	var n int
+	err = conn.QueryRow(`SELECT COUNT(1) FROM protocols WHERE tag = ?`, protocol).Scan(&n)
+	return err == nil && n > 0
+}
+
+// ListOwnedProtocols returns protocol tags seeded into the SQLite catalog.
+func ListOwnedProtocols() ([]string, error) {
+	conn, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := conn.Query(`SELECT tag FROM protocols ORDER BY tag`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // CanonicalTag maps alias → canonical tag when owned by SQLite.
@@ -115,16 +145,16 @@ FROM protocols WHERE tag = ?`, tag).Scan(
 	_ = json.Unmarshal([]byte(i18n), &p.I18n)
 	_ = json.Unmarshal([]byte(notes), &p.Notes)
 	_ = json.Unmarshal([]byte(creds), &p.DefaultCredFields)
-	p.InvariantTags = append(p.InvariantTags, mustTags(conn)...)
+	p.InvariantTags = append(p.InvariantTags, mustTags(conn, p.Tag)...)
 	return p, nil
 }
 
-func mustTags(conn *sql.DB) []string {
+func mustTags(conn *sql.DB, protocol string) []string {
 	rows, err := conn.Query(`
 SELECT tag FROM preset_bases WHERE protocol = ?
 UNION ALL
 SELECT tag FROM ready_presets WHERE protocol = ?
-ORDER BY 1`, protocolVLESS, protocolVLESS)
+ORDER BY 1`, protocol, protocol)
 	if err != nil {
 		return nil
 	}
@@ -169,9 +199,25 @@ FROM preset_bases WHERE tag = ?`, tag).Scan(
 }
 
 func loadReadyByTag(conn *sql.DB, tag string) (domain.InvariantPreset, error) {
-	baseTag, err := baseTagForProtocol(conn, protocolVLESS)
+	var protocol, shortName, status string
+	var aliases, traits, scores, demux, reqs, creds, variants, profiles, i18n, notes string
+	var credGen, peer, paramFields, optFields sql.NullString
+	var inTpl, outTpl, epTpl sql.NullString
+	err := conn.QueryRow(`
+SELECT protocol,short_name,status,aliases_json,traits_json,scores_json,demux_hints_json,requirements_json,
+  cred_fields_json,cred_generators_json,peer_secret_fields_json,
+  param_fields_json,optional_param_fields_json,
+  default_user_variants_json,default_client_profiles_json,
+  i18n_json,client_notes_json,inbound_template_json,outbound_template_json,endpoint_template_json
+FROM ready_presets WHERE tag = ?`, tag).Scan(
+		&protocol, &shortName, &status, &aliases, &traits, &scores, &demux, &reqs,
+		&creds, &credGen, &peer, &paramFields, &optFields, &variants, &profiles, &i18n, &notes, &inTpl, &outTpl, &epTpl)
 	if err != nil {
-		return domain.InvariantPreset{}, err
+		return domain.InvariantPreset{}, fmt.Errorf("ready %q: %w", tag, err)
+	}
+	baseTag, err := baseTagForProtocol(conn, protocol)
+	if err != nil {
+		return domain.InvariantPreset{}, fmt.Errorf("ready %q base for protocol %q: %w", tag, protocol, err)
 	}
 	base, err := loadBaseByTag(conn, baseTag)
 	if err != nil {
@@ -181,27 +227,47 @@ func loadReadyByTag(conn *sql.DB, tag string) (domain.InvariantPreset, error) {
 	if err != nil {
 		return domain.InvariantPreset{}, err
 	}
-	var shortName, status string
-	var aliases, traits, scores, demux, reqs, creds, variants, profiles, i18n, notes string
-	var inTpl, outTpl, epTpl sql.NullString
-	err = conn.QueryRow(`
-SELECT short_name,status,aliases_json,traits_json,scores_json,demux_hints_json,requirements_json,
-  cred_fields_json,default_user_variants_json,default_client_profiles_json,
-  i18n_json,client_notes_json,inbound_template_json,outbound_template_json,endpoint_template_json
-FROM ready_presets WHERE tag = ?`, tag).Scan(
-		&shortName, &status, &aliases, &traits, &scores, &demux, &reqs,
-		&creds, &variants, &profiles, &i18n, &notes, &inTpl, &outTpl, &epTpl)
-	if err != nil {
-		return domain.InvariantPreset{}, fmt.Errorf("ready %q: %w", tag, err)
-	}
 	inv.Tag = tag
+	inv.Protocol = protocol
 	inv.ShortName = shortName
 	inv.Status = status
 	inv.CustomPreset = true // ready edits use full base schema
 	_ = json.Unmarshal([]byte(aliases), &inv.Aliases)
 	_ = json.Unmarshal([]byte(traits), &inv.Traits)
-	// CredFields / generators / peer secrets stay from base (full constructor).
-	_ = creds
+	// Generators / peer secrets may be overridden per ready (SS2022 key length,
+	// SSH pubkey). CredFields override only when generators override is present
+	// (stock-shrunk ready cred_fields like vless ["uuid"] must NOT replace the
+	// full constructor cred surface).
+	if credGen.Valid && credGen.String != "" && credGen.String != "null" {
+		var gens map[string]string
+		if json.Unmarshal([]byte(credGen.String), &gens) == nil {
+			inv.CredGenerators = gens
+		}
+		if creds != "" && creds != "null" {
+			var cf []string
+			if json.Unmarshal([]byte(creds), &cf) == nil && len(cf) > 0 {
+				inv.CredFields = cf
+			}
+		}
+	}
+	if peer.Valid && peer.String != "" && peer.String != "null" {
+		var ps map[string]string
+		if json.Unmarshal([]byte(peer.String), &ps) == nil {
+			inv.PeerSecretFields = ps
+		}
+	}
+	if paramFields.Valid && paramFields.String != "" && paramFields.String != "null" {
+		var pf []string
+		if json.Unmarshal([]byte(paramFields.String), &pf) == nil {
+			inv.ParamFields = pf
+		}
+	}
+	if optFields.Valid && optFields.String != "" && optFields.String != "null" {
+		var of []string
+		if json.Unmarshal([]byte(optFields.String), &of) == nil {
+			inv.OptionalParamFields = of
+		}
+	}
 	_ = json.Unmarshal([]byte(variants), &inv.DefaultUserVariants)
 	_ = json.Unmarshal([]byte(profiles), &inv.DefaultClientProfiles)
 	if scores != "" && scores != "null" {
@@ -363,18 +429,56 @@ func EffectiveParams(presetTag string, user map[string]string) (map[string]strin
 	return out, nil
 }
 
-// KnobProfile returns the constructor tag used for materialize knobs.
+// KnobProfile returns the constructor (base) tag used for materialize knobs / param i18n.
 func KnobProfile(presetTag string) string {
 	if !Owns(presetTag) {
 		return presetTag
 	}
 	conn, err := DB()
 	if err != nil {
-		return "vless_custom"
+		return presetTag
 	}
-	tag, err := baseTagForProtocol(conn, protocolVLESS)
+	canon, ok := CanonicalTag(presetTag)
+	if !ok {
+		return presetTag
+	}
+	var protocol string
+	err = conn.QueryRow(`
+SELECT protocol FROM preset_bases WHERE tag = ?
+UNION ALL
+SELECT protocol FROM ready_presets WHERE tag = ?
+LIMIT 1`, canon, canon).Scan(&protocol)
+	if err != nil || protocol == "" {
+		return presetTag
+	}
+	tag, err := baseTagForProtocol(conn, protocol)
 	if err != nil {
-		return "vless_custom"
+		return presetTag
 	}
 	return tag
+}
+
+// ProtocolOf returns the protocol family for an owned preset tag/alias.
+func ProtocolOf(presetTag string) (string, bool) {
+	if !Owns(presetTag) {
+		return "", false
+	}
+	conn, err := DB()
+	if err != nil {
+		return "", false
+	}
+	canon, ok := CanonicalTag(presetTag)
+	if !ok {
+		return "", false
+	}
+	var protocol string
+	err = conn.QueryRow(`
+SELECT protocol FROM preset_bases WHERE tag = ?
+UNION ALL
+SELECT protocol FROM ready_presets WHERE tag = ?
+LIMIT 1`, canon, canon).Scan(&protocol)
+	if err != nil || protocol == "" {
+		return "", false
+	}
+	return protocol, true
 }

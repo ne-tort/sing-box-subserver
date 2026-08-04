@@ -34,6 +34,7 @@ type Input struct {
 	CertManager        domain.CertManager
 	DNS                json.RawMessage // raw dns object; empty → default
 	Route              json.RawMessage // raw route object; empty → default
+	Outbounds          json.RawMessage // raw outbounds array; empty → default direct+block
 	// SlotTLS maps demux_sni → dedicated self-signed PEM paths (optional).
 	SlotTLS            map[string]SlotTLSMaterial
 	RealityAssignments map[string]domain.RealityAssignment
@@ -55,6 +56,9 @@ type SubscriptionFilters struct {
 	Flow          []string
 	Network       string
 	StrictFilters bool
+	// TLSCertPath / SlotTLS pin leaf PEMs for Cronet naive (rejects tls.insecure).
+	TLSCertPath string
+	SlotTLS     map[string]SlotTLSMaterial
 }
 
 var leftoverToken = regexp.MustCompile(`\{\{[^{}]+\}\}`)
@@ -81,12 +85,25 @@ func Build(in Input) ([]byte, error) {
 	if err := domain.ValidateRouteFragment(routeRaw); err != nil {
 		return nil, err
 	}
-	var dnsObj, routeObj any
+	outboundsRaw := in.Outbounds
+	if len(bytes.TrimSpace(outboundsRaw)) == 0 {
+		outboundsRaw = domain.DefaultOutboundsFragment()
+	}
+	if err := domain.ValidateOutboundsFragment(outboundsRaw); err != nil {
+		return nil, err
+	}
+	var dnsObj, routeObj, outboundsObj any
 	if err := json.Unmarshal(dnsRaw, &dnsObj); err != nil {
 		return nil, fmt.Errorf("dns: %w", err)
 	}
 	if err := json.Unmarshal(routeRaw, &routeObj); err != nil {
 		return nil, fmt.Errorf("route: %w", err)
+	}
+	if err := json.Unmarshal(outboundsRaw, &outboundsObj); err != nil {
+		return nil, fmt.Errorf("outbounds: %w", err)
+	}
+	if err := resolveRouteRulesetPaths(routeObj, in.DataDir); err != nil {
+		return nil, err
 	}
 
 	serverName := in.TLS.ServerNameForTLS(in.PublicHost)
@@ -102,11 +119,8 @@ func Build(in Input) ([]byte, error) {
 		"log":       map[string]any{"level": "warn"},
 		"dns":       dnsObj,
 		"inbounds":  inbounds,
-		"outbounds": []any{
-			map[string]any{"type": "direct", "tag": "direct"},
-			map[string]any{"type": "block", "tag": "block"},
-		},
-		"route": routeObj,
+		"outbounds": outboundsObj,
+		"route":     routeObj,
 	}
 	if in.WgHub != nil && in.WgHub.Enabled {
 		ep, err := BuildWireGuardEndpoint(*in.WgHub, in.Users, in.PublicHost)
@@ -132,6 +146,40 @@ func Build(in Input) ([]byte, error) {
 		return nil, err
 	}
 	return compact.Bytes(), nil
+}
+
+// resolveRouteRulesetPaths turns relative rule_set path basenames into absolute paths under
+// data_dir/controlplane/rulesets/. Absolute paths are left unchanged.
+func resolveRouteRulesetPaths(routeObj any, dataDir string) error {
+	route, ok := routeObj.(map[string]any)
+	if !ok || route == nil {
+		return nil
+	}
+	rsList, ok := route["rule_set"].([]any)
+	if !ok {
+		return nil
+	}
+	base := filepath.Join(dataDir, "controlplane", "rulesets")
+	for i, item := range rsList {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		path, _ := m["path"].(string)
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if filepath.IsAbs(path) {
+			continue
+		}
+		safe := filepath.Base(path)
+		abs := filepath.Join(base, safe)
+		m["path"] = abs
+		rsList[i] = m
+	}
+	route["rule_set"] = rsList
+	return nil
 }
 
 func certificateProviders(in Input) []any {
@@ -222,6 +270,9 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			return nil, fmt.Errorf("set %q demux: %w", set.Name, err)
 		}
 		rewriteDemuxActionsToDial(demux, set.Name, memberPorts)
+		if err := rejectRemainingInject(demux, set.Name); err != nil {
+			return nil, err
+		}
 		syncDemuxSNIFromBindings(demux, set, memberPorts)
 		syncDemuxSNIWithReality(demux, set, memberPorts, in.RealityAssignments)
 		out = append(out, demux)
@@ -511,7 +562,8 @@ func applyDemuxPortSNI(demux map[string]any, portToSNI map[uint16]string) {
 	}
 }
 
-// rewriteDemuxActionsToDial converts inject (inbound.tag) into dial/forward to 127.0.0.1.
+// rewriteDemuxActionsToDial converts legacy inject (inbound.tag) into dial/forward to 127.0.0.1.
+// New demux groups already emit dial; this only migrates old persisted templates.
 func rewriteDemuxActionsToDial(demux map[string]any, setName string, memberPorts map[string]uint16) {
 	rules, ok := demux["rules"].([]any)
 	if !ok {
@@ -552,6 +604,28 @@ func rewriteDemuxActionsToDial(demux map[string]any, setName string, memberPorts
 			"port":    port,
 		}
 	}
+}
+
+// rejectRemainingInject fails materialize when demux still uses inject after rewrite.
+func rejectRemainingInject(demux map[string]any, setName string) error {
+	rules, ok := demux["rules"].([]any)
+	if !ok {
+		return nil
+	}
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		action, ok := rule["action"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, hasInbound := action["inbound"]; hasInbound {
+			return fmt.Errorf("set %q demux: inject action not allowed (use dial to member ports)", setName)
+		}
+	}
+	return nil
 }
 
 // applyZeroEligibleFallback keeps Apply/validate succeeding when no eligible users
@@ -931,6 +1005,28 @@ func pruneEmptyLinkFields(link map[string]any) {
 	}
 }
 
+// linkFieldString returns a trimmed link value; missing/nil map entries are "".
+// Avoids fmt.Sprint(nil) → "<nil>" which falsely looks like a set value.
+func linkFieldString(link map[string]any, key string) string {
+	if link == nil {
+		return ""
+	}
+	v, ok := link[key]
+	if !ok || v == nil {
+		return ""
+	}
+	s := strings.TrimSpace(fmt.Sprint(v))
+	if s == "<nil>" {
+		return ""
+	}
+	return s
+}
+
+func linkFieldEmptyOrToken(link map[string]any, key string) bool {
+	s := linkFieldString(link, key)
+	return s == "" || strings.Contains(s, "{{")
+}
+
 func finalizeCarrierInbound(ib map[string]any, set domain.InboundSet, p domain.ProtocolPreset, listen string, port uint16, b domain.SetBinding) {
 	link := carrierLink(ib)
 	provider, _ := ib["provider"].(string)
@@ -946,7 +1042,7 @@ func finalizeCarrierInbound(ib map[string]any, set domain.InboundSet, p domain.P
 		ib["listen"] = listen
 		ib["listen_port"] = port
 	case "vk":
-		if srv := strings.TrimSpace(fmt.Sprint(link["server"])); srv == "" || strings.Contains(srv, "{{") {
+		if linkFieldEmptyOrToken(link, "server") {
 			link["server"] = "0.0.0.0"
 		}
 		if sp, _ := toUint16(link["server_port"]); sp == 0 {
@@ -956,14 +1052,14 @@ func finalizeCarrierInbound(ib map[string]any, set domain.InboundSet, p domain.P
 		ib["listen_port"] = port
 	}
 	if pw := peerSecretsForPreset(set, p.Name)["password"]; pw != "" {
-		if cur := strings.TrimSpace(fmt.Sprint(link["password"])); cur == "" || strings.Contains(cur, "{{") {
+		if linkFieldEmptyOrToken(link, "password") {
 			link["password"] = pw
 		}
 	}
 	if b.Params != nil {
 		for _, k := range []string{"room", "token", "transport", "key", "vk_hash", "wrap_password", "peer", "server"} {
 			if v := strings.TrimSpace(b.Params[k]); v != "" {
-				if cur := strings.TrimSpace(fmt.Sprint(link[k])); cur == "" || strings.Contains(cur, "{{") {
+				if linkFieldEmptyOrToken(link, k) {
 					link[k] = v
 				}
 			}
@@ -996,11 +1092,11 @@ func finalizeCarrierOutbound(ob map[string]any, set domain.InboundSet, p domain.
 	}
 	switch provider {
 	case "peer":
-		if peer := strings.TrimSpace(fmt.Sprint(link["peer"])); peer == "" || strings.Contains(peer, "{{") {
+		if linkFieldEmptyOrToken(link, "peer") {
 			link["peer"] = net.JoinHostPort(host, strconv.FormatUint(uint64(set.ListenPort), 10))
 		}
 	case "vk":
-		if srv := strings.TrimSpace(fmt.Sprint(link["server"])); srv == "" || strings.Contains(srv, "{{") {
+		if linkFieldEmptyOrToken(link, "server") {
 			link["server"] = host
 		}
 		if sp, _ := toUint16(link["server_port"]); sp == 0 {
@@ -1008,7 +1104,7 @@ func finalizeCarrierOutbound(ob map[string]any, set domain.InboundSet, p domain.
 		}
 	}
 	if creds != nil {
-		if id, ok := creds["device_id"]; ok && strings.TrimSpace(fmt.Sprint(link["device_id"])) == "" {
+		if id, ok := creds["device_id"]; ok && linkFieldString(link, "device_id") == "" {
 			link["device_id"] = id
 		}
 		if presetHasTrait(p, "users_auth") {
@@ -1018,7 +1114,7 @@ func finalizeCarrierOutbound(ob map[string]any, set domain.InboundSet, p domain.
 		}
 	}
 	if pw := peerSecretsForPreset(set, p.Name)["password"]; pw != "" && !presetHasTrait(p, "users_auth") {
-		if cur := strings.TrimSpace(fmt.Sprint(link["password"])); cur == "" || strings.Contains(cur, "{{") {
+		if linkFieldEmptyOrToken(link, "password") {
 			link["password"] = pw
 		}
 	}
@@ -1026,7 +1122,7 @@ func finalizeCarrierOutbound(ob map[string]any, set domain.InboundSet, p domain.
 	if b.Params != nil {
 		for _, k := range []string{"room", "token", "transport", "key", "vk_hash", "wrap_password", "peer", "server"} {
 			if v := strings.TrimSpace(b.Params[k]); v != "" {
-				if cur := strings.TrimSpace(fmt.Sprint(link[k])); cur == "" || strings.Contains(cur, "{{") {
+				if linkFieldEmptyOrToken(link, k) {
 					link[k] = v
 				}
 			}
@@ -1208,7 +1304,7 @@ func attachInboundTLS(ib map[string]any, in Input, serverName string, useCertMan
 	ib["tls"] = tlsObj
 }
 
-func attachSubscriptionTLS(ob map[string]any, defaultServer string, b domain.SetBinding, cm domain.CertManager) {
+func attachSubscriptionTLS(ob map[string]any, defaultServer string, b domain.SetBinding, cm domain.CertManager, filters SubscriptionFilters) {
 	tlsObj, _ := ob["tls"].(map[string]any)
 	if tlsObj == nil {
 		tlsObj = map[string]any{}
@@ -1223,12 +1319,64 @@ func attachSubscriptionTLS(ob map[string]any, defaultServer string, b domain.Set
 	} else {
 		tlsObj["server_name"] = defaultServer
 	}
-	if domain.NeedsTLSReportsInsecure(b.Params[domain.BindingParamSNI], cm) {
+	needInsecure := domain.NeedsTLSReportsInsecure(b.Params[domain.BindingParamSNI], cm)
+	if !needInsecure && sni != "" {
+		// Demux slot SNI may not be in ACME domains either.
+		needInsecure = domain.NeedsTLSReportsInsecure(sni, cm)
+	}
+	if typ, _ := ob["type"].(string); strings.EqualFold(typ, "naive") && needInsecure {
+		// Cronet rejects insecure; pin the leaf the inbound actually serves.
+		delete(tlsObj, "insecure")
+		pinPath := naivePinCertPath(sni, filters)
+		if pinPath != "" {
+			if err := embedTLSCertificateFile(tlsObj, pinPath); err == nil {
+				ob["tls"] = tlsObj
+				return
+			}
+		}
+		// Fall through without insecure — dial will fail loudly rather than lie to Cronet.
+		ob["tls"] = tlsObj
+		return
+	}
+	if needInsecure {
 		tlsObj["insecure"] = true
 	} else {
 		delete(tlsObj, "insecure")
 	}
 	ob["tls"] = tlsObj
+}
+
+func naivePinCertPath(sni string, filters SubscriptionFilters) string {
+	sni = strings.ToLower(strings.TrimSpace(sni))
+	if sni != "" && filters.SlotTLS != nil {
+		if m, ok := filters.SlotTLS[sni]; ok && strings.TrimSpace(m.CertPath) != "" {
+			return m.CertPath
+		}
+	}
+	return strings.TrimSpace(filters.TLSCertPath)
+}
+
+func embedTLSCertificateFile(tlsObj map[string]any, certPath string) error {
+	raw, err := os.ReadFile(certPath)
+	if err != nil {
+		return err
+	}
+	pem := strings.TrimSpace(string(raw))
+	if pem == "" {
+		return fmt.Errorf("empty certificate %s", certPath)
+	}
+	lines := strings.Split(pem, "\n")
+	out := make([]any, 0, len(lines))
+	for _, ln := range lines {
+		ln = strings.TrimRight(ln, "\r")
+		if ln != "" {
+			out = append(out, ln)
+		}
+	}
+	tlsObj["certificate"] = out
+	delete(tlsObj, "certificate_path")
+	delete(tlsObj, "certificate_provider")
+	return nil
 }
 
 func applySlotTLSPaths(ib map[string]any, m SlotTLSMaterial) {
@@ -1301,13 +1449,21 @@ func attachInboundReality(ib map[string]any, assignment domain.RealityAssignment
 	delete(tlsObj, "certificate_provider")
 	delete(tlsObj, "certificate")
 	delete(tlsObj, "key")
+	hs := strings.TrimSpace(assignment.HandshakeServer)
+	if hs == "" {
+		hs = strings.TrimSpace(assignment.SNI)
+	}
+	port := assignment.HandshakePort
+	if port == 0 {
+		port = 443
+	}
 	tlsObj["reality"] = map[string]any{
 		"enabled":     true,
 		"private_key": assignment.PrivateKeyBase64,
 		"short_id":    []any{assignment.ShortID},
 		"handshake": map[string]any{
-			"server":      assignment.HandshakeServer,
-			"server_port": assignment.HandshakePort,
+			"server":      hs,
+			"server_port": port,
 		},
 	}
 	ib["tls"] = tlsObj
@@ -1441,11 +1597,10 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 			}
 			profiles := domain.ClientProfilesForProtocol(p.Protocol, b, p.DefaultClientProfiles)
 			if len(filters.Profiles) > 0 {
-				names := make([]string, 0, len(profiles)+len(b.EnabledClientProfiles))
+				names := make([]string, 0, len(profiles))
 				for _, cp := range profiles {
 					names = append(names, cp.Name)
 				}
-				names = append(names, b.EnabledClientProfiles...)
 				if !hasAny(filters.Profiles, names) {
 					continue
 				}
@@ -1457,19 +1612,6 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 				for _, f := range filters.Profiles {
 					if f == name {
 						return true
-					}
-				}
-				// Legacy: EnabledClientProfiles may be opaque subscription tags
-				// (not catalog profile names). Matching those tags admits the
-				// resolved catalog profiles for this binding.
-				for _, f := range filters.Profiles {
-					for _, e := range b.EnabledClientProfiles {
-						if f != e {
-							continue
-						}
-						if !domain.IsKnownClientProfile(p.Protocol, f) {
-							return true
-						}
 					}
 				}
 				return false
@@ -1529,10 +1671,10 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 						if mode == "none" {
 							delete(ob, "tls")
 						} else {
-							attachSubscriptionTLS(ob, serverName, b, cm)
+							attachSubscriptionTLS(ob, serverName, b, cm, filters)
 						}
 					} else if presetNeedsTLS(p) {
-						attachSubscriptionTLS(ob, serverName, b, cm)
+						attachSubscriptionTLS(ob, serverName, b, cm, filters)
 					}
 					stripUTLSForQUICTransport(ob)
 					sanitizeNaiveOutboundTLS(ob)
@@ -1645,14 +1787,27 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					if mode == "none" {
 						delete(ob, "tls")
 					} else {
-						attachSubscriptionTLS(ob, serverName, b, cm)
+						attachSubscriptionTLS(ob, serverName, b, cm, filters)
 					}
 				} else if presetNeedsTLS(p) {
-					attachSubscriptionTLS(ob, serverName, b, cm)
+					attachSubscriptionTLS(ob, serverName, b, cm, filters)
 				}
 				stripUTLSForQUICTransport(ob)
 				sanitizeNaiveOutboundTLS(ob)
 				outbounds = append(outbounds, ob)
+				// Dual-stack naive: same inbound serves H2+H3; advertise QUIC sibling.
+				if p.Protocol == "naive" && naiveNetworkIsDual(effectiveKnobParams(slotParams, p.Name)) {
+					obQ, err := cloneMap(ob)
+					if err != nil {
+						return nil, err
+					}
+					obQ["tag"] = tag + "-quic"
+					obQ["quic"] = true
+					obQ["quic_congestion_control"] = "bbr"
+					delete(obQ, "extra_headers")
+					sanitizeNaiveOutboundTLS(obQ)
+					outbounds = append(outbounds, obQ)
+				}
 			}
 		}
 	}

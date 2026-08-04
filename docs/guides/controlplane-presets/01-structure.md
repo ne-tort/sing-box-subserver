@@ -3,13 +3,29 @@
 ## Layout
 
 ```
-internal/controlplane/presets/data/
-  index.json                 # порядок протоколов
-  <protocol>/
-    protocol.json            # метаданные протокола + i18n
-    <invariant_tag>.json     # инвариант (= файл)
-  _schema/                   # описания полей
+internal/controlplane/catalogsqlite/
+  ref/
+    <protocol>/
+      protocol.json            # метаданные протокола + i18n
+      <protocol>_custom.json   # constructor base (schema + templates)
+      <invariant_tag>.json     # ready preset (+ param_values)
+      variants.json            # user_variants / client_profiles
+    demux/
+      dg_*.json                # demux groups (seeded from demuxgroups.BuiltinGroups)
+  data/
+    catalog.sqlite             # embedded runtime blob
+  sql/
+    schema.sql
 ```
+
+Regenerate blob after editing `ref/`:
+
+```bash
+go run -tags with_controlplane ./cmd/dump-demux-groups   # if demux catalog.go changed
+go run -tags with_controlplane ./cmd/gen-catalogsqlite
+```
+
+Locales stay under `internal/controlplane/presets/i18n/locales/`.
 
 ## Naming
 
@@ -26,7 +42,7 @@ internal/controlplane/presets/data/
 
 - **stable** — templates обязательны, materialize OK
 - **lab** — templates есть, экспериментально (`ssh_password`)
-- **planned** — только `protocol.json` (наполнение позже)
+- **planned** / **deferred** — скрыты из materialize-каталога
 
 ## WireGuard
 

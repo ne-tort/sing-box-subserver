@@ -1,0 +1,34 @@
+{
+  "protocol": "vmess",
+  "user_variants": [],
+  "client_profiles": [
+    {
+      "name": "sec-auto",
+      "scope": "outbound_only",
+      "subscription_default": true,
+      "query_tags": ["profile:sec-auto", "tag:sec-auto"],
+      "outbound_overrides": {"security": "auto"}
+    },
+    {
+      "name": "sec-aes128",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:sec-aes128", "tag:sec-aes128"],
+      "outbound_overrides": {"security": "aes-128-gcm"}
+    },
+    {
+      "name": "sec-chacha",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:sec-chacha", "tag:sec-chacha"],
+      "outbound_overrides": {"security": "chacha20-poly1305"}
+    },
+    {
+      "name": "pkt-xudp",
+      "scope": "outbound_only",
+      "subscription_default": false,
+      "query_tags": ["profile:pkt-xudp", "tag:pkt-xudp"],
+      "outbound_overrides": {"packet_encoding": "xudp"}
+    }
+  ]
+}

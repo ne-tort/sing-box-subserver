@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "tag": "mieru",
+  "singbox_type": "mieru",
+  "short_name": "Mieru",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "Mieru",
+      "description": "Чистый TCP/UDP без TLS. Ключ к demux «plain рядом с Reality/Hy2» — first-bytes / always_plain."
+    },
+    "en": {
+      "title": "Mieru",
+      "description": "Clean TCP/UDP without TLS. Key to demux «plain next to Reality/Hy2» — first-bytes / always_plain."
+    }
+  },
+  "default_cred_fields": [
+    "password"
+  ],
+  "notes": {
+    "variants_family": "none",
+    "lx": "with_mieru"
+  }
+}

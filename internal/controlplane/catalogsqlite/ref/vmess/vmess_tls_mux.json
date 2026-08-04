@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "tag": "vmess_tls_mux",
+  "protocol": "vmess",
+  "aliases": [
+    "vmess-tls-mux"
+  ],
+  "short_name": "VMess mux",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "VMess TLS + multiplex",
+      "description": "VMess+TLS с smux multiplex (padding)."
+    },
+    "en": {
+      "title": "VMess TLS mux",
+      "description": "VMess+TLS with multiplex padding."
+    }
+  },
+  "traits": [
+    "tcp",
+    "tls",
+    "multiplex"
+  ],
+  "demux_hints": {
+    "network": [
+      "tcp"
+    ],
+    "looks_like": "tls_clienthello",
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "sni_required": true,
+    "first_bytes": "TLS ClientHello → VMess+mux",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 5,
+    "speed": 7,
+    "mobile": 5,
+    "setup": 6
+  },
+  "cred_fields": [
+    "uuid"
+  ],
+  "default_client_profiles": [
+    "sec-auto"
+  ],
+  "param_values": {
+    "transport": "tcp",
+    "tls_mode": "tls",
+    "packet_encoding": "xudp",
+    "fingerprint": "chrome",
+    "transport_path": "/vmess",
+    "transport_host": "{{server}}",
+    "service_name": "VMessService",
+    "alpn": "h2,http/1.1",
+    "multiplex": "smux",
+    "ws_max_early_data": "0"
+  },
+  "requirements": {
+    "tls_profile": true
+  },
+  "client_notes": {
+    "mux": "smux+padding via multiplex=smux"
+  }
+}

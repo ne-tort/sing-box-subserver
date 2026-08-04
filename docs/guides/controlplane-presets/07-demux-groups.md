@@ -1,6 +1,6 @@
 # Demux groups (controlplane)
 
-Каталог готовых наборов инбаундов + demux на одном публичном порту.
+Каталог готовых наборов инбаундов + demux (~10 branded групп).
 
 ## Зачем
 
@@ -21,60 +21,47 @@ Demux-группа занимает **один** публичный порт (tc
 4. `POST /sets/from-demux-group` `{ group, slot_presets?, listen_port?, activate: true }`  
 5. Пользователь + subscription (+ query filters)
 
-Клиентские теги разведения (`tcp`/`tls`/`sni`/`udp`/`quic`/…) и класс взаимозаменяемости substitutes — см. § Match metadata в [`05-api.md`](../../controlplane/05-api.md). Capability: `demux_group_match_meta`.
-
 ## Разведение по TLS / QUIC
 
 | Механизм | Как |
 |----------|-----|
 | SNI pool | Уникальный `demux_sni` на слот → demux `match.tls.sni` / QUIC `sni` + `server_name` у TLS-инбаунда |
-| Per-slot PEM | Для non-Reality TLS/TrustTunnel CP пишет `controlplane/tls/slots/<sni>.crt` с CN/SAN = demux_sni |
+| Per-slot PEM | Для non-Reality TLS CP пишет `controlplane/tls/slots/<sni>.crt` с CN/SAN = demux_sni |
 | Reality | `demux_sni` предпочитается при Reality assignment; materialize синхронизирует demux SNI с assignment |
-| ALPN | `demux_alpn` / PreferredALPN → inbound `tls.alpn` + опционально demux match |
+| ALPN | `demux_alpn` / PreferredALPN → inbound `tls.alpn` (demux match = SNI) |
 | protocol_only | Один QUIC-catch-all (типично Hy2), когда на порту один QUIC-слот |
+| Naive H2+H3 | `naive_quic` на TLS-слоте занимает `protocol=quic`; отдельный QUIC-член пропускается |
 
-Несколько Reality в одном наборе получают **разные** SNI из валидированного пула.
+Несколько Reality/TLS в одном наборе получают **разные** SNI из пула — demux без проблем держит много TLS на одном порту.
 
-## Full-stack модель (:443)
+## Branded catalog
 
-Целевой «осознанный» набор — группа **`dg_443_fullstack`**:
+| Tag | Brand | Status | Суть |
+|-----|-------|--------|------|
+| `dg_443_dual` | Bypasser | stable | Reality + Hy2 |
+| `dg_443_triple` | DPI Triple | stable | Reality + Naive TLS + Hy2 |
+| `dg_443_fullstack` | DPI Killer | stable | Флагман ~5 слотов (Naive как TLS/h2) |
+| `dg_443_tls_quic` | HTTPS Mask | stable | Naive TLS + Hy2 |
+| `dg_443_exotic` | Oddball | stable | Naive + Hy2 + plain |
+| `dg_443_modern5` | Vision Pack | lab | 2×Reality + Naive + 2×QUIC |
+| `dg_443_sni_stack` | SNI Lattice | lab | Несколько TLS/Reality по hostname |
+| `dg_443_broad7` | Full Arsenal | lab | Максимум слотов |
+| `dg_443_quic_storm` | QUIC Storm | lab | Два QUIC |
+| `dg_443_reality_sq` | Shadow Lane | lab | Reality + lab QUIC |
 
-1. TCP Reality (`vless_reality` family) — SNI pool  
-2. N× TCP TLS с разными `*.local` / pool SNI + ALPN (`vless_grpc_tls` h2, `anytls` http/1.1, …)  
-3. QUIC catch-all (`hy2` / substitutes)  
-4. TCP plain (`mieru_tcp` / sudoku) — `always_plain`
-
-См. также dense/broad группы (`dg_443_dense8`, `dg_443_broad7`) для большего числа слотов.
+**Naive** встроен в наборы как TLS-основа и substitute (`naive_tls` / `naive_quic`). Отдельных однослотовых Naive-групп нет. Выбор `naive_quic` на TLS-слоте включает H3 и забирает QUIC-маршрут. Нужен `libcronet` у клиента и у агента для CP smoke.
 
 ## Docker matrix
 
 ```bash
-cd third_party/sing-box-subserver/scripts/demux_groups_matrix
-python run.py --priority   # gate
-python run.py --all        # extended
-python run.py --group dg_443_dual
+cd vendor/sing-box-subserver
+python scripts/demux_groups_matrix/run.py --priority   # gate
+python scripts/demux_groups_matrix/run.py --all        # extended
+python scripts/demux_groups_matrix/run.py --group dg_443_dual
 ```
-
-Требует тот же `sui-lx-iperf:local` / `LX_BIN`, что и invariant matrix.
-
-### Docker gate
-
-`--priority`: **pass=24 fail=0** (incl. `dg_443_modern5` ×5).  
-`--all` (18 groups): **pass=63 fail=0** (2026-07-30).  
-ShadowQUIC: JLS `server_name` syncs with `demux_sni` (materialize + harness); verify with  
-`python run.py --group dg_443_reality_sq --slot quic=shadowquic_jls`.
-
-### Каталог (слоты)
-
-| Диапазон | Примеры |
-|----------|---------|
-| 2–3 | dual, anytls_hy2, snell_hy2, reality_sq, … |
-| 5–8 | modern5, sni_stack, vless_family, stack6, broad7(7), dense8 |
 
 ### Известные ограничения
 
-- **TrustTunnel** через demux dial — `demux_lab`.
-- **ShadowQUIC**: JLS SNI sync с `demux_sni` починен; `protocol_only` substitute **pass** (`--slot quic=shadowquic_jls` ≈1 Gbps). Параллельный SQ+другой QUIC (`sni_pool`) всё ещё `demux_lab`.
-- Параллельные QUIC: **Hy2 + TUIC** по SNI — ок.
-- **dg_443_dense8** / **broad7** — широкие наборы с уникальными SNI (**broad7** Docker pass=7/7).
-- **dg_443_snell_hy2** — Docker pass.
+- **TrustTunnel** через demux dial — `demux_lab` (substitute only).
+- **ShadowQUIC** — `demux_lab`; default Hy2. Salamander obfs не используется в demux.
+- Параллельные QUIC: **Hy2 + TUIC** по SNI — ок (Vision Pack / QUIC Storm).

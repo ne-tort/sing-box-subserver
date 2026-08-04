@@ -12,6 +12,7 @@ echo "== host-build linux binary (controlplane tags) =="
 mkdir -p dist
 TAGS="$(tr -d '\r\n' < build/tags.server.controlplane)"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -checklinkname=0" -tags "$TAGS" -o dist/subserver-cp-linux ./cmd/subserver
+bash scripts/ensure_libcronet.sh amd64
 
 echo "== compose up (runtime image + prebuilt binary) =="
 docker compose -f "$COMPOSE" down -v >/dev/null 2>&1 || true

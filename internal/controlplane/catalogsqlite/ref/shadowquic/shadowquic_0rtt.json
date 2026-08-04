@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tag": "shadowquic_0rtt",
+  "protocol": "shadowquic",
+  "aliases": [
+    "shadowquic-0rtt"
+  ],
+  "short_name": "SQ 0-RTT",
+  "status": "lab",
+  "i18n": {
+    "ru": {
+      "title": "ShadowQUIC 0-RTT",
+      "description": "ShadowQUIC JLS + zero_rtt (быстрее, слабее replay resistance)."
+    },
+    "en": {
+      "title": "ShadowQUIC 0-RTT",
+      "description": "ShadowQUIC with 0-RTT. Faster resume; slightly different replay tradeoffs."
+    }
+  },
+  "traits": [
+    "udp",
+    "quic",
+    "jls",
+    "0rtt"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "quic",
+    "alpn": [
+      "h3"
+    ],
+    "sni_required": true,
+    "first_bytes": "QUIC 0-RTT",
+    "compatible_with_demux": true
+  },
+  "scores": {
+    "dpi": 8,
+    "speed": 9,
+    "mobile": 5,
+    "setup": 4
+  },
+  "cred_fields": [
+    "username",
+    "password"
+  ],
+  "requirements": {
+    "udp": true,
+    "quic": true,
+    "build_tag": "with_shadowquic"
+  },
+  "client_notes": {
+    "params": "optional bindings[].params overrides: jls_addr, jls_server_name"
+  },
+  "param_values": {
+    "jls_addr": "www.cloudflare.com:443",
+    "jls_server_name": "www.cloudflare.com",
+    "congestion_control": "bbr",
+    "zero_rtt": "true",
+    "udp_over_stream": "false"
+  }
+}

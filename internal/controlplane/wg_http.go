@@ -3,28 +3,31 @@
 package controlplane
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/ne-tort/sing-box-subserver/internal/configowner"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/wgawg"
 )
 
 func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
 	h.Normalize()
 	hubAddr, _ := h.HubAddress()
 	out := map[string]any{
-		"enabled":       h.Enabled,
-		"profile":       h.Profile,
-		"subnet":        h.Subnet,
-		"listen_port":   h.ListenPort,
-		"system":        h.System,
-		"forward_allow": h.ForwardAllow,
+		"enabled":        h.Enabled,
+		"profile":        h.Profile,
+		"subnet":         h.Subnet,
+		"listen_port":    h.ListenPort,
+		"system":         h.System,
+		"peer_relay":     h.PeerRelay,
 		"internet_allow": h.InternetAllowed(),
-		"hub_address":   hubAddr,
+		"exit_user_id":   h.ExitUserID,
+		"hub_address":    hubAddr,
 		"hub_public_key": h.HubPublicKey,
-		"has_awg":       len(h.AWG) > 0,
+		"has_awg":        len(h.AWG) > 0,
 	}
 	if h.Name != "" {
 		out["name"] = h.Name
@@ -38,6 +41,12 @@ func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
 	if h.DownMbps > 0 {
 		out["down_mbps"] = h.DownMbps
 	}
+	out["peer_keepalive"] = h.PeerKeepalive
+	ck := h.ClientKeepalive
+	if ck <= 0 {
+		ck = 25
+	}
+	out["client_keepalive"] = ck
 	if len(h.AWG) > 0 {
 		awgView := map[string]any{}
 		for _, k := range []string{
@@ -46,6 +55,7 @@ func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
 			"h1", "h2", "h3", "h4",
 			"id", "ip", "ib",
 			"i1", "i2", "i3", "i4", "i5",
+			"signature_protocol",
 			"header_protection_key", "content_padding_addition",
 			"rekey_after_time", "rekey_timeout", "reject_after_time",
 			"keepalive_timeout", "max_handshake_attempts",
@@ -56,6 +66,19 @@ func (s *Service) wgPublicView(h domain.WgHub) map[string]any {
 		}
 		if len(awgView) > 0 {
 			out["awg"] = awgView
+		}
+		manual := false
+		for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
+			if v, ok := h.AWG[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+				manual = true
+				break
+			}
+		}
+		if manual {
+			out["manual_init"] = true
+			out["masquerade_mode"] = "none"
+		} else if ip, _ := h.AWG["ip"].(string); strings.TrimSpace(ip) != "" {
+			out["masquerade_mode"] = strings.ToLower(strings.TrimSpace(ip))
 		}
 	}
 	return out
@@ -98,11 +121,42 @@ func (s *Service) handleWgPut(w http.ResponseWriter, r *http.Request) {
 	if v, ok := body["system"].(bool); ok {
 		h.System = v
 	}
-	if v, ok := body["forward_allow"].(bool); ok {
-		h.ForwardAllow = v
+	if v, ok := body["peer_relay"].(bool); ok {
+		h.PeerRelay = v
+	} else if v, ok := body["forward_allow"].(bool); ok {
+		// Legacy alias from older clients.
+		h.PeerRelay = v
 	}
 	if v, ok := body["internet_allow"].(bool); ok {
 		h.InternetAllow = &v
+	}
+	if _, ok := body["exit_user_id"]; ok {
+		v, _ := body["exit_user_id"].(string)
+		h.ExitUserID = strings.TrimSpace(v)
+		if h.ExitUserID != "" {
+			users, err := s.store.LoadUsers()
+			if err != nil {
+				failJSON(w, 500, "internal", err.Error())
+				return
+			}
+			found := false
+			for _, u := range users {
+				if u.ID != h.ExitUserID {
+					continue
+				}
+				found = true
+				if firstWgCreds(u.Creds) == nil {
+					failJSON(w, 400, "cp_invalid_wg", fmt.Sprintf("exit_user_id %q has no WG credentials", h.ExitUserID))
+					return
+				}
+				break
+			}
+			if !found {
+				failJSON(w, 400, "cp_invalid_wg", fmt.Sprintf("exit_user_id %q not found", h.ExitUserID))
+				return
+			}
+			h.PeerRelay = true
+		}
 	}
 	if v, ok := body["name"].(string); ok {
 		h.Name = strings.TrimSpace(v)
@@ -116,6 +170,18 @@ func (s *Service) handleWgPut(w http.ResponseWriter, r *http.Request) {
 	if v, ok := body["down_mbps"].(float64); ok {
 		h.DownMbps = int(v)
 	}
+	if v, ok := body["peer_keepalive"].(float64); ok {
+		if v < 0 {
+			v = 0
+		}
+		h.PeerKeepalive = int(v)
+	}
+	if v, ok := body["client_keepalive"].(float64); ok {
+		if v < 0 {
+			v = 0
+		}
+		h.ClientKeepalive = int(v)
+	}
 	h.Normalize()
 	if err := h.Validate(); err != nil {
 		failJSON(w, 400, "cp_invalid_wg", err.Error())
@@ -126,15 +192,22 @@ func (s *Service) handleWgPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forceAWG := h.Profile != domain.WgProfilePlain && (prevProfile != h.Profile || len(h.AWG) == 0)
+	if h.Profile == domain.WgProfilePlain {
+		h.AWG = nil
+	} else {
+		// Apply operator overrides first so ensureWgHubSecrets does not redraw sugar
+		// over an explicit masquerade_mode=none / manual i1–i5 intent.
+		if err := mergeWgAWGOverrides(&h, body); err != nil {
+			failJSON(w, 400, "cp_invalid_wg", err.Error())
+			return
+		}
+	}
 	if _, err := s.ensureWgHubSecrets(&h, forceAWG); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
 	if h.Profile == domain.WgProfilePlain {
 		h.AWG = nil
-	} else if err := mergeWgAWGOverrides(&h, body); err != nil {
-		failJSON(w, 400, "cp_invalid_wg", err.Error())
-		return
 	}
 
 	if h.Enabled {
@@ -179,9 +252,59 @@ func (s *Service) handleWgRegenerateAWG(w http.ResponseWriter, r *http.Request) 
 		failJSON(w, 400, "bad_request", "regenerate-awg only for wg_awg2/wg_awg3")
 		return
 	}
-	if _, err := s.ensureWgHubSecrets(&h, true); err != nil {
+	mode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("mode")))
+	if mode == "" {
+		mode = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("masquerade")))
+	}
+	// Optional JSON body: {"mode":"none"|"quic"|..., "id":"sni.example"}
+	var body map[string]any
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+	if body != nil {
+		if mode == "" {
+			if v, ok := body["mode"].(string); ok {
+				mode = strings.ToLower(strings.TrimSpace(v))
+			}
+		}
+		if mode == "" {
+			if v, ok := body["masquerade_mode"].(string); ok {
+				mode = strings.ToLower(strings.TrimSpace(v))
+			}
+		}
+	}
+	preserveID := ""
+	if h.AWG != nil {
+		preserveID = strings.TrimSpace(fmt.Sprint(h.AWG["id"]))
+		if preserveID == "<nil>" {
+			preserveID = ""
+		}
+	}
+	if body != nil {
+		if v, ok := body["id"].(string); ok && strings.TrimSpace(v) != "" {
+			preserveID = strings.TrimSpace(v)
+		}
+		if v, ok := body["masquerade_url"].(string); ok && strings.TrimSpace(v) != "" {
+			preserveID = strings.TrimSpace(v)
+		}
+	}
+
+	awg3 := h.Profile == domain.WgProfileAWG3
+	bundle, err := wgawg.BundleFromExisting(awg3, h.AWG, mode)
+	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
+	}
+	if !wgawg.HasManualCPS(bundle) && preserveID != "" {
+		bundle["id"] = preserveID
+	}
+	h.AWG = bundle
+
+	if strings.TrimSpace(h.HubPrivateKey) == "" || strings.TrimSpace(h.HubPublicKey) == "" {
+		if _, err := s.ensureWgHubSecrets(&h, false); err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
 	}
 	if err := s.store.SaveWgHub(h); err != nil {
 		failJSON(w, 500, "internal", err.Error())

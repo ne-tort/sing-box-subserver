@@ -33,8 +33,7 @@ This file remains the **endpoint catalog**. Prefer the modules above for install
     "users_total": 10,
     "users_eligible": 8,
     "presets_count": 15,
-    "demux_recipes_count": 9,
-    "demux_groups_count": 18,
+    "demux_groups_count": 13,
     "sets_count": 2,
     "demux_in_binary": true,
     "cert_manager": { "enabled": false, "domains": [] },
@@ -128,10 +127,10 @@ Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or no
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/wg` | Singleton hub status (no private key) |
-| PUT | `/v1/controlplane/wg` | Update `{enabled, profile, subnet, listen_port, system, forward_allow, internet_allow, …}`; Claim(controlplane) when enabling |
+| PUT | `/v1/controlplane/wg` | Update `{enabled, profile, subnet, listen_port, peer_relay, internet_allow, exit_user_id, …}`; Claim(controlplane) when enabling |
 | POST | `/v1/controlplane/wg/regenerate-awg` | Rotate AWG2/3 + masquerade params |
 
-Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade). Subnet default `10.8.0.0/24`.
+Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade). Subnet default `10.8.0.0/24`. Sugar-only emit (`subnet` / peer `ip` / `exit_node` / `use_exit_node` / `advertise_exit_node`); no `allowed_ips` in hub or subscription JSON. Non-empty `exit_user_id` forces `peer_relay=true` and must reference a user with WG creds.
 
 ## TLS (self-signed) + cert-manager
 
@@ -145,14 +144,35 @@ Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade)
 
 TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager domains). See [11-tls](11-tls.md).
 
-## Config fragments (dns / route)
+## Config fragments (dns / route / outbounds)
+
+Thin raw JSON blocks for the server dataplane. Overrides live in `config_fragments.json`;
+empty override → built-in default. Full sing-box validate runs only on rematerialize when CP owns the dataplane.
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET/PUT | `/v1/controlplane/config/dns` | Raw sing-box `dns` object (default: local server); PUT validates → `400` `cp_invalid_config`; rematerialize persist-then-422 if CP owns dataplane |
-| GET/PUT | `/v1/controlplane/config/route` | Raw sing-box `route` object (default: `final=direct`, `rules=[]`); same validate + rematerialize contract |
+| GET | `/v1/controlplane/config` | All three effective blocks + `is_default.{dns,route,outbounds}` + `config_mode` |
+| GET/PUT/DELETE | `/v1/controlplane/config/dns` | Raw sing-box `dns` **object** (default: local server). PUT body `{dns}`; DELETE clears override |
+| GET/PUT/DELETE | `/v1/controlplane/config/route` | Raw sing-box `route` **object** (default: `final=direct`, `rules=[]`). PUT requires non-empty string `final`. PUT may include companion `rulesets:[{filename,content_base64}]` written under `controlplane/rulesets/`; `rule_set[].path` uses basenames resolved to absolute paths on materialize. DELETE clears route override **and** rulesets dir |
+| GET/PUT/DELETE | `/v1/controlplane/config/outbounds` | Raw sing-box `outbounds` **array** (default: `direct`+`block`). Client owns full array contents |
+
+PUT shallow validation failure → `400` `cp_invalid_config`.
+PUT/DELETE rematerialize failure after store write → `422` with **`persisted: true`** in the response body (persist-then-422).
+Success PUT/DELETE includes `persisted: true`, `rematerialized: bool`, `config_mode`.
+
+Outbounds fragment replaces the entire server dataplane `outbounds` array (not subscription `/v1/sub` outbounds).
+Capabilities: `config_dns_route`, `config_outbounds`, `config_fragments`, `config_route_rulesets`.
 
 ---
+
+## Inbound smoke
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| POST | `/v1/controlplane/smoke` | Hairpin connectivity check of active sets via ephemeral client-box (does **not** rematerialize live dataplane). Body optional: `{sets?, presets?, timeout_ms?, urls?, include_variants?}`. `409` if already running; `422` if no active set. On success overwrites `data_dir/controlplane/smoke_last.json`. See [ADR 0007](adr/0007-inbound-smoke.md). |
+| GET | `/v1/controlplane/smoke/last` | Last smoke report (`finished_at` RFC3339 + results), or `null` if never run. |
+
+`GET /sets` (and set get) may include a short `smoke: {ok, latency_ms?, skipped?, finished_at?}` on each set and binding when a matching entry exists in the last report (set+preset key). Deactivate/delete does **not** clear the last report.
 
 ## Reality profiles
 
@@ -184,7 +204,8 @@ Rules:
 
 ## Protocols & presets
 
-File catalog under `internal/controlplane/presets/data/`. Operator how-to:
+Catalog SoT: embedded SQLite (`internal/controlplane/catalogsqlite/data/catalog.sqlite`),
+authored from `internal/controlplane/catalogsqlite/ref/<protocol>/`. Operator how-to:
 [`docs/guides/controlplane-presets/`](../guides/controlplane-presets/00-index.md).
 
 Query `lang` (default/fallback `ru`).
@@ -206,15 +227,19 @@ Full templates remain on `GET /presets/{tag}`.
 
 ## Demux groups (catalog)
 
-First-class installable demux bundles (modern protocols only). Prefer these over raw `demux-recipes` for client UX.
+First-class installable demux bundles (modern protocols only). **SoT:** `catalogsqlite` tables `demux_groups` / `demux_slots` (seeded from `ref/demux/*.json`).
+
+Runtime materialize uses **dial → `127.0.0.1` member ports** (not inject `{{tag:…}}`).
 
 | Method | Path | Meaning |
 |--------|------|---------|
 | GET | `/v1/controlplane/demux-groups?lang=` | List groups: tag, scores, slots (+ match tags), `separation_summary` |
 | GET | `/v1/controlplane/demux-groups/{tag}?lang=` | Full group + `match_plan` + enriched slots |
-| GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + `separation_tags` / `interchange_tags` / `fits_interchange` |
-| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?` auto-pick, `slot_presets?`, `slot_sni?`, `activate?`) |
+| GET | `/v1/controlplane/demux-groups/{tag}/substitutions` | Slot picker: presets + `demux_compat` / `fits_interchange` / separation tags |
+| POST | `/v1/controlplane/sets/from-demux-group` | Install set from group (`group`, `name?`, `listen_port?`, `slot_presets?`, `slot_params?`, `slot_sni?`, `slot_user_variants?`, `slot_client_profiles?`, `disabled_slots?`, `allow_lab?`, `activate?`, `replace?`) |
 | POST | `/v1/controlplane/sets/from-presets` | Batch install single-inbound sets with port policy |
+
+Cost model (1 demux + N members): [09-demux-cost.md](../guides/controlplane-presets/09-demux-cost.md).
 
 `activate:true` must fully succeed: HTTP `201` + `activated:true`. If the set(s) were saved but activate failed → HTTP `422` (`cp_claim_failed` / `cp_materialize_failed` / `cp_apply_failed` / `unsupported_build_tag`); resource remains on disk for retry via `POST .../activate`.
 
@@ -279,19 +304,6 @@ Response includes `set`, `member_ports`, `slot_snis`, `warnings`. Reality slots 
 |--------|------|---------|
 | GET | `/v1/controlplane/client/bootstrap?lang=` | Flows + capabilities + counts for mobile/desktop UX |
 | GET | `/v1/controlplane/ports/availability?port=` | Free TCP/UDP on a port; `can_demux` |
-
----
-
-## Demux recipes
-
-Named demux_template skeletons (legacy/manual; separate from demux-groups). Operators copy `demux_template` + `required_presets` into a set.
-
-| Method | Path | Meaning |
-|--------|------|---------|
-| GET | `/v1/controlplane/demux-recipes` | List name, description, required_presets, suggested_port |
-| GET | `/v1/controlplane/demux-recipes/{name}` | Full recipe including `demux_template` |
-
-`404` if unknown. Creating a set with empty `"match":{"tls":{}}` → `400` `cp_invalid_demux`.
 
 ---
 
@@ -367,7 +379,7 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_invalid_demux_group` | from-demux-group install request invalid |
 | `cp_invalid_slot` | Slot preset not allowed / duplicate across slots |
 | `cp_invalid_set` | Generic set validation failure |
-| `cp_invalid_config` | DNS/route fragment validation failed |
+| `cp_invalid_config` | DNS/route/outbounds fragment validation failed |
 | `cp_invalid_tls` | TLS self-signed profile validation failed |
 | `cp_invalid_reality` | Reality PUT: all submitted profiles rejected |
 | `cp_invalid_cert_manager` | Cert-manager settings invalid |
@@ -376,9 +388,9 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_invalid_sub_filter` | Subscription query filter unknown/disallowed when `strict_filters=true` |
 | `unsupported_build_tag` | Same family as root validate 422 |
 
-`422` on activate / PUT active set / TLS / cert-manager / dns / route / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
+`422` on activate / PUT active set / TLS / cert-manager / dns / route / outbounds / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
 
-**Persist-then-422:** for `PUT` dns / route / tls / cert-manager (and rematerialize after users/reality), the store write happens before rematerialize. On `422` the new values are already on disk — client should retry rematerialize path or re-read via GET. Dry-run/rollback is out of scope.
+**Persist-then-422:** for `PUT`/`DELETE` dns / route / outbounds / tls / cert-manager (and rematerialize after users/reality), the store write happens before rematerialize. On `422` the response includes `persisted: true` and the new values are already on disk — client should retry rematerialize path or re-read via GET. Dry-run/rollback is out of scope.
 
 ### Follow-ups (не блокируют клиентский happy-path)
 
