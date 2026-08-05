@@ -115,6 +115,16 @@ func Build(in Input) ([]byte, error) {
 		}
 		inbounds = append(inbounds, built...)
 	}
+	// ACME-only materialize (no active sets yet): keep a loopback mixed inbound so
+	// sing-box accepts the config while certificate_providers obtain PEMs.
+	if len(inbounds) == 0 && in.CertManager.Enabled() {
+		inbounds = append(inbounds, map[string]any{
+			"type":        "mixed",
+			"tag":         "cp-acme-keepalive",
+			"listen":      "127.0.0.1",
+			"listen_port": 0,
+		})
+	}
 	doc := map[string]any{
 		"log":       map[string]any{"level": "warn"},
 		"dns":       dnsObj,
@@ -187,40 +197,51 @@ func certificateProviders(in Input) []any {
 		return nil
 	}
 	// Emit when domains configured (sing-box obtains; inbounds opt-in via params.sni).
+	// DNS names and bare IP use separate providers (LE shortlived cannot share a set).
 	a := in.CertManager
-	domains := a.NormalizedDomains()
+	dnsNames, ips := a.SplitDomains()
 	prov := a.Provider
 	if prov == "" {
 		prov = "letsencrypt"
 	}
 	dataDir := filepath.Join(in.DataDir, "controlplane", "acme")
-	obj := map[string]any{
-		"type":           "acme",
-		"tag":            domain.TLSProviderTag,
-		"domain":         domains,
-		"email":          a.Email,
-		"provider":       prov,
-		"data_directory": dataDir,
+	mk := func(tag string, domains []string, provider string) map[string]any {
+		obj := map[string]any{
+			"type":           "acme",
+			"tag":            tag,
+			"domain":         domains,
+			"email":          a.Email,
+			"provider":       provider,
+			"data_directory": dataDir,
+		}
+		if a.KeyType != "" {
+			obj["key_type"] = a.KeyType
+		}
+		if a.DisableHTTPChallenge {
+			obj["disable_http_challenge"] = true
+		}
+		if a.DisableTLSALPNChallenge {
+			obj["disable_tls_alpn_challenge"] = true
+		}
+		if a.AlternativeHTTPPort > 0 {
+			obj["alternative_http_port"] = a.AlternativeHTTPPort
+		}
+		if a.AlternativeTLSPort > 0 {
+			obj["alternative_tls_port"] = a.AlternativeTLSPort
+		}
+		if tag == domain.TLSProviderTag && len(a.DNS01Challenge) > 0 {
+			obj["dns01_challenge"] = a.DNS01Challenge
+		}
+		return obj
 	}
-	if a.KeyType != "" {
-		obj["key_type"] = a.KeyType
+	out := make([]any, 0, 2)
+	if len(dnsNames) > 0 {
+		out = append(out, mk(domain.TLSProviderTag, dnsNames, prov))
 	}
-	if a.DisableHTTPChallenge {
-		obj["disable_http_challenge"] = true
+	if len(ips) > 0 {
+		out = append(out, mk(domain.TLSProviderTagIP, ips, "letsencrypt"))
 	}
-	if a.DisableTLSALPNChallenge {
-		obj["disable_tls_alpn_challenge"] = true
-	}
-	if a.AlternativeHTTPPort > 0 {
-		obj["alternative_http_port"] = a.AlternativeHTTPPort
-	}
-	if a.AlternativeTLSPort > 0 {
-		obj["alternative_tls_port"] = a.AlternativeTLSPort
-	}
-	if len(a.DNS01Challenge) > 0 {
-		obj["dns01_challenge"] = a.DNS01Challenge
-	}
-	return []any{obj}
+	return out
 }
 
 func activeSetsNeedTLS(sets []domain.InboundSet) bool {
@@ -1296,7 +1317,7 @@ func attachInboundTLS(ib map[string]any, in Input, serverName string, useCertMan
 	delete(tlsObj, "certificate")
 	delete(tlsObj, "key")
 	if useCertManager {
-		tlsObj["certificate_provider"] = domain.TLSProviderTag
+		tlsObj["certificate_provider"] = domain.CertificateProviderTagForSNI(serverName)
 	} else {
 		tlsObj["certificate_path"] = in.TLSCertPath
 		tlsObj["key_path"] = in.TLSKeyPath

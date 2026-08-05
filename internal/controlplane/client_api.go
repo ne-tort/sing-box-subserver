@@ -35,6 +35,7 @@ func (s *Service) handleClientBootstrap(w http.ResponseWriter, r *http.Request) 
 			"subscription": "path token only (sub_token); Bearer not accepted",
 		},
 		"needs_tls_insecure": true, // management TLS is self-signed by default; Reality outbounds do not use insecure
+		"cert_manager":       s.clientBootstrapCertManager(),
 		"subscription": map[string]any{
 			"shape":            "raw_fragment",
 			"envelope":         "raw JSON {outbounds, meta?, endpoints?} — not {ok,data}",

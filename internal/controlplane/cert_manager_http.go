@@ -4,10 +4,12 @@ package controlplane
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/freedns"
 )
 
 func (s *Service) ensureCertManager() (domain.CertManager, error) {
@@ -62,6 +64,9 @@ func (s *Service) certManagerStatusPayload(cm domain.CertManager) map[string]any
 		"dns01_challenge":            redactDNS01(cm.DNS01Challenge),
 		"enabled":                    cm.Enabled(),
 	}
+	fd, _ := freedns.LoadState(s.cfg.DataDir)
+	out["free_dns"] = fd.Payload()
+
 	domainStatuses := make([]any, 0, len(domains))
 	allReady := true
 	var found, missing []string
@@ -75,7 +80,11 @@ func (s *Service) certManagerStatusPayload(cm domain.CertManager) map[string]any
 			missSet[strings.ToLower(m)] = struct{}{}
 		}
 		for _, d := range domains {
-			st := map[string]any{"domain": d, "status": "ready"}
+			st := map[string]any{
+				"domain": d,
+				"status": "ready",
+				"source": fd.SourceOf(d),
+			}
 			if _, ok := missSet[strings.ToLower(d)]; ok {
 				st["status"] = "missing"
 				st["reason"] = "certificate not found in acme data directory"
@@ -83,13 +92,24 @@ func (s *Service) certManagerStatusPayload(cm domain.CertManager) map[string]any
 			}
 			domainStatuses = append(domainStatuses, st)
 		}
+	} else {
+		// Expose free-DNS hosts even before they are merged into cert-manager.
+		for _, d := range fd.Hosts() {
+			domainStatuses = append(domainStatuses, map[string]any{
+				"domain": d,
+				"status": "pending_acme",
+				"source": fd.SourceOf(d),
+			})
+		}
 	}
 	ms := map[string]any{
 		"ready":                    allReady || !cm.Enabled(),
+		"partial_ready":            len(found) > 0,
 		"acme_data_directory":      acmeDataDirectory(s.cfg.DataDir),
 		"certificate_provider_tag": domain.TLSProviderTag,
 		"acme_certs_found":         found,
 		"acme_certs_missing":       missing,
+		"issued_domains":           listIssuedAcmeDomains(s.cfg.DataDir),
 	}
 	if cm.Enabled() && !allReady {
 		ms["ready_reason"] = "waiting for ACME obtain (certmagic)"
@@ -156,4 +176,28 @@ func (s *Service) handleCertManagerPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	okJSON(w, 200, s.certManagerStatusPayload(cm))
+}
+
+func (s *Service) handleCertManagerEnsureFreeDNS(w http.ResponseWriter, r *http.Request) {
+	wait := acmeObtainWaitDefault
+	if q := strings.TrimSpace(r.URL.Query().Get("wait_sec")); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			if n < 0 {
+				n = 0
+			}
+			if n > 600 {
+				n = 600
+			}
+			wait = time.Duration(n) * time.Second
+		}
+	}
+	result := s.ensureAutoFreeDNSAndACME(r.Context(), wait)
+	cm, err := s.ensureCertManager()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	payload := s.certManagerStatusPayload(cm)
+	payload["ensure"] = result
+	okJSON(w, 200, payload)
 }

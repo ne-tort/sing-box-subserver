@@ -188,8 +188,58 @@ func TestBuildCertManagerIPProviders(t *testing.T) {
 	if tlsObj["server_name"] != "203.0.113.10" {
 		t.Fatalf("server_name=%v", tlsObj["server_name"])
 	}
-	if tlsObj["certificate_provider"] != domain.TLSProviderTag {
+	if tlsObj["certificate_provider"] != domain.TLSProviderTagIP {
 		t.Fatalf("certificate_provider=%v", tlsObj["certificate_provider"])
+	}
+	if p["tag"] != domain.TLSProviderTagIP {
+		t.Fatalf("provider tag=%v", p["tag"])
+	}
+}
+
+func TestBuildCertManagerMixedDNSAndIP(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	cm := domain.CertManager{
+		Email: "admin@example.com",
+		Domains: []string{"203.0.113.10", "vpn.example.com"},
+		Provider: "letsencrypt",
+	}
+	set := trojanSet()
+	set.Presets = nil
+	set.Bindings = []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSNI: "vpn.example.com"}}}
+	raw, err := Build(Input{
+		PublicHost:  "203.0.113.10",
+		DataDir:     "/data",
+		TLS:         domain.DefaultSelfSigned("203.0.113.10"),
+		TLSCertPath: "/data/c.pem",
+		TLSKeyPath:  "/data/k.pem",
+		CertManager: cm,
+		ActiveSets:  []domain.InboundSet{set},
+		Users:       []domain.User{trojanUser(now)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	provs, _ := doc["certificate_providers"].([]any)
+	if len(provs) != 2 {
+		t.Fatalf("providers=%d %#v", len(provs), provs)
+	}
+	tags := map[string]bool{}
+	for _, raw := range provs {
+		p, _ := raw.(map[string]any)
+		tags[fmt.Sprint(p["tag"])] = true
+	}
+	if !tags[domain.TLSProviderTag] || !tags[domain.TLSProviderTagIP] {
+		t.Fatalf("tags=%v", tags)
+	}
+	ib := firstInbound(t, doc)
+	tlsObj, _ := ib["tls"].(map[string]any)
+	if tlsObj["certificate_provider"] != domain.TLSProviderTag {
+		t.Fatalf("dns inbound provider=%v", tlsObj["certificate_provider"])
 	}
 }
 

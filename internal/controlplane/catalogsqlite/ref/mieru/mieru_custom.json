@@ -137,13 +137,25 @@
       "widget": "text",
       "ui_group": "core",
       "ui_order": 44,
+      "pattern": "^[A-Za-z0-9+/=]*$",
       "title": {
         "en": "Traffic pattern",
         "ru": "Паттерн трафика"
       },
       "description": {
-        "en": "Mieru traffic shaping profile name.",
-        "ru": "Имя профиля shaping трафика Mieru."
+        "en": "Optional base64 of mieru TrafficPattern protobuf (from `mieru export traffic-pattern`). Empty = library default.",
+        "ru": "Опциональный base64 protobuf TrafficPattern (из `mieru export traffic-pattern`). Пусто — дефолт библиотеки."
+      },
+      "help": {
+        "summary": {
+          "en": "Not a profile name. Paste a base64 blob exported by mieru/mita, or leave empty.",
+          "ru": "Это не имя профиля. Вставьте base64 из export mieru/mita или оставьте пустым."
+        },
+        "input_hint": {
+          "en": "Base64 string or empty",
+          "ru": "Base64 или пусто"
+        },
+        "format": "GgQIARAK"
       },
       "default": ""
     }

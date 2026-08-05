@@ -51,3 +51,18 @@ func TestWgHubLegacyForwardMigratesToPeerRelay(t *testing.T) {
 		t.Fatalf("%+v", h)
 	}
 }
+
+func TestWgHubPathologyProfile(t *testing.T) {
+	t.Parallel()
+	h := WgHub{Profile: "pathology", Subnet: "10.8.0.0/24", AWG2: map[string]any{"jc": 1}}
+	h.Normalize()
+	if h.Profile != WgProfilePathology || h.AWG2 != nil || h.MTU != 1280 {
+		t.Fatalf("%+v", h)
+	}
+	if err := h.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !IsWgProfile("wg_pathology") || !NeedsObfuscation(WgProfilePathology) {
+		t.Fatal("pathology not recognized")
+	}
+}

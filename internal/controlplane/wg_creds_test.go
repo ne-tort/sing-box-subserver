@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/wgawg"
 )
 
 func TestEnsureWgUserCreds_StickyAndMirror(t *testing.T) {
@@ -93,7 +94,7 @@ func TestEnsureWgUserCreds_DuplicateIndexRejected(t *testing.T) {
 
 func mustPriv(t *testing.T) string {
 	t.Helper()
-	p, err := randomCurve25519Private()
+	p, err := domain.RandomWireGuardPrivate()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,26 +104,34 @@ func mustPriv(t *testing.T) string {
 func TestEnsureWgHubSecrets_ClearAWGOnPlain(t *testing.T) {
 	t.Parallel()
 	s := &Service{}
-	h := domain.WgHub{Profile: domain.WgProfilePlain, AWG: map[string]any{"jc": 1}}
+	h := domain.WgHub{Profile: domain.WgProfilePlain, AWG2: map[string]any{"jc": 1}}
 	changed, err := s.ensureWgHubSecrets(&h, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !changed || h.AWG != nil {
-		t.Fatalf("changed=%v awg=%v", changed, h.AWG)
+	if !changed || h.AWG2 != nil {
+		t.Fatalf("changed=%v awg2=%v", changed, h.AWG2)
 	}
 	h2 := domain.WgHub{Profile: domain.WgProfileAWG2}
 	_, err = s.ensureWgHubSecrets(&h2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h2.AWG["ip"] == nil || h2.AWG["jc"] == nil {
-		t.Fatalf("%v", h2.AWG)
+	if h2.AWG2["ip"] == nil || h2.AWG2["jc"] == nil {
+		t.Fatalf("%v", h2.AWG2)
 	}
-	if _, ok := h2.AWG["id"]; ok {
+	if _, ok := h2.AWG2["id"]; ok {
 		t.Fatal("id must come from client Reality SNI, not Bundle")
 	}
-	if _, ok := h2.AWG["header_protection_key"]; ok {
+	if _, ok := h2.AWG2["header_protection_key"]; ok {
 		t.Fatal("awg2 must not have HP")
+	}
+	h3 := domain.WgHub{Profile: domain.WgProfilePathology}
+	_, err = s.ensureWgHubSecrets(&h3, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !wgawg.PathologyHasKey(h3.Pathology) || h3.Pathology["auto"] != true {
+		t.Fatalf("%v", h3.Pathology)
 	}
 }

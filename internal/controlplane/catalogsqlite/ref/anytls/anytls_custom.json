@@ -173,19 +173,23 @@
       "default": "stop=8\n0=30-30\n1=100-400\n2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000\n3=9-9,500-1000\n4=500-1000\n5=500-1000\n6=500-1000\n7=500-1000",
       "ui_group": "advanced",
       "ui_order": 20,
+      "ui_actions": [
+        "randomize"
+      ],
       "title": {
         "en": "Padding scheme",
-        "ru": "Padding scheme"
+        "ru": "Схема padding"
       },
       "description": {
-        "en": "Inbound padding_scheme profile (one rule per line).",
-        "ru": "Профиль padding_scheme на inbound (по правилу на строку)."
+        "en": "Inbound padding_scheme (one rule per line).",
+        "ru": "padding_scheme на inbound (по правилу на строку)."
       },
       "help": {
         "summary": {
-          "en": "Full AnyTLS padding_scheme. One rule per line (or semicolon-separated). Applied to the inbound; leave empty to keep the template default.",
-          "ru": "Полный padding_scheme AnyTLS. По правилу на строку (или через ;). На inbound; пусто — шаблон по умолчанию."
-        }
+          "en": "AnyTLS padding scheme: required stop=N, then 0..(N-1)=size ranges (min-max) and optional c markers. Empty keeps the template default.",
+          "ru": "Схема AnyTLS: обязательный stop=N, затем 0..(N-1)=диапазоны размеров (min-max) и опциональные метки c. Пусто — шаблон по умолчанию."
+        },
+        "format": "stop=8\\n0=30-30\\n1=100-400\\n2=400-500,c,500-1000"
       }
     }
   }

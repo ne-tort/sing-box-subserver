@@ -64,7 +64,7 @@ func TestClientNetFragmentsAgainstAPI(t *testing.T) {
 			{"tag":"dns-local","type":"local"},
 			{"tag":"dns-bootstrap-0","type":"udp","server":"1.1.1.1","domain_resolver":"dns-local"},
 			{"tag":"dns-bootstrap","type":"group","servers":["dns-bootstrap-0"],"mode":"stable","error_ttl":"2m"},
-			{"tag":"dns-remote-0","type":"local","domain_resolver":"dns-bootstrap","detour":"direct"},
+			{"tag":"dns-remote-0","type":"local","domain_resolver":"dns-bootstrap"},
 			{"tag":"dns-remote","type":"group","servers":["dns-remote-0"],"mode":"stable","error_ttl":"2m"},
 			{"tag":"dns-fake","type":"fakeip","inet4_range":"198.18.0.0/15","inet6_range":"fc00::/18"}
 		],

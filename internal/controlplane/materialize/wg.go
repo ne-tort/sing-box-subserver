@@ -18,6 +18,7 @@ func wgCredKeys() []string {
 		domain.WgProfilePlain, "wireguard", "plain",
 		domain.WgProfileAWG2, "awg2", "amnezia-wg2",
 		domain.WgProfileAWG3, "awg3", "amnezia-wg3",
+		domain.WgProfilePathology, "pathology",
 	}
 }
 
@@ -92,11 +93,15 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 	if err := hub.Validate(); err != nil {
 		return nil, err
 	}
-	if hub.Profile != domain.WgProfilePlain && len(hub.AWG) == 0 {
-		return nil, fmt.Errorf("cp_invalid_wg: profile %s requires generated AWG/masquerade params", hub.Profile)
+	if domain.NeedsObfuscation(hub.Profile) && !hub.HasObfuscation() {
+		return nil, fmt.Errorf("cp_invalid_wg: profile %s requires generated AWG/pathology params", hub.Profile)
 	}
 	if strings.TrimSpace(hub.HubPrivateKey) == "" {
 		return nil, fmt.Errorf("cp_invalid_wg: hub_private_key required")
+	}
+	hubPriv, err := domain.NormalizeWireGuardKey(hub.HubPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("cp_invalid_wg: hub_private_key: %w", err)
 	}
 	p, err := presets.Get(hub.Profile)
 	if err != nil {
@@ -117,7 +122,7 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 	}
 	ep["subnet"] = hub.Subnet
 	ep["address"] = []any{hubAddr}
-	ep["private_key"] = hub.HubPrivateKey
+	ep["private_key"] = hubPriv
 	ep["listen_port"] = hub.ListenPort
 	if hub.MTU > 0 {
 		ep["mtu"] = hub.MTU
@@ -147,18 +152,10 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 		delete(ep, "peer_relay")
 	}
 
-	if hub.Profile != domain.WgProfilePlain {
-		wgawg.ApplyToEndpoint(ep, hub.AWG, hub.Profile)
+	if domain.NeedsObfuscation(hub.Profile) {
+		wgawg.ApplyToEndpoint(ep, hub.ActiveObfuscation(), hub.Profile)
 	} else {
-		for _, k := range []string{
-			"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4",
-			"id", "ip", "ib", "i1", "i2", "i3", "i4", "i5",
-			"header_protection_key", "content_padding_addition",
-			"rekey_after_time", "rekey_timeout", "reject_after_time",
-			"keepalive_timeout", "max_handshake_attempts",
-		} {
-			delete(ep, k)
-		}
+		wgawg.ClearEndpointObfuscation(ep)
 	}
 
 	exitID := strings.TrimSpace(hub.ExitUserID)
@@ -176,6 +173,11 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 		if pub == "" {
 			continue
 		}
+		normPub, err := domain.NormalizeWireGuardKey(pub)
+		if err != nil {
+			return nil, fmt.Errorf("user %q public_key: %w", u.Name, err)
+		}
+		pub = normPub
 		if other, ok := seenPub[pub]; ok {
 			return nil, fmt.Errorf("cp_wg_peer_conflict: users %q and %q share public_key", other, u.Name)
 		}
@@ -223,8 +225,8 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	if !hub.Enabled {
 		return nil, nil
 	}
-	if hub.Profile != domain.WgProfilePlain && len(hub.AWG) == 0 {
-		return nil, fmt.Errorf("cp_invalid_wg: profile %s requires AWG params for subscription", hub.Profile)
+	if domain.NeedsObfuscation(hub.Profile) && !hub.HasObfuscation() {
+		return nil, fmt.Errorf("cp_invalid_wg: profile %s requires AWG/pathology params for subscription", hub.Profile)
 	}
 	creds := wgCredsFromUser(user, hub.Profile)
 	if creds == nil {
@@ -233,6 +235,14 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	priv, _ := creds["private_key"].(string)
 	if strings.TrimSpace(priv) == "" {
 		return nil, nil
+	}
+	priv, err := domain.NormalizeWireGuardKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("private_key: %w", err)
+	}
+	hubPub, err := domain.NormalizeWireGuardKey(hub.HubPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("hub_public_key: %w", err)
 	}
 	idx, ok := hostIndexFromCred(creds["wg_host_index"])
 	if !ok {
@@ -270,7 +280,7 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 			map[string]any{
 				"address":                       server,
 				"port":                          hub.ListenPort,
-				"public_key":                    hub.HubPublicKey,
+				"public_key":                    hubPub,
 				"persistent_keepalive_interval": clientKA,
 			},
 		},
@@ -282,8 +292,10 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	} else if hub.InternetAllowed() {
 		ep["use_exit_node"] = true
 	}
-	if hub.Profile != domain.WgProfilePlain {
-		wgawg.ApplyToEndpoint(ep, hub.AWG, hub.Profile)
+	if domain.NeedsObfuscation(hub.Profile) {
+		wgawg.ApplyToEndpoint(ep, hub.ActiveObfuscation(), hub.Profile)
+	} else {
+		wgawg.ClearEndpointObfuscation(ep)
 	}
 	return ep, nil
 }

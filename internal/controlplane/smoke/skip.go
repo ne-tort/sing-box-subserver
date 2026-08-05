@@ -27,8 +27,6 @@ func SkipReason(preset string) string {
 		return "carrier_no_hairpin"
 	case "cloudflared":
 		return "cloudflared_no_hairpin"
-	case "wireguard":
-		return "wireguard_endpoint"
 	}
 	return ""
 }

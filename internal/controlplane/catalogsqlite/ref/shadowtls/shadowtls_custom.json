@@ -138,8 +138,8 @@
       }
     },
     "fingerprint": {
-      "type": "string",
-      "widget": "text",
+      "type": "enum",
+      "widget": "select",
       "default": "chrome",
       "ui_group": "tls",
       "ui_order": 23,
@@ -150,7 +150,16 @@
       "description": {
         "en": "Outbound uTLS fingerprint.",
         "ru": "uTLS fingerprint на outbound."
-      }
+      },
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ]
     }
   },
   "param_fields": [

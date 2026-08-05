@@ -43,7 +43,12 @@ func (s *Service) handleSmoke(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	if len(sets) == 0 {
+	hub, err := s.store.LoadWgHub()
+	if err != nil {
+		failJSON(w, 500, "internal", err.Error())
+		return
+	}
+	if len(sets) == 0 && !hub.Enabled {
 		failJSON(w, 422, "cp_no_active_set", "no active sets")
 		return
 	}
@@ -52,6 +57,43 @@ func (s *Service) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
+	}
+	if hub.Enabled {
+		ensured, credsChanged, err := s.ensureWgUserCreds([]domain.User{user})
+		if err != nil {
+			failJSON(w, 500, "internal", fmt.Sprintf("wg probe creds: %v", err))
+			return
+		}
+		if len(ensured) == 1 {
+			user = ensured[0]
+		}
+		if credsChanged {
+			users, err := s.store.LoadUsers()
+			if err != nil {
+				failJSON(w, 500, "internal", err.Error())
+				return
+			}
+			for i := range users {
+				if users[i].ID == user.ID {
+					users[i] = user
+					break
+				}
+			}
+			if err := s.store.SaveUsers(users); err != nil {
+				failJSON(w, 500, "internal", err.Error())
+				return
+			}
+			if err := s.rematerialize(r.Context()); err != nil {
+				failJSON(w, 500, "internal", fmt.Sprintf("rematerialize after wg probe creds: %v", err))
+				return
+			}
+			// Reload hub after rematerialize (keys may have been filled).
+			hub, err = s.store.LoadWgHub()
+			if err != nil {
+				failJSON(w, 500, "internal", err.Error())
+				return
+			}
+		}
 	}
 	profile, err := s.ensureTLSProfile(false)
 	if err != nil {
@@ -68,9 +110,9 @@ func (s *Service) handleSmoke(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	hub, err := s.store.LoadWgHub()
+	sets, _, err = s.ensurePeerSecretsAll(sets)
 	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
+		failJSON(w, 500, "internal", fmt.Sprintf("peer secrets: %v", err))
 		return
 	}
 	var hubPtr *domain.WgHub

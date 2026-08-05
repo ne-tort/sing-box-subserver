@@ -950,8 +950,18 @@ func TestRemainingProtocolsCutoverSeed(t *testing.T) {
 			t.Fatalf("expected owns %s", proto)
 		}
 	}
-	if !Owns("wg") || !Owns("wireguard") || !Owns("wg_awg2") || !Owns("wg_awg3") || !Owns("wg_custom") {
+	if !Owns("wg") || !Owns("wireguard") || !Owns("wg_awg2") || !Owns("wg_awg3") || !Owns("wg_pathology") || !Owns("wg_custom") {
 		t.Fatal("wireguard owns")
+	}
+	pathology, err := GetInvariant("wg_pathology")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pathology.ParamMeta["persona"].Type != "enum" || len(pathology.ParamMeta["persona"].Enum) < 5 {
+		t.Fatalf("pathology persona meta=%#v", pathology.ParamMeta["persona"])
+	}
+	if pathology.ParamMeta["pad_budget"].Min == nil || *pathology.ParamMeta["pad_budget"].Max != 255 {
+		t.Fatalf("pad_budget meta=%#v", pathology.ParamMeta["pad_budget"])
 	}
 	awg2, err := GetInvariant("wg_awg2")
 	if err != nil {

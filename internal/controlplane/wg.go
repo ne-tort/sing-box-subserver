@@ -16,6 +16,7 @@ func wgCredKeys() []string {
 		domain.WgProfilePlain, "wireguard", "plain",
 		domain.WgProfileAWG2, "awg2", "amnezia-wg2",
 		domain.WgProfileAWG3, "awg3", "amnezia-wg3",
+		domain.WgProfilePathology, "pathology",
 	}
 }
 
@@ -57,46 +58,83 @@ func allocWgHostIndex(used map[int]string) (int, error) {
 	return 0, fmt.Errorf("cp_wg_pool_exhausted: no free host index in %d-%d", domain.WgMinHostIndex, domain.WgMaxHostIndex)
 }
 
-// ensureWgHubSecrets fills hub keys + AWG bundle when needed.
-func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceAWG bool) (bool, error) {
+// ensureWgHubSecrets fills hub keys + obfuscation bundle when needed.
+func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceObf bool) (bool, error) {
 	if h == nil {
 		return false, nil
 	}
 	h.Normalize()
 	changed := false
 	if strings.TrimSpace(h.HubPrivateKey) == "" {
-		priv, err := randomCurve25519Private()
+		priv, err := domain.RandomWireGuardPrivate()
 		if err != nil {
 			return false, err
 		}
 		h.HubPrivateKey = priv
+		h.HubPublicKey = ""
 		changed = true
+	} else {
+		norm, err := domain.NormalizeWireGuardKey(h.HubPrivateKey)
+		if err != nil {
+			return false, fmt.Errorf("hub_private_key: %w", err)
+		}
+		if norm != h.HubPrivateKey {
+			h.HubPrivateKey = norm
+			h.HubPublicKey = "" // re-derive in StdEncoding
+			changed = true
+		}
 	}
 	if strings.TrimSpace(h.HubPublicKey) == "" {
-		pub, err := curve25519PublicFromPrivate(h.HubPrivateKey)
+		pub, err := domain.WireGuardPublicFromPrivate(h.HubPrivateKey)
 		if err != nil {
 			return false, err
 		}
 		h.HubPublicKey = pub
 		changed = true
-	}
-	needAWG := h.Profile == domain.WgProfileAWG2 || h.Profile == domain.WgProfileAWG3
-	if needAWG && (forceAWG || len(h.AWG) == 0) {
-		var bundle map[string]any
-		var err error
-		if forceAWG && len(h.AWG) > 0 {
-			bundle, err = wgawg.BundleFromExisting(h.Profile == domain.WgProfileAWG3, h.AWG, "")
-		} else {
-			bundle, err = wgawg.Bundle(h.Profile == domain.WgProfileAWG3)
-		}
+	} else {
+		norm, err := domain.NormalizeWireGuardKey(h.HubPublicKey)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("hub_public_key: %w", err)
 		}
-		h.AWG = bundle
-		changed = true
+		if norm != h.HubPublicKey {
+			h.HubPublicKey = norm
+			changed = true
+		}
 	}
-	if !needAWG && len(h.AWG) > 0 {
-		h.AWG = nil
+	needObf := domain.NeedsObfuscation(h.Profile)
+	if !needObf {
+		if h.AWG2 != nil || h.AWG3 != nil || h.Pathology != nil {
+			h.ClearObfuscation()
+			changed = true
+		}
+		return changed, nil
+	}
+	prev := h.ActiveObfuscation()
+	missing := !h.HasObfuscation()
+	if !(forceObf || missing) {
+		return changed, nil
+	}
+	var bundle map[string]any
+	var err error
+	switch h.Profile {
+	case domain.WgProfilePathology:
+		// PUT never rotates Pathology key; regenerate-obfuscation does.
+		if missing {
+			bundle, err = wgawg.BundlePathology()
+		}
+	case domain.WgProfileAWG2, domain.WgProfileAWG3:
+		awg3 := h.Profile == domain.WgProfileAWG3
+		if forceObf && len(prev) > 0 {
+			bundle, err = wgawg.BundleFromExisting(awg3, prev, "")
+		} else {
+			bundle, err = wgawg.Bundle(awg3)
+		}
+	}
+	if err != nil {
+		return false, err
+	}
+	if bundle != nil {
+		h.SetActiveObfuscation(bundle)
 		changed = true
 	}
 	return changed, nil
@@ -154,25 +192,54 @@ func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, e
 		}
 		uc := false
 		if credFieldEmpty(creds["private_key"]) {
-			priv, err := randomCurve25519Private()
+			priv, err := domain.RandomWireGuardPrivate()
 			if err != nil {
 				return nil, false, err
 			}
 			creds["private_key"] = priv
+			creds["public_key"] = ""
 			uc = true
+		} else if priv, ok := creds["private_key"].(string); ok {
+			norm, err := domain.NormalizeWireGuardKey(priv)
+			if err != nil {
+				return nil, false, fmt.Errorf("user %q private_key: %w", u.Name, err)
+			}
+			if norm != priv {
+				creds["private_key"] = norm
+				creds["public_key"] = ""
+				uc = true
+			}
 		}
-		pubChanged, err := ensureCurve25519Public(creds, true)
-		if err != nil {
-			return nil, false, err
-		}
-		if pubChanged {
+		if credFieldEmpty(creds["public_key"]) {
+			priv, _ := creds["private_key"].(string)
+			pub, err := domain.WireGuardPublicFromPrivate(priv)
+			if err != nil {
+				return nil, false, err
+			}
+			creds["public_key"] = pub
 			uc = true
+		} else if pub, ok := creds["public_key"].(string); ok {
+			norm, err := domain.NormalizeWireGuardKey(pub)
+			if err != nil {
+				// Stale/placeholder public_key — re-derive from private.
+				priv, _ := creds["private_key"].(string)
+				derived, derr := domain.WireGuardPublicFromPrivate(priv)
+				if derr != nil {
+					return nil, false, fmt.Errorf("user %q public_key: %w", u.Name, err)
+				}
+				creds["public_key"] = derived
+				uc = true
+			} else if norm != pub {
+				creds["public_key"] = norm
+				uc = true
+			}
 		}
 		idx, hasIdx := hostIndexFromAny(creds["wg_host_index"])
 		if !hasIdx {
-			idx, err = allocWgHostIndex(used)
-			if err != nil {
-				return nil, false, err
+			var allocErr error
+			idx, allocErr = allocWgHostIndex(used)
+			if allocErr != nil {
+				return nil, false, allocErr
 			}
 			creds["wg_host_index"] = idx
 			used[idx] = u.Name

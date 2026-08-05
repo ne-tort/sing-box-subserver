@@ -58,7 +58,16 @@
     "down_mbps",
     "jc",
     "jmin",
-    "jmax"
+    "jmax",
+    "auto",
+    "key",
+    "persona",
+    "pad_budget",
+    "preset",
+    "intensity",
+    "frame",
+    "cipher",
+    "dialog"
   ],
   "param_meta": {
     "mtu": {
@@ -142,6 +151,8 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 10,
+      "min": 0,
+      "max": 128,
       "title": {
         "en": "AWG jc",
         "ru": "AWG jc"
@@ -156,6 +167,8 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 11,
+      "min": 0,
+      "max": 2048,
       "title": {
         "en": "AWG jmin",
         "ru": "AWG jmin"
@@ -176,6 +189,8 @@
       "widget": "text",
       "ui_group": "awg",
       "ui_order": 12,
+      "min": 0,
+      "max": 4096,
       "title": {
         "en": "AWG jmax",
         "ru": "AWG jmax"
@@ -189,6 +204,354 @@
           "en": "bytes (AWG junk max)",
           "ru": "байты (AWG junk max)"
         }
+      }
+    },
+    "auto": {
+      "type": "bool",
+      "widget": "toggle",
+      "ui_group": "pathology",
+      "ui_order": 10,
+      "default": "true",
+      "title": {
+        "en": "Auto",
+        "ru": "Авто"
+      },
+      "description": {
+        "en": "When true, Pathology runtime fills unset morph knobs.",
+        "ru": "При true runtime Pathology сам заполняет незаданные knobs."
+      }
+    },
+    "key": {
+      "type": "string",
+      "widget": "text",
+      "ui_group": "pathology",
+      "ui_order": 11,
+      "pattern": "^[A-Za-z0-9+/=_-]+$",
+      "title": {
+        "en": "Pathology key",
+        "ru": "Ключ Pathology"
+      },
+      "description": {
+        "en": "Shared base64 Pathology PSK; peers must match.",
+        "ru": "Общий base64 PSK Pathology; должен совпадать у пиров."
+      }
+    },
+    "persona": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "balanced",
+        "quic-h3",
+        "dns-idle",
+        "webrtc",
+        "tls13",
+        "random",
+        "custom"
+      ],
+      "enum_labels": {
+        "balanced": {
+          "en": "Balanced",
+          "ru": "Balanced"
+        },
+        "quic-h3": {
+          "en": "QUIC/H3",
+          "ru": "QUIC/H3"
+        },
+        "dns-idle": {
+          "en": "DNS idle",
+          "ru": "DNS idle"
+        },
+        "webrtc": {
+          "en": "WebRTC",
+          "ru": "WebRTC"
+        },
+        "tls13": {
+          "en": "TLS 1.3",
+          "ru": "TLS 1.3"
+        },
+        "random": {
+          "en": "Random",
+          "ru": "Random"
+        },
+        "custom": {
+          "en": "Custom",
+          "ru": "Custom"
+        }
+      },
+      "default": "balanced",
+      "ui_group": "pathology",
+      "ui_order": 20,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Persona",
+        "ru": "Persona"
+      },
+      "description": {
+        "en": "Pad-shape persona for Pathology morpher.",
+        "ru": "Persona формы pad для morpher Pathology."
+      }
+    },
+    "pad_budget": {
+      "type": "int",
+      "widget": "text",
+      "min": 0,
+      "max": 255,
+      "default": "64",
+      "ui_group": "pathology",
+      "ui_order": 21,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Pad budget",
+        "ru": "Pad budget"
+      },
+      "description": {
+        "en": "Max clear-pad bytes (0-255).",
+        "ru": "Макс. clear-pad байт (0-255)."
+      }
+    },
+    "preset": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "safe",
+        "balanced",
+        "fast",
+        "custom"
+      ],
+      "enum_labels": {
+        "safe": {
+          "en": "Safe",
+          "ru": "Safe"
+        },
+        "balanced": {
+          "en": "Balanced",
+          "ru": "Balanced"
+        },
+        "fast": {
+          "en": "Fast",
+          "ru": "Fast"
+        },
+        "custom": {
+          "en": "Custom",
+          "ru": "Custom"
+        }
+      },
+      "default": "balanced",
+      "ui_group": "pathology",
+      "ui_order": 22,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Preset",
+        "ru": "Пресет"
+      },
+      "description": {
+        "en": "Named Pathology tier (fills unset cipher/frame).",
+        "ru": "Именованный tier Pathology (заполняет cipher/frame)."
+      }
+    },
+    "intensity": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "enum_labels": {
+        "1": {
+          "en": "1",
+          "ru": "1"
+        },
+        "2": {
+          "en": "2",
+          "ru": "2"
+        },
+        "3": {
+          "en": "3",
+          "ru": "3"
+        },
+        "4": {
+          "en": "4",
+          "ru": "4"
+        },
+        "5": {
+          "en": "5",
+          "ru": "5"
+        }
+      },
+      "default": "3",
+      "ui_group": "pathology",
+      "ui_order": 23,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Intensity",
+        "ru": "Интенсивность"
+      },
+      "description": {
+        "en": "Morph aggressiveness 1-5.",
+        "ru": "Агрессивность morph 1-5."
+      }
+    },
+    "frame": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "none",
+        "auto",
+        "tls13",
+        "quic-short",
+        "dns",
+        "stun"
+      ],
+      "enum_labels": {
+        "none": {
+          "en": "None",
+          "ru": "Нет"
+        },
+        "auto": {
+          "en": "Auto",
+          "ru": "Авто"
+        },
+        "tls13": {
+          "en": "TLS 1.3",
+          "ru": "TLS 1.3"
+        },
+        "quic-short": {
+          "en": "QUIC short",
+          "ru": "QUIC short"
+        },
+        "dns": {
+          "en": "DNS",
+          "ru": "DNS"
+        },
+        "stun": {
+          "en": "STUN",
+          "ru": "STUN"
+        }
+      },
+      "default": "tls13",
+      "ui_group": "pathology",
+      "ui_order": 24,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Frame",
+        "ru": "Frame"
+      },
+      "description": {
+        "en": "Outer frame prefix for Pathology envelopes.",
+        "ru": "Внешний frame-префикс для Pathology envelopes."
+      }
+    },
+    "cipher": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "aead",
+        "stream",
+        "none"
+      ],
+      "enum_labels": {
+        "aead": {
+          "en": "AEAD",
+          "ru": "AEAD"
+        },
+        "stream": {
+          "en": "Stream",
+          "ru": "Stream"
+        },
+        "none": {
+          "en": "None",
+          "ru": "Нет"
+        }
+      },
+      "default": "stream",
+      "ui_group": "pathology",
+      "ui_order": 25,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Cipher",
+        "ru": "Cipher"
+      },
+      "description": {
+        "en": "Seal-side Pathology cipher choice.",
+        "ru": "Cipher Pathology на стороне Seal."
+      }
+    },
+    "dialog": {
+      "type": "enum",
+      "widget": "select",
+      "enum": [
+        "auto",
+        "off",
+        "dns",
+        "stun"
+      ],
+      "enum_labels": {
+        "auto": {
+          "en": "Auto",
+          "ru": "Авто"
+        },
+        "off": {
+          "en": "Off",
+          "ru": "Выкл"
+        },
+        "dns": {
+          "en": "DNS",
+          "ru": "DNS"
+        },
+        "stun": {
+          "en": "STUN",
+          "ru": "STUN"
+        }
+      },
+      "default": "auto",
+      "ui_group": "pathology",
+      "ui_order": 26,
+      "visible_when": [
+        {
+          "key": "auto",
+          "equals": "false"
+        }
+      ],
+      "title": {
+        "en": "Dialog",
+        "ru": "Dialog"
+      },
+      "description": {
+        "en": "Start dialog script (DNS/STUN polite exchange).",
+        "ru": "Стартовый dialog (вежливый DNS/STUN обмен)."
       }
     }
   },
@@ -219,6 +582,7 @@
   },
   "client_notes": {
     "endpoint": "Managed exclusively via PUT /v1/controlplane/wg (singleton hub). Rejected by sets/from-presets.",
-    "awg": "Profile wg_awg2|wg_awg3 auto-generates AWG bundle; jc/jmin/jmax in PUT body override after generate. i1–i5 are stripped by materialize."
+    "awg": "Profile wg_awg2|wg_awg3 auto-generates AWG bundle; jc/jmin/jmax in PUT body override after generate. i1–i5 are stripped by materialize.",
+    "pathology": "Nested pathology knobs (auto/key/persona/…) live under ui_group pathology; used by wg_pathology hub profile."
   }
 }

@@ -34,7 +34,9 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 		ctx = context.Background()
 	}
 	sets := filterSets(in.Sets, req.Sets, req.Presets)
-	if len(sets) == 0 {
+	hubEnabled := in.Hub != nil && in.Hub.Enabled
+	includeWg := hubEnabled && wgSmokeRequested(req)
+	if len(sets) == 0 && !includeWg {
 		return nil, fmt.Errorf("cp_no_active_set: no matching active sets")
 	}
 
@@ -85,7 +87,7 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 		return nil, err
 	}
 
-	targets := make([]probeTarget, 0, len(outbounds))
+	targets := make([]probeTarget, 0, len(outbounds)+1)
 	bestPrimary := map[string]probeTarget{}
 	bestScore := map[string]int{}
 	for _, raw := range outbounds {
@@ -126,6 +128,72 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 			targets = append(targets, pt)
 		}
 	}
+
+	if includeWg {
+		eps, err := ExtractEndpoints(subBody)
+		if err != nil {
+			return nil, err
+		}
+		eps, err = CloneOutbounds(eps)
+		if err != nil {
+			return nil, err
+		}
+		if err := RewriteServersToHairpin(eps); err != nil {
+			return nil, err
+		}
+		var wgOb map[string]any
+		for _, raw := range eps {
+			ob, ok := raw.(map[string]any)
+			if !ok || !isWireGuardType(ob) {
+				continue
+			}
+			tag := outboundTag(ob)
+			if tag == WgSmokeTag || strings.HasPrefix(tag, "cp-wg") {
+				wgOb = ob
+				break
+			}
+			if wgOb == nil {
+				wgOb = ob
+			}
+		}
+		if wgOb == nil {
+			results = append(results, Result{
+				Set: WgSmokeSetName, Preset: WgSmokePreset,
+				InboundTag: "cp-wg",
+				Skipped:    true, SkipReason: "wg_no_client_endpoint",
+			})
+		} else {
+			tag := outboundTag(wgOb)
+			if tag == "" || tag == "<nil>" {
+				tag = WgSmokeTag
+				wgOb["tag"] = tag
+			}
+			targets = append(targets, probeTarget{
+				Outbound: wgOb,
+				Result: Result{
+					Set:         WgSmokeSetName,
+					Preset:      WgSmokePreset,
+					InboundTag:  "cp-wg",
+					OutboundTag: tag,
+				},
+			})
+		}
+	}
+
+	// Drop outbounds that cannot start (e.g. DERP with empty peer_public_key) so one
+	// bad preset does not abort the whole ephemeral smoke box.
+	usable := make([]probeTarget, 0, len(targets))
+	for _, t := range targets {
+		if reason := outboundStartBlockReason(t.Outbound); reason != "" {
+			r := t.Result
+			r.OK = false
+			r.Error = reason
+			results = append(results, r)
+			continue
+		}
+		usable = append(usable, t)
+	}
+	targets = usable
 
 	if len(targets) == 0 {
 		return &Report{DurationMs: time.Since(start).Milliseconds(), Results: results}, nil
@@ -202,6 +270,16 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 	}, nil
 }
 
+func wgSmokeRequested(req Request) bool {
+	if len(req.Presets) > 0 && !presetMatchesFilter(req.Presets, WgSmokePreset) {
+		return false
+	}
+	if len(req.Sets) == 0 {
+		return true
+	}
+	return strIn(req.Sets, WgSmokeSetName)
+}
+
 func freeTCPPort() (int, error) {
 	ln, err := net.Listen("tcp", HairpinLocalHost+":0")
 	if err != nil {
@@ -252,6 +330,7 @@ func primaryOutboundScore(preset, variant, profile string) int {
 func buildEphemeralConfig(targets []probeTarget, ports []int) ([]byte, error) {
 	inbounds := make([]any, 0, len(targets))
 	outbounds := make([]any, 0, len(targets)+1)
+	endpoints := make([]any, 0)
 	outbounds = append(outbounds, map[string]any{"type": "direct", "tag": "direct"})
 	rules := make([]any, 0, len(targets))
 
@@ -266,7 +345,12 @@ func buildEphemeralConfig(targets []probeTarget, ports []int) ([]byte, error) {
 		})
 		ob := t.Outbound
 		ob["tag"] = obTag
-		outbounds = append(outbounds, ob)
+		// WireGuard is an endpoint in sing-box-lx; dialer tag still works in route.
+		if isWireGuardType(ob) {
+			endpoints = append(endpoints, ob)
+		} else {
+			outbounds = append(outbounds, ob)
+		}
 		rules = append(rules, map[string]any{
 			"inbound":  []any{inTag},
 			"outbound": obTag,
@@ -282,7 +366,42 @@ func buildEphemeralConfig(targets []probeTarget, ports []int) ([]byte, error) {
 			"final": "direct",
 		},
 	}
+	if len(endpoints) > 0 {
+		doc["endpoints"] = endpoints
+	}
 	return json.Marshal(doc)
+}
+
+// outboundStartBlockReason returns a non-empty reason when the outbound would fail
+// box start (seen as: ephemeral box: initialize outbound[N]: peer_public_key: empty key).
+func outboundStartBlockReason(ob map[string]any) string {
+	if ob == nil {
+		return "empty outbound"
+	}
+	typ, _ := ob["type"].(string)
+	switch strings.ToLower(strings.TrimSpace(typ)) {
+	case "derp":
+		pk, _ := ob["peer_public_key"].(string)
+		if strings.TrimSpace(pk) == "" {
+			return "peer_public_key: empty key"
+		}
+		priv, _ := ob["private_key"].(string)
+		if strings.TrimSpace(priv) == "" {
+			return "private_key: empty key"
+		}
+	case "wireguard":
+		peers, _ := ob["peers"].([]any)
+		if len(peers) == 0 {
+			if pk, _ := ob["peer_public_key"].(string); strings.TrimSpace(pk) == "" {
+				return "peer_public_key: empty key"
+			}
+		}
+		priv, _ := ob["private_key"].(string)
+		if strings.TrimSpace(priv) == "" {
+			return "private_key: empty key"
+		}
+	}
+	return ""
 }
 
 func filterSets(all []domain.InboundSet, setFilter, presetFilter []string) []domain.InboundSet {

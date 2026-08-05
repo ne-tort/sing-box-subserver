@@ -249,6 +249,9 @@ func enrichFieldSchema(m map[string]any, meta domain.ParamFieldMeta, lang string
 		}
 	}
 	m["widget"] = widget
+	if len(meta.UiActions) > 0 {
+		m["ui_actions"] = append([]string{}, meta.UiActions...)
+	}
 	if len(meta.VisibleWhen) > 0 {
 		conds := make([]any, 0, len(meta.VisibleWhen))
 		for _, c := range meta.VisibleWhen {

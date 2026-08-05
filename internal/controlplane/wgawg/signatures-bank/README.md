@@ -13,7 +13,7 @@ Local copy of research / seed artefacts from
 Canonical embeds used at runtime:
 
 - Go agent: `../data/signatures.seed.json` + `../data/junk-ranges.seed.json` (`//go:embed`)
-- Flutter client stays thin: calls `POST /v1/controlplane/wg/regenerate-awg` (no local bank)
+- Flutter client stays thin: calls `POST /v1/controlplane/wg/regenerate-obfuscation` (no local bank)
 
 ## CPS format (official Amnezia / sing-box-lx)
 

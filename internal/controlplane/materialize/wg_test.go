@@ -11,6 +11,18 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/wgawg"
 )
 
+func bytes32(seed byte) []byte {
+	raw := make([]byte, 32)
+	for i := range raw {
+		raw[i] = seed
+	}
+	return raw
+}
+
+func wgTestKey(seed byte) string {
+	return domain.EncodeWireGuardKey(bytes32(seed))
+}
+
 func TestBytesPerSecToMbps(t *testing.T) {
 	t.Parallel()
 	if BytesPerSecToMbps(0) != 0 {
@@ -36,10 +48,10 @@ func TestBuildWireGuardEndpointPlainAndAWG(t *testing.T) {
 		Enabled:       true,
 		Profile:       domain.WgProfileAWG2,
 		Subnet:        "10.8.0.0/24",
-		ListenPort:    51820,
-		HubPrivateKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		HubPublicKey:  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-		AWG:           bundle,
+		ListenPort:    41641,
+		HubPrivateKey: wgTestKey(1),
+		HubPublicKey:  wgTestKey(2),
+		AWG2:          bundle,
 	}
 	user := domain.User{
 		Name: "alice", Enabled: true, CreatedAt: now,
@@ -47,8 +59,8 @@ func TestBuildWireGuardEndpointPlainAndAWG(t *testing.T) {
 		SpeedDownBytesPerSec: 250_000, // 2 Mbps
 		Creds: map[string]map[string]any{
 			"wg": {
-				"private_key":   "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
-				"public_key":    "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+				"private_key":   wgTestKey(3),
+				"public_key":    wgTestKey(4),
 				"wg_host_index": 7,
 			},
 		},
@@ -60,11 +72,15 @@ func TestBuildWireGuardEndpointPlainAndAWG(t *testing.T) {
 	if ep["type"] != "wireguard" {
 		t.Fatalf("%v", ep["type"])
 	}
-	if ep["ip"] == nil || ep["jc"] == nil {
-		t.Fatalf("awg fields missing: %#v", ep)
+	awg2, _ := ep["awg2"].(map[string]any)
+	if awg2 == nil || awg2["ip"] == nil || awg2["jc"] == nil {
+		t.Fatalf("nested awg2 missing: %#v", ep)
 	}
-	if _, ok := ep["i1"]; ok {
+	if _, ok := awg2["i1"]; ok {
 		t.Fatal("i1 must not be set")
+	}
+	if _, ok := ep["jc"]; ok {
+		t.Fatal("flat jc must not be on root")
 	}
 	peers, _ := ep["peers"].([]any)
 	if len(peers) != 1 {
@@ -103,14 +119,14 @@ func TestBuildIncludesEndpoints(t *testing.T) {
 	bundle, _ := wgawg.Bundle(true)
 	hub := domain.WgHub{
 		Enabled: true, Profile: domain.WgProfileAWG3, Subnet: "10.9.0.0/24", ListenPort: 51821,
-		HubPrivateKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		HubPublicKey:  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-		AWG:           bundle,
+		HubPrivateKey: wgTestKey(1),
+		HubPublicKey:  wgTestKey(2),
+		AWG3:          bundle,
 	}
 	user := domain.User{
 		Name: "u", Enabled: true, CreatedAt: now,
 		Creds: map[string]map[string]any{
-			"wg": {"private_key": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC", "public_key": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD", "wg_host_index": float64(2)},
+			"wg": {"private_key": wgTestKey(3), "public_key": wgTestKey(4), "wg_host_index": float64(2)},
 		},
 	}
 	raw, err := Build(Input{
@@ -132,7 +148,8 @@ func TestBuildIncludesEndpoints(t *testing.T) {
 		t.Fatalf("endpoints=%d", len(eps))
 	}
 	ep := eps[0].(map[string]any)
-	if ep["header_protection_key"] == nil {
+	awg3, _ := ep["awg3"].(map[string]any)
+	if awg3 == nil || awg3["header_protection_key"] == nil {
 		t.Fatal("awg3 HP missing")
 	}
 	addrs, _ := ep["address"].([]any)
@@ -148,13 +165,17 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPublicKey: wgTestKey(2),
 	}
 	user := domain.User{
 		Name: "u", Enabled: true, CreatedAt: now,
 		Creds: map[string]map[string]any{
-			"wg": {"private_key": "PRIV", "public_key": "PUB", "wg_host_index": 3},
+			"wg": {
+				"private_key":   wgTestKey(3),
+				"public_key":    wgTestKey(4),
+				"wg_host_index": 3,
+			},
 		},
 	}
 	body, err := RenderSubscription(user, nil, "edge.example", domain.DefaultSelfSigned("edge.example"), domain.CertManager{}, SubscriptionFilters{}, nil, &hub)
@@ -177,7 +198,7 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 	}
 	peers := ep["peers"].([]any)
 	p0 := peers[0].(map[string]any)
-	if p0["public_key"] != "HUBPUB" || p0["port"] != float64(51820) {
+	if p0["public_key"] != wgTestKey(2) || p0["port"] != float64(41641) {
 		t.Fatalf("%v", p0)
 	}
 	if _, ok := p0["allowed_ips"]; ok {

@@ -18,14 +18,16 @@ type ConfigFragments struct {
 	Outbounds json.RawMessage `json:"outbounds,omitempty"`
 }
 
-// DefaultDNSFragment is the minimal dns block.
+// DefaultDNSFragment is the minimal dns block compatible with client route
+// fragments (default_domain_resolver → dns-bootstrap) and without detour:direct
+// (empty direct outbound is rejected by sing-box).
 func DefaultDNSFragment() json.RawMessage {
-	return json.RawMessage(`{"servers":[{"tag":"local","type":"local"}]}`)
+	return json.RawMessage(`{"independent_cache":false,"disable_expire":true,"final":"dns-remote","servers":[{"tag":"dns-local","type":"local"},{"tag":"dns-bootstrap-0","type":"udp","server":"1.1.1.1","domain_resolver":"dns-local"},{"tag":"dns-bootstrap","type":"group","servers":["dns-bootstrap-0"],"mode":"stable","error_ttl":"2m"},{"tag":"dns-remote-0","type":"local"},{"tag":"dns-remote","type":"group","servers":["dns-remote-0"],"mode":"stable","error_ttl":"2m"}]}`)
 }
 
 // DefaultRouteFragment is the minimal route block.
 func DefaultRouteFragment() json.RawMessage {
-	return json.RawMessage(`{"final":"direct","rules":[]}`)
+	return json.RawMessage(`{"final":"direct","rules":[],"default_domain_resolver":{"server":"dns-bootstrap"}}`)
 }
 
 // DefaultOutboundsFragment is the minimal outbounds array.

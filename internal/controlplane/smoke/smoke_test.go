@@ -16,6 +16,13 @@ func TestRewriteServersToHairpin(t *testing.T) {
 			"server": "203.0.113.10",
 			"tls":    map[string]any{"server_name": "vpn.example.com", "insecure": true},
 		},
+		map[string]any{
+			"tag":  "cp-wg",
+			"type": "wireguard",
+			"peers": []any{
+				map[string]any{"address": "203.0.113.10", "port": 51820, "public_key": "x"},
+			},
+		},
 	}
 	if err := RewriteServersToHairpin(obs); err != nil {
 		t.Fatal(err)
@@ -27,6 +34,39 @@ func TestRewriteServersToHairpin(t *testing.T) {
 	tls := ob["tls"].(map[string]any)
 	if tls["server_name"] != "vpn.example.com" {
 		t.Fatalf("server_name rewritten: %v", tls["server_name"])
+	}
+	wg := obs[1].(map[string]any)
+	peer := wg["peers"].([]any)[0].(map[string]any)
+	if peer["address"] != HairpinLocalHost {
+		t.Fatalf("wg peer address=%v", peer["address"])
+	}
+}
+
+func TestExtractEndpoints(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{"outbounds":[{"tag":"a"}],"endpoints":[{"tag":"cp-wg","type":"wireguard"}]}`)
+	eps, err := ExtractEndpoints(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(eps) != 1 {
+		t.Fatalf("endpoints=%d", len(eps))
+	}
+	if outboundTag(eps[0].(map[string]any)) != "cp-wg" {
+		t.Fatalf("tag=%v", eps[0])
+	}
+}
+
+func TestWgSmokeRequested(t *testing.T) {
+	t.Parallel()
+	if !wgSmokeRequested(Request{}) {
+		t.Fatal("empty sets filter should include wg")
+	}
+	if !wgSmokeRequested(Request{Sets: []string{"wg", "v1"}}) {
+		t.Fatal("explicit wg should include")
+	}
+	if wgSmokeRequested(Request{Sets: []string{"v1"}}) {
+		t.Fatal("v1-only filter must exclude wg")
 	}
 }
 

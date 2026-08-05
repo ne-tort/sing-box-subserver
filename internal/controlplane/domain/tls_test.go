@@ -34,8 +34,22 @@ func TestCertManagerValidate(t *testing.T) {
 		t.Fatal("email required")
 	}
 	mix := CertManager{Email: "a@b.c", Domains: []string{"1.2.3.4", "vpn.example.com"}}
-	if err := mix.Validate(); err == nil {
-		t.Fatal("mix ip/dns")
+	if err := mix.Validate(); err != nil {
+		t.Fatalf("mix ip+dns should be allowed (dual providers): %v", err)
+	}
+	dns, ips := mix.SplitDomains()
+	if len(dns) != 1 || len(ips) != 1 {
+		t.Fatalf("split=%v %v", dns, ips)
+	}
+	if CertificateProviderTagForSNI("1.2.3.4") != TLSProviderTagIP {
+		t.Fatal("ip tag")
+	}
+	if CertificateProviderTagForSNI("vpn.example.com") != TLSProviderTag {
+		t.Fatal("dns tag")
+	}
+	twoIP := CertManager{Email: "a@b.c", Domains: []string{"1.2.3.4", "5.6.7.8"}}
+	if err := twoIP.Validate(); err == nil {
+		t.Fatal("two IPs rejected")
 	}
 }
 

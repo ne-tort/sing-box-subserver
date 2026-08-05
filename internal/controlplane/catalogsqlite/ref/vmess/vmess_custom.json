@@ -131,8 +131,8 @@
       }
     },
     "fingerprint": {
-      "type": "string",
-      "widget": "text",
+      "type": "enum",
+      "widget": "select",
       "default": "chrome",
       "ui_group": "tls",
       "ui_order": 20,
@@ -149,7 +149,16 @@
       "description": {
         "en": "Client uTLS fingerprint (ignored for QUIC transport).",
         "ru": "uTLS fingerprint клиента (не для QUIC)."
-      }
+      },
+      "enum": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "ios",
+        "android",
+        "random"
+      ]
     },
     "transport_path": {
       "type": "string",

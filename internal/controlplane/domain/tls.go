@@ -8,8 +8,13 @@ import (
 	"strings"
 )
 
-// ProviderTag is the certificate_providers tag emitted for cert-manager ACME.
+// ProviderTag is the certificate_providers tag emitted for cert-manager ACME (DNS names).
 const TLSProviderTag = "cp-tls"
+
+// TLSProviderTagIP is a separate ACME provider for bare-IP shortlived certs.
+// Let's Encrypt shortlived profile cannot share a ManageAsync set with DNS names,
+// so IP and DNS are split into two providers when both are configured.
+const TLSProviderTagIP = "cp-tls-ip"
 
 // BindingParamSNI is the optional inbound param that selects an ACME domain
 // from CertManager (non-Reality TLS inbounds only).
@@ -141,32 +146,33 @@ func (c CertManager) Validate() error {
 		return fmt.Errorf("cert_manager.email required when domains are set")
 	}
 	hasIP := false
-	hasName := false
+	ipCount := 0
+	hasDNS := false
 	for _, d := range domains {
 		if net.ParseIP(d) != nil {
 			hasIP = true
+			ipCount++
 		} else {
-			hasName = true
+			hasDNS = true
 		}
-	}
-	if hasIP && hasName {
-		return fmt.Errorf("cert_manager.domains must not mix IP and DNS names")
 	}
 	prov := c.Provider
 	if prov == "" {
 		prov = "letsencrypt"
 	}
+	// IP + DNS may coexist: materialize emits cp-tls (DNS) and cp-tls-ip (shortlived).
 	if hasIP {
-		if len(domains) != 1 {
-			return fmt.Errorf("cert_manager IP mode requires exactly one IP in domains")
+		if ipCount != 1 {
+			return fmt.Errorf("cert_manager allows at most one IP in domains")
 		}
 		if prov != "letsencrypt" {
 			return fmt.Errorf("cert_manager IP only supports letsencrypt, got %q", prov)
 		}
 		if len(c.DNS01Challenge) > 0 {
-			return fmt.Errorf("dns01_challenge not allowed for IP domains")
+			return fmt.Errorf("dns01_challenge not allowed when IP domains are set")
 		}
-	} else {
+	}
+	if hasDNS {
 		if prov != "letsencrypt" && prov != "zerossl" && !strings.HasPrefix(prov, "https://") {
 			return fmt.Errorf("unsupported acme provider %q", prov)
 		}
@@ -181,6 +187,26 @@ func (c CertManager) Validate() error {
 		return fmt.Errorf("all ACME challenge methods disabled")
 	}
 	return nil
+}
+
+// SplitDomains separates bare IPs from DNS names (for dual ACME providers).
+func (c CertManager) SplitDomains() (dnsNames, ips []string) {
+	for _, d := range c.NormalizedDomains() {
+		if net.ParseIP(d) != nil {
+			ips = append(ips, d)
+		} else {
+			dnsNames = append(dnsNames, d)
+		}
+	}
+	return dnsNames, ips
+}
+
+// CertificateProviderTagForSNI returns cp-tls or cp-tls-ip for an ACME SNI.
+func CertificateProviderTagForSNI(sni string) string {
+	if net.ParseIP(strings.TrimSpace(sni)) != nil {
+		return TLSProviderTagIP
+	}
+	return TLSProviderTag
 }
 
 // NeedsTLSReportsInsecure tells subscription outbounds to set tls.insecure

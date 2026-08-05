@@ -54,9 +54,9 @@ For demux, setting `params.sni` also sets `demux_sni = sni` so ClientHello match
 
 Constraints:
 
-- Domains must not mix DNS names and IPs.
-- IP mode: exactly one IP, provider `letsencrypt` only, no `dns01_challenge`.
-- Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge`.
+- At most one bare IP in `domains` (LE shortlived); DNS names may coexist — materialize emits `cp-tls` + `cp-tls-ip`.
+- IP mode provider is `letsencrypt` only; no `dns01_challenge` when an IP is present.
+- Challenges: HTTP-01 / TLS-ALPN-01 (default) or optional `dns01_challenge` on the DNS provider.
 
 ### Management HTTPS
 

@@ -74,7 +74,7 @@ func TestCatalogLoads(t *testing.T) {
 		"shadowquic_uot", "trusttunnel_auto", "vless_quic_tls", "vless_hysteria_tls", "hy2_masquerade_file", "carrier_jitsi_sei_shared",
 		"hy2_gecko", "hy2_gecko_compact", "hy2_gecko_masquerade",
 		"vless_httpupgrade_reality", "vmess_httpupgrade_reality", "trojan_httpupgrade_reality",
-		"wg", "wg_awg2", "wg_awg3",
+		"wg", "wg_awg2", "wg_awg3", "wg_pathology",
 	} {
 		if _, err := Get(want); err != nil {
 			t.Fatalf("missing canonical %s: %v", want, err)

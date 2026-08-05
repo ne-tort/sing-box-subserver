@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "tag": "wg_pathology",
+  "protocol": "wireguard",
+  "aliases": [
+    "pathology"
+  ],
+  "short_name": "Pathology",
+  "status": "stable",
+  "i18n": {
+    "ru": {
+      "title": "Pathology",
+      "description": "Внешний morpher Pathology (enabled/key/auto). Вложенный блок pathology; взаимоисключаем с awg2/awg3."
+    },
+    "en": {
+      "title": "Pathology",
+      "description": "Pathology outer morpher (enabled/key/auto). Nested pathology block; mutex with awg2/awg3."
+    }
+  },
+  "traits": [
+    "udp",
+    "endpoint",
+    "wireguard",
+    "pathology"
+  ],
+  "demux_hints": {
+    "network": [
+      "udp"
+    ],
+    "looks_like": "raw_udp",
+    "compatible_with_demux": false
+  },
+  "scores": {
+    "dpi": 9,
+    "speed": 8,
+    "mobile": 7,
+    "setup": 5
+  },
+  "cred_fields": [
+    "private_key",
+    "public_key",
+    "wg_host_index"
+  ],
+  "cred_generators": {
+    "private_key": "curve25519",
+    "wg_host_index": "wg_host_index"
+  },
+  "requirements": {
+    "build_tag": "with_awg"
+  },
+  "client_notes": {
+    "pathology": "Hub generates pathology.key + auto=true by default. Enum/range schema for nested knobs lives on wg_custom (ui_group=pathology) and is exposed via GET presets/wg_pathology params_schema.",
+    "mtu": "hub field: body.mtu on PUT /v1/controlplane/wg"
+  },
+  "optional_param_fields": [
+    "mtu",
+    "auto",
+    "key",
+    "persona",
+    "pad_budget",
+    "preset",
+    "intensity",
+    "frame",
+    "cipher",
+    "dialog"
+  ],
+  "param_meta": {
+    "mtu": {
+      "type": "uint16",
+      "widget": "text",
+      "ui_group": "core",
+      "ui_order": 1,
+      "title": {
+        "en": "MTU",
+        "ru": "MTU"
+      },
+      "description": {
+        "en": "Hub endpoint MTU via PUT /wg body.mtu.",
+        "ru": "MTU hub-endpoint через PUT /wg body.mtu."
+      },
+      "default": "1280"
+    }
+  },
+  "param_values": {
+    "mtu": "1280",
+    "auto": "true",
+    "preset": "balanced",
+    "intensity": "3",
+    "pad_budget": "64"
+  }
+}

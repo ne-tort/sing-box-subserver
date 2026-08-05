@@ -63,6 +63,29 @@ func TestValidateSetAllowsTCPAndUDPSamePort(t *testing.T) {
 	}
 }
 
+func TestValidateDemuxUniqueSNITLS(t *testing.T) {
+	set := domain.InboundSet{
+		Name:       "dg",
+		Listen:     "::",
+		ListenPort: 443,
+		DemuxTemplate: map[string]any{
+			"network": []any{"tcp", "udp"},
+			"rules":   []any{},
+		},
+		Bindings: []domain.SetBinding{
+			{Preset: "trojan-tcp", Params: map[string]string{"demux_sni": "a.example.com", "sni": "a.example.com"}},
+			{Preset: "anytls", Params: map[string]string{"demux_sni": "a.example.com", "sni": "a.example.com"}},
+		},
+	}
+	if err := validateDemuxUniqueSNITLS(set); err == nil {
+		t.Fatal("expected duplicate demux SNI to fail")
+	}
+	set.Bindings[1].Params = map[string]string{"demux_sni": "b.example.com", "sni": "b.example.com"}
+	if err := validateDemuxUniqueSNITLS(set); err != nil {
+		t.Fatalf("unique SNIs should pass: %v", err)
+	}
+}
+
 func TestDemuxOccupiesBothNetworks(t *testing.T) {
 	set := domain.InboundSet{
 		Name: "dg", ListenPort: 443,

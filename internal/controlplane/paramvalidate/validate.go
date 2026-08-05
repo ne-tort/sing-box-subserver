@@ -80,6 +80,20 @@ func Validate(pp domain.ProtocolPreset, params map[string]string) error {
 			if _, err := strconv.ParseBool(raw); err != nil && raw != "0" && raw != "1" {
 				return &Error{Code: "cp_param_type", Field: f, Message: "expected bool"}
 			}
+		case "int", "integer", "number":
+			n, err := strconv.ParseFloat(raw, 64)
+			if err != nil {
+				return &Error{Code: "cp_param_type", Field: f, Message: "expected number"}
+			}
+			if typ != "number" && n != float64(int64(n)) {
+				return &Error{Code: "cp_param_type", Field: f, Message: "expected integer"}
+			}
+			if meta.Min != nil && n < *meta.Min {
+				return &Error{Code: "cp_param_range", Field: f, Message: "below min"}
+			}
+			if meta.Max != nil && n > *meta.Max {
+				return &Error{Code: "cp_param_range", Field: f, Message: "above max"}
+			}
 		case "uint16":
 			n, err := strconv.ParseUint(raw, 10, 16)
 			if err != nil {

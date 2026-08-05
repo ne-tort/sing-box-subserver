@@ -248,10 +248,85 @@ type BundleOpts struct {
 	PreserveID string
 }
 
-// Bundle merges device (+ optional AWG3) into a flat map for hub.AWG.
+// Bundle merges device (+ optional AWG3) into a flat map stored under hub.awg2/awg3.
 // Default is sugar masquerade (ip/ib); id is left empty for the client SNI pool.
 func Bundle(awg3 bool) (map[string]any, error) {
 	return BundleWith(BundleOpts{AWG3: awg3, Mode: "sugar"})
+}
+
+// BundlePathology returns a Pathology outer-morph block (enabled + random key + auto).
+func BundlePathology() (map[string]any, error) {
+	return BundlePathologyWith(true)
+}
+
+// BundlePathologyWith builds a Pathology block. When auto is false, fills a
+// compatible minimal advanced set (persona/pad_budget/preset/intensity/frame/cipher/dialog).
+func BundlePathologyWith(auto bool) (map[string]any, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	out := map[string]any{
+		"enabled": true,
+		"key":     base64.StdEncoding.EncodeToString(key),
+		"auto":    auto,
+	}
+	if !auto {
+		// Values must match sing-box-lx pathology normalize allowlists.
+		personas := []string{"balanced", "quic-h3", "dns-idle", "webrtc", "tls13", "random"}
+		presets := []string{"safe", "balanced", "fast", "custom"}
+		frames := []string{"none", "auto", "tls13", "quic-short", "dns", "stun"}
+		ciphers := []string{"aead", "stream", "none"}
+		dialogs := []string{"auto", "off", "dns", "stun"}
+		out["persona"] = personas[rnd(0, len(personas)-1)]
+		out["pad_budget"] = rnd(32, 96)
+		out["preset"] = presets[rnd(0, len(presets)-1)]
+		out["intensity"] = rnd(1, 5)
+		out["frame"] = frames[rnd(0, len(frames)-1)]
+		out["cipher"] = ciphers[rnd(0, len(ciphers)-1)]
+		out["dialog"] = dialogs[rnd(0, len(dialogs)-1)]
+	}
+	return out, nil
+}
+
+// PathologyAuto reads the auto flag from an existing pathology map (default true).
+func PathologyAuto(existing map[string]any) bool {
+	if existing == nil {
+		return true
+	}
+	switch v := existing["auto"].(type) {
+	case bool:
+		return v
+	case string:
+		s := strings.ToLower(strings.TrimSpace(v))
+		if s == "false" || s == "0" || s == "no" {
+			return false
+		}
+		if s == "true" || s == "1" || s == "yes" {
+			return true
+		}
+	}
+	return true
+}
+
+// RegeneratePathology replaces the PSK (and advanced knobs when auto=false),
+// preserving the existing auto flag (default true).
+func RegeneratePathology(existing map[string]any) (map[string]any, error) {
+	return BundlePathologyWith(PathologyAuto(existing))
+}
+
+// RotatePathologyKey is kept as an alias of RegeneratePathology.
+func RotatePathologyKey(existing map[string]any) (map[string]any, error) {
+	return RegeneratePathology(existing)
+}
+
+// PathologyHasKey reports whether pathology map carries a non-empty key.
+func PathologyHasKey(m map[string]any) bool {
+	if m == nil {
+		return false
+	}
+	s := strings.TrimSpace(fmt.Sprint(m["key"]))
+	return s != "" && s != "<nil>"
 }
 
 // BundleManual generates junk + bank-based i1–i5 (no id/ip/ib).
@@ -370,13 +445,53 @@ func BundleFromExisting(awg3 bool, prev map[string]any, modeOverride string) (ma
 	})
 }
 
-// ApplyToEndpoint copies AWG map onto a wireguard endpoint object.
-// Masquerade sugar (id/ip/ib) and explicit CPS (i1–i5) are mutually exclusive:
-// if any iN is set, sugar is omitted; otherwise sugar is applied and iN cleared.
-func ApplyToEndpoint(ep map[string]any, awg map[string]any, profile string) {
-	if ep == nil || len(awg) == 0 {
+// ClearEndpointObfuscation removes nested and legacy flat obfuscation keys from an endpoint.
+func ClearEndpointObfuscation(ep map[string]any) {
+	if ep == nil {
 		return
 	}
+	delete(ep, "awg2")
+	delete(ep, "awg3")
+	delete(ep, "pathology")
+	for _, k := range []string{
+		"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4",
+		"id", "ip", "ib", "i1", "i2", "i3", "i4", "i5",
+		"header_protection_key", "content_padding_addition",
+		"rekey_after_time", "rekey_timeout", "reject_after_time",
+		"keepalive_timeout", "max_handshake_attempts",
+	} {
+		delete(ep, k)
+	}
+}
+
+// ApplyToEndpoint writes the obfuscation block as a nested awg2/awg3/pathology object.
+// Masquerade sugar (id/ip/ib) and explicit CPS (i1–i5) are mutually exclusive inside the block.
+func ApplyToEndpoint(ep map[string]any, block map[string]any, profile string) {
+	if ep == nil {
+		return
+	}
+	ClearEndpointObfuscation(ep)
+	if len(block) == 0 {
+		return
+	}
+	switch profile {
+	case "wg_pathology", "pathology":
+		nested := map[string]any{}
+		for k, v := range block {
+			nested[k] = v
+		}
+		if _, ok := nested["enabled"]; !ok {
+			nested["enabled"] = true
+		}
+		ep["pathology"] = nested
+		return
+	case "wg_awg2", "awg2", "wg_awg3", "awg3":
+		// continue
+	default:
+		return
+	}
+
+	nested := map[string]any{}
 	keys := []string{"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"}
 	if profile == "wg_awg3" || profile == "awg3" {
 		keys = append(keys,
@@ -386,36 +501,36 @@ func ApplyToEndpoint(ep map[string]any, awg map[string]any, profile string) {
 		)
 	}
 	for _, k := range keys {
-		if v, ok := awg[k]; ok {
-			ep[k] = v
+		if v, ok := block[k]; ok {
+			nested[k] = v
 		}
 	}
 	manualCPS := false
 	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
-		if v, ok := awg[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
+		if v, ok := block[k]; ok && strings.TrimSpace(fmt.Sprint(v)) != "" {
 			manualCPS = true
 			break
 		}
 	}
 	if manualCPS {
 		for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
-			if v, ok := awg[k]; ok {
-				ep[k] = v
-			} else {
-				delete(ep, k)
+			if v, ok := block[k]; ok {
+				nested[k] = v
 			}
 		}
+	} else {
 		for _, k := range []string{"id", "ip", "ib"} {
-			delete(ep, k)
-		}
-		return
-	}
-	for _, k := range []string{"id", "ip", "ib"} {
-		if v, ok := awg[k]; ok {
-			ep[k] = v
+			if v, ok := block[k]; ok {
+				nested[k] = v
+			}
 		}
 	}
-	for _, k := range []string{"i1", "i2", "i3", "i4", "i5"} {
-		delete(ep, k)
+	if sp, ok := block["signature_protocol"]; ok && manualCPS {
+		nested["signature_protocol"] = sp
+	}
+	if profile == "wg_awg3" || profile == "awg3" {
+		ep["awg3"] = nested
+	} else {
+		ep["awg2"] = nested
 	}
 }

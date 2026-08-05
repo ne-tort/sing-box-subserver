@@ -12,13 +12,21 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/wgawg"
 )
 
-func sampleUser(name string, index int, pub string) domain.User {
+func wgKey(seed byte) string {
+	raw := make([]byte, 32)
+	for i := range raw {
+		raw[i] = seed
+	}
+	return domain.EncodeWireGuardKey(raw)
+}
+
+func sampleUser(name string, index int, pubSeed byte) domain.User {
 	return domain.User{
 		ID: "id-" + name, Name: name, Enabled: true, CreatedAt: time.Now().UTC(),
 		Creds: map[string]map[string]any{
 			"wg": {
-				"private_key":   "PRIV-" + name,
-				"public_key":    pub,
+				"private_key":   wgKey(pubSeed + 100),
+				"public_key":    wgKey(pubSeed),
 				"wg_host_index": index,
 			},
 		},
@@ -28,15 +36,15 @@ func sampleUser(name string, index int, pub string) domain.User {
 func TestScenario_PlainNoAWGFields(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
-		AWG: map[string]any{"jc": 4, "id": "leak.example"}, // leftover should be stripped
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
+		AWG2: map[string]any{"jc": 4, "id": "leak.example"}, // leftover should be stripped
 	}
-	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, "PUBA")}, "edge")
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, 99)}, "edge")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"jc", "id", "ip", "ib", "header_protection_key", "i1"} {
+	for _, k := range []string{"jc", "id", "ip", "ib", "header_protection_key", "i1", "awg2", "awg3", "pathology"} {
 		if _, ok := ep[k]; ok {
 			t.Fatalf("plain must not emit %s", k)
 		}
@@ -53,24 +61,39 @@ func TestScenario_AWG2RequiresMasqueradeNoISlots(t *testing.T) {
 		t.Fatal(err)
 	}
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB", AWG: bundle,
+		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2), AWG2: bundle,
 	}
-	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, "PUBA")}, "edge")
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, 99)}, "edge")
 	if err != nil {
 		t.Fatal(err)
 	}
+	awg2, _ := ep["awg2"].(map[string]any)
+	if awg2 == nil {
+		t.Fatalf("missing nested awg2: %#v", ep)
+	}
 	for _, k := range []string{"jc", "jmin", "s1", "h1", "ip", "ib"} {
-		if ep[k] == nil || ep[k] == "" {
-			t.Fatalf("missing %s", k)
+		if awg2[k] == nil || awg2[k] == "" {
+			t.Fatalf("missing awg2.%s", k)
 		}
 	}
-	if _, ok := ep["id"]; ok {
+	if _, ok := awg2["id"]; ok {
 		t.Fatal("id must come from Reality SNI override, not Bundle")
 	}
 	for _, k := range []string{"i1", "i2", "i3", "i4", "i5", "header_protection_key"} {
+		if _, ok := awg2[k]; ok {
+			t.Fatalf("unexpected awg2.%s", k)
+		}
+	}
+	for _, k := range []string{"jc", "ip", "awg3", "pathology"} {
+		if k == "awg3" || k == "pathology" {
+			if _, ok := ep[k]; ok {
+				t.Fatalf("unexpected %s", k)
+			}
+			continue
+		}
 		if _, ok := ep[k]; ok {
-			t.Fatalf("unexpected %s", k)
+			t.Fatalf("flat %s must not be on root", k)
 		}
 	}
 }
@@ -82,23 +105,50 @@ func TestScenario_AWG3HasHPAndMasquerade(t *testing.T) {
 		t.Fatal(err)
 	}
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfileAWG3, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB", AWG: bundle,
+		Enabled: true, Profile: domain.WgProfileAWG3, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2), AWG3: bundle,
 	}
-	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, "PUBA")}, "edge")
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, 99)}, "edge")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ep["header_protection_key"] == nil || ep["ip"] == nil {
+	awg3, _ := ep["awg3"].(map[string]any)
+	if awg3 == nil || awg3["header_protection_key"] == nil || awg3["ip"] == nil {
 		t.Fatalf("%v", ep)
+	}
+	if _, ok := ep["header_protection_key"]; ok {
+		t.Fatal("HP must be nested under awg3")
+	}
+}
+
+func TestScenario_PathologyNested(t *testing.T) {
+	t.Parallel()
+	bundle, err := wgawg.BundlePathology()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := domain.WgHub{
+		Enabled: true, Profile: domain.WgProfilePathology, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2), Pathology: bundle,
+	}
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, 99)}, "edge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ep["pathology"].(map[string]any)
+	if path == nil || path["key"] == nil || path["auto"] != true {
+		t.Fatalf("%v", ep)
+	}
+	if _, ok := ep["awg2"]; ok {
+		t.Fatal("awg2 mutex")
 	}
 }
 
 func TestScenario_AWGProfileWithoutBundleFails(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	_, err := BuildWireGuardEndpoint(hub, nil, "edge")
 	if err == nil || !strings.Contains(err.Error(), "requires generated AWG") {
@@ -108,10 +158,10 @@ func TestScenario_AWGProfileWithoutBundleFails(t *testing.T) {
 
 func TestScenario_StickyIndexSurvivesSubnetChange(t *testing.T) {
 	t.Parallel()
-	u := sampleUser("a", 7, "PUBA")
+	u := sampleUser("a", 7, 99)
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	ep1, err := BuildWireGuardEndpoint(hub, []domain.User{u}, "edge")
 	if err != nil {
@@ -145,12 +195,12 @@ func TestScenario_StickyIndexSurvivesSubnetChange(t *testing.T) {
 func TestScenario_DuplicateHostIndexRejected(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	_, err := BuildWireGuardEndpoint(hub, []domain.User{
-		sampleUser("a", 5, "PUBA"),
-		sampleUser("b", 5, "PUBB"),
+		sampleUser("a", 5, 99),
+		sampleUser("b", 5, 100),
 	}, "edge")
 	if err == nil || !strings.Contains(err.Error(), "cp_wg_peer_conflict") {
 		t.Fatalf("err=%v", err)
@@ -160,12 +210,12 @@ func TestScenario_DuplicateHostIndexRejected(t *testing.T) {
 func TestScenario_DuplicatePublicKeyRejected(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	_, err := BuildWireGuardEndpoint(hub, []domain.User{
-		sampleUser("a", 2, "SAME"),
-		sampleUser("b", 3, "SAME"),
+		sampleUser("a", 2, 97),
+		sampleUser("b", 3, 97),
 	}, "edge")
 	if err == nil || !strings.Contains(err.Error(), "public_key") {
 		t.Fatalf("err=%v", err)
@@ -175,9 +225,9 @@ func TestScenario_DuplicatePublicKeyRejected(t *testing.T) {
 func TestScenario_SystemOptInAndPeerRelay(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
 		System: true, Name: "wg0", PeerRelay: true,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	ep, err := BuildWireGuardEndpoint(hub, nil, "edge")
 	if err != nil {
@@ -203,10 +253,10 @@ func TestScenario_SystemOptInAndPeerRelay(t *testing.T) {
 func TestScenario_ClientInternetAllowRoutes(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPublicKey: wgKey(2),
 	}
-	u := sampleUser("a", 3, "PUBA")
+	u := sampleUser("a", 3, 99)
 	ep, err := RenderWireGuardClientEndpoint(u, hub, "edge.example")
 	if err != nil {
 		t.Fatal(err)
@@ -238,11 +288,11 @@ func TestScenario_ClientInternetAllowRoutes(t *testing.T) {
 
 func TestScenario_ExitNodeSugar(t *testing.T) {
 	t.Parallel()
-	exit := sampleUser("exit", 4, "PUBE")
-	other := sampleUser("a", 2, "PUBA")
+	exit := sampleUser("exit", 4, 103)
+	other := sampleUser("a", 2, 99)
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 		ExitUserID: exit.ID,
 	}
 	ep, err := BuildWireGuardEndpoint(hub, []domain.User{other, exit}, "edge")
@@ -284,10 +334,10 @@ func TestScenario_ExitNodeSugar(t *testing.T) {
 func TestScenario_SpeedMapsToPeerMbps(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
-	u := sampleUser("a", 2, "PUBA")
+	u := sampleUser("a", 2, 99)
 	u.SpeedUpBytesPerSec = 125_000   // 1 Mbps
 	u.SpeedDownBytesPerSec = 1_000_000 // 8 Mbps
 	ep, err := BuildWireGuardEndpoint(hub, []domain.User{u}, "edge")
@@ -303,7 +353,7 @@ func TestScenario_SpeedMapsToPeerMbps(t *testing.T) {
 func TestScenario_DisabledHubOmitsEndpoint(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{Enabled: false, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24"}
-	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, "PUBA")}, "edge")
+	ep, err := BuildWireGuardEndpoint(hub, []domain.User{sampleUser("a", 2, 99)}, "edge")
 	if err != nil || ep != nil {
 		t.Fatalf("ep=%v err=%v", ep, err)
 	}
@@ -323,10 +373,10 @@ func TestScenario_DisabledHubOmitsEndpoint(t *testing.T) {
 func TestScenario_InvalidHostIndexRejected(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfilePlain, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
-	u := sampleUser("a", 1, "PUBA") // .1 reserved for hub
+	u := sampleUser("a", 1, 99) // .1 reserved for hub
 	_, err := BuildWireGuardEndpoint(hub, []domain.User{u}, "edge")
 	if err == nil {
 		t.Fatal("index 1 must be rejected")
@@ -336,20 +386,20 @@ func TestScenario_InvalidHostIndexRejected(t *testing.T) {
 func TestScenario_CredsUnderAwgKeyOnly(t *testing.T) {
 	t.Parallel()
 	hub := domain.WgHub{
-		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 51820,
-		HubPrivateKey: "HUBPRIV", HubPublicKey: "HUBPUB",
+		Enabled: true, Profile: domain.WgProfileAWG2, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgKey(1), HubPublicKey: wgKey(2),
 	}
 	bundle, err := wgawg.Bundle(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hub.AWG = bundle
+	hub.AWG2 = bundle
 	u := domain.User{
 		Name: "a", Enabled: true, CreatedAt: time.Now().UTC(),
 		Creds: map[string]map[string]any{
 			"wg_awg2": {
-				"private_key":   "PRIV",
-				"public_key":    "PUBA",
+				"private_key":   wgKey(50),
+				"public_key":    wgKey(51),
 				"wg_host_index": 9,
 			},
 		},

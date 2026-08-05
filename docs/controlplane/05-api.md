@@ -126,11 +126,11 @@ Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or no
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/wg` | Singleton hub status (no private key) |
-| PUT | `/v1/controlplane/wg` | Update `{enabled, profile, subnet, listen_port, peer_relay, internet_allow, exit_user_id, …}`; Claim(controlplane) when enabling |
-| POST | `/v1/controlplane/wg/regenerate-awg` | Rotate AWG2/3 + masquerade params |
+| GET | `/v1/controlplane/wg` | Singleton hub status (no private key); nested `awg2`/`awg3`/`pathology` when present |
+| PUT | `/v1/controlplane/wg` | Update `{enabled, profile, subnet, listen_port, peer_relay, internet_allow, exit_user_id, awg2?, awg3?, pathology?, …}`; Claim(controlplane) when enabling. Flat AWG keys rejected. |
+| POST | `/v1/controlplane/wg/regenerate-obfuscation` | Profile-aware rotate: AWG2/3 junk+masquerade, or Pathology key |
 
-Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade). Subnet default `10.8.0.0/24`. Sugar-only emit (`subnet` / peer `ip` / `exit_node` / `use_exit_node` / `advertise_exit_node`); no `allowed_ips` in hub or subscription JSON. Non-empty `exit_user_id` forces `peer_relay=true` and must reference a user with WG creds.
+Profiles: `wg` (plain), `wg_awg2` (nested `awg2`), `wg_awg3` (nested `awg3`), `wg_pathology` (nested `pathology`). Subnet default `10.8.0.0/24`. Sugar-only emit (`subnet` / peer `ip` / `exit_node` / `use_exit_node` / `advertise_exit_node`); no `allowed_ips` in hub or subscription JSON. Non-empty `exit_user_id` forces `peer_relay=true` and must reference a user with WG creds. Legacy flat `awg` / root `jc`/`h1`/… are not accepted.
 
 ## TLS (self-signed) + cert-manager
 
@@ -139,8 +139,11 @@ Profiles: `wg` (plain), `wg_awg2` (AWG2+masquerade), `wg_awg3` (AWG3+masquerade)
 | GET | `/v1/controlplane/tls` | Self-signed profile + `material_status` |
 | PUT | `/v1/controlplane/tls` | Upsert `{self_signed}`; validation failure → `400` `cp_invalid_tls`; ensures PEM; rematerialize if active (persist-then-422) |
 | POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM |
-| GET | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status |
+| GET | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status; includes `free_dns` summary and `domain_status[].source` (`manual` \| `sslip` \| `nip` \| `addrtools`) when auto free-DNS ran |
 | PUT | `/v1/controlplane/cert-manager` | Replace ACME settings + domains list; invalid → `400` `cp_invalid_cert_manager`; rematerialize persist-then-422 |
+| POST | `/v1/controlplane/cert-manager/ensure-free-dns` | Idempotent auto free-DNS (sslip/nip/addr.tools) + ACME ensure; query `wait_sec` (default `180`); silent skip when `public_host` is not an IP |
+
+`GET /v1/controlplane/client/bootstrap` may include `cert_manager.domains` and `free_dns` so clients can fill SNI pickers without a separate call.
 
 TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager domains). See [11-tls](11-tls.md).
 

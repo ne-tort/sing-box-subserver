@@ -26,6 +26,7 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/configstore"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/demuxgroups"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
+	"github.com/ne-tort/sing-box-subserver/internal/controlplane/freedns"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/materialize"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/paramvalidate"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
@@ -39,10 +40,10 @@ import (
 
 // Service is the embedded controlplane.
 type Service struct {
-	cfg   Deps
-	store *store.Store
-	log   *slog.Logger
-	mu    sync.Mutex
+	cfg                   Deps
+	store                 *store.Store
+	log                   *slog.Logger
+	mu                    sync.Mutex
 	realityLastValidation time.Time
 
 	mgmtTLS   mgmtCertCache
@@ -97,6 +98,9 @@ func (s *Service) Bootstrap(ctx context.Context) {
 	if s == nil {
 		return
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	p, err := s.ensureTLSProfile(false)
 	if err != nil && s.log != nil {
 		s.log.Warn("controlplane tls profile bootstrap failed", "err", err)
@@ -112,6 +116,13 @@ func (s *Service) Bootstrap(ctx context.Context) {
 		ready, _, _ := acmeCertificateReady(s.cfg.DataDir, cm.NormalizedDomains())
 		s.noteACMEReady(ready)
 	}
+	// Free-DNS + ACME: sync register/merge (no wait), then background obtain/shrink.
+	_ = s.ensureAutoFreeDNSAndACME(ctx, 0)
+	go func() {
+		bg, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+		defer cancel()
+		_ = s.ensureAutoFreeDNSAndACME(bg, acmeObtainWaitDefault)
+	}()
 	if s.cfg.Owner == nil {
 		return
 	}
@@ -142,6 +153,7 @@ func (s *Service) Run(ctx context.Context) {
 			return
 		case <-w.C:
 			s.acmeWatchdog(ctx)
+			s.freeDNSHeartbeat(ctx)
 		case <-t.C:
 			s.mu.Lock()
 			beforeElig := s.eligibilityMapLocked()
@@ -364,6 +376,7 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
 	mux.HandleFunc("GET /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerGet))
 	mux.HandleFunc("PUT /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerPut))
+	mux.HandleFunc("POST /v1/controlplane/cert-manager/ensure-free-dns", requireAuth(s.handleCertManagerEnsureFreeDNS))
 	mux.HandleFunc("GET /v1/controlplane/config", requireAuth(s.handleConfigGet))
 	mux.HandleFunc("GET /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSGet))
 	mux.HandleFunc("PUT /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSPut))
@@ -378,7 +391,7 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("PUT /v1/controlplane/reality", requireAuth(s.handleRealityPut))
 	mux.HandleFunc("GET /v1/controlplane/wg", requireAuth(s.handleWgGet))
 	mux.HandleFunc("PUT /v1/controlplane/wg", requireAuth(s.handleWgPut))
-	mux.HandleFunc("POST /v1/controlplane/wg/regenerate-awg", requireAuth(s.handleWgRegenerateAWG))
+	mux.HandleFunc("POST /v1/controlplane/wg/regenerate-obfuscation", requireAuth(s.handleWgRegenerateObfuscation))
 	mux.HandleFunc("GET /v1/sub/{token}", s.handleSub)
 }
 
@@ -780,8 +793,17 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		return err
 	}
 	if len(sets) == 0 && !hub.Enabled {
-		s.publishTrafficPolicyLocked()
-		return nil
+		// Still materialize an ACME-only box so cert-manager can obtain PEMs before
+		// any inbound set exists (bootstrap / free-DNS ensure).
+		cmEarly, cmErr := s.ensureCertManager()
+		if cmErr != nil {
+			return cmErr
+		}
+		if !cmEarly.Enabled() || strings.TrimSpace(cmEarly.Email) == "" {
+			s.publishTrafficPolicyLocked()
+			return nil
+		}
+		// Fall through with empty sets — Build emits certificate_providers only.
 	}
 	users, err := s.eligibleUsers(time.Now().UTC())
 	if err != nil {
@@ -1029,6 +1051,49 @@ func (s *Service) acmeWatchdog(ctx context.Context) {
 	_ = ctx
 }
 
+func (s *Service) freeDNSHeartbeat(ctx context.Context) {
+	ip, err := s.resolveBootstrapIPv4(ctx)
+	if err != nil {
+		return
+	}
+	st, did, err := freedns.RefreshAddrTools(ctx, freedns.Options{DataDir: s.cfg.DataDir, IPv4: ip})
+	if err != nil && s.log != nil {
+		s.log.Warn("free-dns: addr.tools heartbeat failed", "err", err)
+		return
+	}
+	if did && s.log != nil {
+		s.log.Debug("free-dns: addr.tools heartbeat", "host", st.AddrHost)
+	}
+}
+
+func (s *Service) clientBootstrapCertManager() map[string]any {
+	out := map[string]any{
+		"enabled": false,
+		"domains": []string{},
+		"ready":   true,
+	}
+	cm, err := s.ensureCertManager()
+	if err == nil {
+		domains := cm.NormalizedDomains()
+		out["enabled"] = cm.Enabled()
+		out["domains"] = domains
+		if len(domains) > 0 {
+			ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
+			out["ready"] = ready
+			out["partial_ready"] = len(found) > 0
+			out["acme_certs_found"] = found
+			out["acme_certs_missing"] = missing
+		}
+	}
+	if fd, err := freedns.LoadState(s.cfg.DataDir); err == nil {
+		out["free_dns"] = fd.Payload()
+		if hosts := fd.Hosts(); len(hosts) > 0 {
+			out["suggested_domains"] = hosts
+		}
+	}
+	return out
+}
+
 func okJSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
@@ -1043,7 +1108,7 @@ func failJSONData(w http.ResponseWriter, code int, errCode, msg string, extra ma
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	body := map[string]any{
-		"ok": false,
+		"ok":    false,
 		"error": map[string]any{"code": errCode, "message": msg},
 	}
 	for k, v := range extra {
@@ -1283,10 +1348,15 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		if domains := cm.NormalizedDomains(); len(domains) > 0 {
 			ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
 			cmPayload["ready"] = ready
+			cmPayload["partial_ready"] = len(found) > 0
 			cmPayload["acme_certs_missing"] = missing
 			cmPayload["acme_certs_found"] = found
 		} else {
 			cmPayload["ready"] = true
+			cmPayload["partial_ready"] = false
+		}
+		if fd, err := freedns.LoadState(s.cfg.DataDir); err == nil {
+			cmPayload["free_dns"] = fd.Payload()
 		}
 		out["cert_manager"] = cmPayload
 	}
@@ -1926,29 +1996,29 @@ func (s *Service) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 			title = pp.ShortName
 		}
 		item := map[string]any{
-			"name":         pp.Name,
-			"tag":          pp.Name,
-			"protocol":     pp.Protocol,
-			"title":        title,
-			"description":  pp.Description,
-			"short_name":   pp.ShortName,
-			"traits":       pp.Traits,
-			"status":       pp.Status,
-			"aliases":      pp.Aliases,
-			"scores":       pp.Scores,
-			"demux_hints":  pp.DemuxHints,
-			"cred_fields":         pp.CredFields,
-			"cred_generators":     pp.CredGenerators,
-			"peer_secret_fields":  pp.PeerSecretFields,
-			"param_fields":          pp.ParamFields,
-			"optional_param_fields": pp.OptionalParamFields,
-			"custom_preset":         pp.CustomPreset,
-			"default_user_variants": pp.DefaultUserVariants,
-			"default_client_profiles": pp.DefaultClientProfiles,
-			"available_user_variants": domain.UserVariantCatalog(pp.Protocol),
+			"name":                      pp.Name,
+			"tag":                       pp.Name,
+			"protocol":                  pp.Protocol,
+			"title":                     title,
+			"description":               pp.Description,
+			"short_name":                pp.ShortName,
+			"traits":                    pp.Traits,
+			"status":                    pp.Status,
+			"aliases":                   pp.Aliases,
+			"scores":                    pp.Scores,
+			"demux_hints":               pp.DemuxHints,
+			"cred_fields":               pp.CredFields,
+			"cred_generators":           pp.CredGenerators,
+			"peer_secret_fields":        pp.PeerSecretFields,
+			"param_fields":              pp.ParamFields,
+			"optional_param_fields":     pp.OptionalParamFields,
+			"custom_preset":             pp.CustomPreset,
+			"default_user_variants":     pp.DefaultUserVariants,
+			"default_client_profiles":   pp.DefaultClientProfiles,
+			"available_user_variants":   domain.UserVariantCatalog(pp.Protocol),
 			"available_client_profiles": domain.ClientProfileCatalog(pp.Protocol),
-			"params_schema":         buildParamsSchemaLang(pp, false, lang),
-			"optional_params":       presetOptionalParamsLang(pp, lang),
+			"params_schema":             buildParamsSchemaLang(pp, false, lang),
+			"optional_params":           presetOptionalParamsLang(pp, lang),
 		}
 		if nets := networksFromTraits(pp.Traits); len(nets) > 0 {
 			item["networks"] = nets
@@ -1983,33 +2053,33 @@ func (s *Service) handlePresetsGet(w http.ResponseWriter, r *http.Request) {
 		pDesc = ld
 	}
 	okJSONETag(w, r, map[string]any{
-		"name":                  pp.Name,
-		"tag":                   pp.Name,
-		"protocol":              pp.Protocol,
-		"title":                 title,
-		"description":           pp.Description,
-		"short_name":            pp.ShortName,
-		"traits":                pp.Traits,
-		"status":                pp.Status,
-		"aliases":               pp.Aliases,
-		"scores":                pp.Scores,
-		"demux_hints":           pp.DemuxHints,
-		"requirements":          pp.Requirements,
-		"cred_fields":           pp.CredFields,
-		"cred_generators":       pp.CredGenerators,
-		"peer_secret_fields":    pp.PeerSecretFields,
-		"param_fields":          pp.ParamFields,
-		"optional_param_fields": pp.OptionalParamFields,
-		"custom_preset":         pp.CustomPreset,
-		"default_user_variants": pp.DefaultUserVariants,
-		"default_client_profiles": pp.DefaultClientProfiles,
-		"available_user_variants": domain.UserVariantCatalog(pp.Protocol),
+		"name":                      pp.Name,
+		"tag":                       pp.Name,
+		"protocol":                  pp.Protocol,
+		"title":                     title,
+		"description":               pp.Description,
+		"short_name":                pp.ShortName,
+		"traits":                    pp.Traits,
+		"status":                    pp.Status,
+		"aliases":                   pp.Aliases,
+		"scores":                    pp.Scores,
+		"demux_hints":               pp.DemuxHints,
+		"requirements":              pp.Requirements,
+		"cred_fields":               pp.CredFields,
+		"cred_generators":           pp.CredGenerators,
+		"peer_secret_fields":        pp.PeerSecretFields,
+		"param_fields":              pp.ParamFields,
+		"optional_param_fields":     pp.OptionalParamFields,
+		"custom_preset":             pp.CustomPreset,
+		"default_user_variants":     pp.DefaultUserVariants,
+		"default_client_profiles":   pp.DefaultClientProfiles,
+		"available_user_variants":   domain.UserVariantCatalog(pp.Protocol),
 		"available_client_profiles": domain.ClientProfileCatalog(pp.Protocol),
-		"client_notes":          inv.ClientNotes,
-		"params_schema":         buildParamsSchemaLang(pp, true, lang),
-		"optional_params":       presetOptionalParamsDetailLang(pp, lang),
-		"inbound_template":      pp.InboundTemplate,
-		"outbound_template":     pp.OutboundTemplate,
+		"client_notes":              inv.ClientNotes,
+		"params_schema":             buildParamsSchemaLang(pp, true, lang),
+		"optional_params":           presetOptionalParamsDetailLang(pp, lang),
+		"inbound_template":          pp.InboundTemplate,
+		"outbound_template":         pp.OutboundTemplate,
 		"protocol_meta": map[string]any{
 			"tag":         proto.Tag,
 			"short_name":  proto.ShortName,
@@ -2031,13 +2101,13 @@ func (s *Service) handleProtocolsList(w http.ResponseWriter, r *http.Request) {
 			desc = d
 		}
 		out = append(out, map[string]any{
-			"tag":             p.Tag,
-			"short_name":      p.ShortName,
-			"status":          p.Status,
-			"title":           title,
-			"description":     desc,
-			"invariant_tags":  p.InvariantTags,
-			"singbox_type":    p.SingBoxType,
+			"tag":            p.Tag,
+			"short_name":     p.ShortName,
+			"status":         p.Status,
+			"title":          title,
+			"description":    desc,
+			"invariant_tags": p.InvariantTags,
+			"singbox_type":   p.SingBoxType,
 		})
 	}
 	okJSONETag(w, r, out)
@@ -2134,6 +2204,9 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 			return err
 		}
 	}
+	if err := validateDemuxUniqueSNITLS(set); err != nil {
+		return err
+	}
 	myNets := portNetworks(set)
 	for _, o := range others {
 		if o.Name == set.Name || o.ListenPort != set.ListenPort {
@@ -2147,6 +2220,43 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// validateDemuxUniqueSNITLS rejects duplicate demux_sni / params.sni among
+// SNI-matched PEM-TLS bindings in a demux set (ClientHello match collision).
+func validateDemuxUniqueSNITLS(set domain.InboundSet) error {
+	if !set.HasDemux() {
+		return nil
+	}
+	seen := map[string]string{}
+	for _, b := range set.EffectiveBindings() {
+		p, err := presets.Get(b.Preset)
+		if err != nil {
+			continue
+		}
+		if domain.BindingUsesReality(p, b.Params) {
+			continue
+		}
+		if !domain.BindingNeedsPEMTLS(p, b.Params) {
+			continue
+		}
+		sni := ""
+		if b.Params != nil {
+			sni = strings.TrimSpace(b.Params["demux_sni"])
+			if sni == "" {
+				sni = strings.TrimSpace(b.Params[domain.BindingParamSNI])
+			}
+		}
+		if sni == "" {
+			continue
+		}
+		sni = strings.ToLower(sni)
+		if other, ok := seen[sni]; ok {
+			return fmt.Errorf("cp_invalid_bindings: duplicate demux SNI %q for presets %q and %q", sni, other, b.Preset)
+		}
+		seen[sni] = b.Preset
 	}
 	return nil
 }
@@ -2268,15 +2378,41 @@ func (s *Service) handleSetsList(w http.ResponseWriter, r *http.Request) {
 	includeSecrets := parseBoolQuery(r, "secrets", false)
 	st, _ := s.store.LoadState()
 	last, _ := s.store.LoadSmokeLast()
-	out := make([]any, 0, len(sets))
+	out := make([]any, 0, len(sets)+1)
 	for _, set := range sets {
 		out = append(out, s.setPublicViewOptsSmoke(set, contains(st.ActiveSets, set.Name), includeSecrets, last))
+	}
+	if hub, err := s.store.LoadWgHub(); err == nil && hub.Enabled {
+		out = append(out, s.wgActiveSetView(hub, last))
 	}
 	if includeSecrets {
 		okJSON(w, 200, out)
 		return
 	}
 	okJSONETag(w, r, out)
+}
+
+// wgActiveSetView synthesizes an Active-proxies row for the singleton WG hub.
+func (s *Service) wgActiveSetView(hub domain.WgHub, last *smoke.Report) map[string]any {
+	hub.Normalize()
+	binding := map[string]any{"preset": smoke.WgSmokePreset}
+	m := map[string]any{
+		"name":        smoke.WgSmokeSetName,
+		"description": "WireGuard",
+		"listen":      "::",
+		"listen_port": hub.ListenPort,
+		"presets":     []string{smoke.WgSmokePreset},
+		"has_demux":   false,
+		"active":      true,
+		"wg_hub":      true,
+		"profile":     hub.Profile,
+	}
+	if sm := last.SmokeFor(smoke.WgSmokeSetName, smoke.WgSmokePreset); sm != nil {
+		binding["smoke"] = sm
+		m["smoke"] = sm
+	}
+	m["bindings"] = []map[string]any{binding}
+	return m
 }
 
 func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
@@ -2409,9 +2545,9 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	if active {
 		if err := s.rematerialize(r.Context()); err != nil {
 			failJSONData(w, 422, materializeErrorCode(err), err.Error(), map[string]any{
-				"set_persisted":        true,
-				"dataplane_unchanged":  false,
-				"persisted":            true,
+				"set_persisted":       true,
+				"dataplane_unchanged": false,
+				"persisted":           true,
 			})
 			return
 		}

@@ -248,6 +248,8 @@ type ParamFieldMeta struct {
 	UiOrder    int                          `json:"ui_order,omitempty"`
 	// Widget: text | select | toggle | port | path (hint for thin clients).
 	Widget string `json:"widget,omitempty"`
+	// UiActions: optional app-bar actions on the param detail page (e.g. "randomize").
+	UiActions []string `json:"ui_actions,omitempty"`
 	// VisibleWhen: all conditions must match for the field to show.
 	VisibleWhen []ParamCondition `json:"visible_when,omitempty"`
 	// Requires: other param keys that must be non-empty / true.

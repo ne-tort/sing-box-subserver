@@ -37,3 +37,21 @@ func TestACMECertificateReady(t *testing.T) {
 		t.Fatalf("full: ready=%v missing=%v found=%v", ready, missing, found)
 	}
 }
+
+func TestListIssuedAcmeDomains(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "controlplane", "acme", "certificates", "acme-v02.api.letsencrypt.org-directory")
+	for _, name := range []string{"a.example.com", "b.example.com"} {
+		d := filepath.Join(root, name)
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, name+".crt"), []byte("CERT"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := listIssuedAcmeDomains(dir)
+	if len(got) != 2 || got[0] != "a.example.com" || got[1] != "b.example.com" {
+		t.Fatalf("issued=%v", got)
+	}
+}

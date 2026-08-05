@@ -5,8 +5,51 @@ package controlplane
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
+
+// listIssuedAcmeDomains scans certmagic storage for domains that already have PEMs.
+// Useful after reinstall / domain-list shrink so clients can reuse issued leaves.
+func listIssuedAcmeDomains(dataDir string) []string {
+	root := filepath.Join(acmeDataDirectory(dataDir), "certificates")
+	issuers, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	for _, iss := range issuers {
+		if !iss.IsDir() {
+			continue
+		}
+		issuerDir := filepath.Join(root, iss.Name())
+		entries, err := os.ReadDir(issuerDir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := strings.TrimSpace(e.Name())
+			if name == "" {
+				continue
+			}
+			key := strings.ToLower(name)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			if !acmeDomainHasCert(root, name) {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // acmeCertificateReady reports whether certmagic has issued PEMs for every domain.
 // Storage layout (certmagic): {acmeDir}/certificates/<issuer>/<name>/<name>.crt

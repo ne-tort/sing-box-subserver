@@ -178,3 +178,49 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+func TestBundlePathologyAutoAndManual(t *testing.T) {
+	t.Parallel()
+	auto, err := BundlePathologyWith(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auto["auto"] != true || !PathologyHasKey(auto) {
+		t.Fatalf("%#v", auto)
+	}
+	if _, ok := auto["persona"]; ok {
+		t.Fatal("auto must omit advanced knobs")
+	}
+	manual, err := BundlePathologyWith(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manual["auto"] != false || !PathologyHasKey(manual) {
+		t.Fatalf("%#v", manual)
+	}
+	for _, k := range []string{"persona", "pad_budget", "preset", "intensity", "frame", "cipher", "dialog"} {
+		if manual[k] == nil || manual[k] == "" {
+			t.Fatalf("missing %s in %#v", k, manual)
+		}
+	}
+	persona, _ := manual["persona"].(string)
+	switch persona {
+	case "balanced", "quic-h3", "dns-idle", "webrtc", "tls13", "random":
+	default:
+		t.Fatalf("invalid persona %q", persona)
+	}
+	preset, _ := manual["preset"].(string)
+	switch preset {
+	case "safe", "balanced", "fast", "custom":
+	default:
+		t.Fatalf("invalid preset %q", preset)
+	}
+	prev := map[string]any{"auto": false, "key": "old"}
+	regen, err := RegeneratePathology(prev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if regen["auto"] != false || regen["key"] == "old" {
+		t.Fatalf("%#v", regen)
+	}
+}

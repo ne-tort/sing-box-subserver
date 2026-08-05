@@ -30,15 +30,15 @@ Persisted as `wg_hub.json`. At most one WireGuard endpoint per agent.
 | Field | Type | Notes |
 |-------|------|-------|
 | `enabled` | bool | When true, materialize emits `endpoints[]` |
-| `profile` | string | `wg` \| `wg_awg2` \| `wg_awg3` |
+| `profile` | string | `wg` \| `wg_awg2` \| `wg_awg3` \| `wg_pathology` |
 | `subnet` | string | Default `10.8.0.0/24` (must be /24); allocates sticky `wg_host_index` addresses |
 | `peer_relay` | bool | L3 peer forwarding inside WG hub (`peer_relay` in sing-box-lx); default false = hard isolation; forced true when `exit_user_id` is set |
 | `internet_allow` | bool | Client `use_exit_node` (default true); false → overlay/subnet only |
 | `exit_user_id` | string | Optional CP user id whose hub peer is sugar `exit_node` |
-| `listen_port` | uint16 | Default 51820 |
+| `listen_port` | uint16 | Default random (never 51820) |
 | `system` | bool | Opt-in; default false (omit) |
 | `hub_private_key` / `hub_public_key` | string | Auto curve25519 |
-| `awg` | object | Generated AWG2/3 + masquerade (`id`/`ip`/`ib`); no i1–i5 |
+| `awg2` / `awg3` / `pathology` | object | Nested obfuscation (mutex by profile); legacy flat `awg` ignored |
 
 Materialize uses **WG config sugar** (sing-box-lx SPEC 057): hub/client JSON has `subnet` + host `address` / peer `ip`, **no** `allowed_ips`. Creds store sticky `wg_host_index` and derived host IP `address` (not CIDR). Exit peer → `exit_node` on hub; that client's sub → `advertise_exit_node`; other internet clients → `use_exit_node`.
 
@@ -208,17 +208,31 @@ ACME domain pool; inbounds opt in via `bindings[].params.sni`.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `email` | string | Required when `domains` non-empty |
-| `domains` | string[] | DNS names **or** single IP (not mixed) |
+| `email` | string | Required when `domains` non-empty; bootstrap may fill from `controlplane.acme_email` in `agent.yaml` |
+| `domains` | string[] | DNS names and optionally **one** bare IP. Materialize splits them into `cp-tls` (DNS) + `cp-tls-ip` (LE shortlived). Auto free-DNS may add DNS names when `public_host` is an IPv4 |
 | `provider` | string | `letsencrypt` (default), `zerossl`, or URL |
 | `key_type` | string | optional |
 | challenge flags | bool/int | `disable_http_challenge`, `alternative_*_port`, `dns01_challenge` |
+
+Do not put more than one bare IP in CertManager. DNS names + one IP are allowed via dual `certificate_providers`. Reinstall preserves `controlplane/acme/`, `cert_manager.json`, and `free_dns.json` so Let's Encrypt account/PEMs are reused.
+
+### Free DNS state (`free_dns.json`)
+
+Operator-independent auto names for IP VPS:
+
+| Field | Notes |
+|-------|-------|
+| `ipv4` | Public IPv4 used for dashed hosts / addr.tools update |
+| `addr_secret` / `addr_host` | Stable dyn.addr.tools secret → sha224 host |
+| `providers.{sslip,nip,addrtools}` | `{host,status,…}`; failed providers are skipped quietly |
+
+Heartbeat refreshes addr.tools about once per day (required before ~90d expiry).
 
 ## ConfigFragments (`config_fragments.json`)
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `dns` | raw JSON object | Optional; default `{"servers":[{"tag":"local","type":"local"}]}` |
+| `dns` | raw JSON object | Optional; default includes `dns-local` / `dns-bootstrap` / `dns-remote` groups (compatible with client route `default_domain_resolver`) |
 | `route` | raw JSON object | Optional; default `{"final":"direct","rules":[]}` |
 | `outbounds` | raw JSON array | Optional; default `[{"type":"direct","tag":"direct"},{"type":"block","tag":"block"}]` |
 
