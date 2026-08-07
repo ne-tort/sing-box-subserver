@@ -10,6 +10,7 @@ import (
 
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
+	"github.com/sagernet/sing-box/common/tls/lxutls"
 )
 
 func TestParamsSchemaCarrierRoomRequired(t *testing.T) {
@@ -75,6 +76,66 @@ func TestParamsSchemaVlessNoRequiredExtras(t *testing.T) {
 		t.Fatalf("_schema_version want 2, got %#v", schema["_schema_version"])
 	}
 	// Full constructor schema may expose ACME sni (user can switch tls_mode to tls).
+}
+
+func TestParamsSchemaFingerprintUsesLxCatalog(t *testing.T) {
+	pp, err := presets.Get("vless_custom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := buildParamsSchemaLang(pp, true, "en")
+	fp, ok := schema["fingerprint"].(map[string]any)
+	if !ok {
+		t.Fatalf("fingerprint missing: %#v", schema)
+	}
+	enum := fingerprintEnumStrings(t, fp["enum"])
+	doc, err := lxutls.GetDocument()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc == nil || len(doc.Fingerprints) == 0 {
+		t.Fatal("lxutls.GetDocument empty")
+	}
+	if len(enum) != len(doc.Fingerprints) {
+		t.Fatalf("fingerprint.enum len=%d want %d (GetDocument)", len(enum), len(doc.Fingerprints))
+	}
+	for i := range enum {
+		if enum[i] != doc.Fingerprints[i] {
+			t.Fatalf("fingerprint.enum[%d]=%q want %q", i, enum[i], doc.Fingerprints[i])
+		}
+	}
+	for _, w := range []string{"chrome-1", "brave", "random", "randomized"} {
+		found := false
+		for _, v := range enum {
+			if v == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("fingerprint.enum missing %q", w)
+		}
+	}
+	if typ, _ := fp["type"].(string); typ != "enum" {
+		t.Fatalf("fingerprint.type=%v want enum", fp["type"])
+	}
+}
+
+func fingerprintEnumStrings(t *testing.T, raw any) []string {
+	t.Helper()
+	if enum, ok := raw.([]string); ok {
+		return enum
+	}
+	anyEnum, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("fingerprint.enum type=%T val=%#v", raw, raw)
+	}
+	out := make([]string, 0, len(anyEnum))
+	for _, v := range anyEnum {
+		s, _ := v.(string)
+		out = append(out, s)
+	}
+	return out
 }
 
 func TestParamsSchemaTlsListExposesSSLProfile(t *testing.T) {

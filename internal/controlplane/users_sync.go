@@ -175,6 +175,11 @@ func (s *Service) handleUsersImport(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if deletedAt != nil && applyTombs {
+				if u.DeletedAt == nil {
+					if byName[u.Name] == idx {
+						delete(byName, u.Name)
+					}
+				}
 				u.DeletedAt = deletedAt
 				u.Enabled = false
 				u.UpdatedAt = now
@@ -188,9 +193,35 @@ func (s *Service) handleUsersImport(w http.ResponseWriter, r *http.Request) {
 				results = append(results, map[string]any{"sync_id": u.SyncID, "local_id": u.ID, "action": "tombstoned"})
 				continue
 			}
+			wantName := strings.TrimSpace(fmtString(raw["name"]))
+			if wantName == "" {
+				wantName = u.Name
+			}
+			if wantName != "" {
+				if ni, taken := byName[wantName]; taken && ni != idx {
+					switch nameConflict {
+					case "reject":
+						failJSON(w, 409, "cp_name_conflict", "name already exists: "+wantName)
+						return
+					case "rename", "merge_by_sync_id":
+						wantName = uniqueImportName(wantName, byName)
+					default:
+						failJSON(w, 400, "bad_request", "invalid on_name_conflict")
+						return
+					}
+				}
+				raw["name"] = wantName
+			}
+			oldName := u.Name
 			if err := s.applyImportProfile(u, raw, secretsPolicy, now, rev); err != nil {
 				failJSON(w, 400, "bad_request", err.Error())
 				return
+			}
+			if u.DeletedAt == nil && oldName != u.Name {
+				if byName[oldName] == idx {
+					delete(byName, oldName)
+				}
+				byName[u.Name] = idx
 			}
 			updated++
 			needRemat = true
@@ -198,43 +229,10 @@ func (s *Service) handleUsersImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Name conflict without sync match.
+		// Name conflict without sync_id match: never adopt a different local user.
+		// Identity is sync_id-only; colliding names get a deterministic " {n}" suffix.
 		if name != "" {
-			if ni, ok := byName[name]; ok {
-				existing := &users[ni]
-				// Adopt a local (or same sync_id) user instead of duplicating.
-				if syncID != "" && (existing.SyncID == "" || existing.SyncID == syncID) && nameConflict != "reject" {
-					if existing.SyncID == "" {
-						existing.SyncID = syncID
-						bySync[syncID] = ni
-					}
-					wasLocal := existing.EffectiveSyncMode() == domain.SyncModeLocal || !existing.SyncEnabled
-					if deletedAt != nil && applyTombs {
-						existing.DeletedAt = deletedAt
-						existing.Enabled = false
-						existing.UpdatedAt = now
-						if rev > existing.Revision {
-							existing.Revision = rev
-						} else {
-							existing.Revision++
-						}
-						tombstoned++
-						needRemat = true
-						results = append(results, map[string]any{"sync_id": existing.SyncID, "local_id": existing.ID, "action": "tombstoned"})
-						continue
-					}
-					if err := s.applyImportProfile(existing, raw, secretsPolicy, now, rev); err != nil {
-						failJSON(w, 400, "bad_request", err.Error())
-						return
-					}
-					if wasLocal && existing.SyncActive() {
-						existing.SeedIngressFromUsed()
-					}
-					updated++
-					needRemat = true
-					results = append(results, map[string]any{"sync_id": existing.SyncID, "local_id": existing.ID, "action": "adopted"})
-					continue
-				}
+			if _, ok := byName[name]; ok {
 				switch nameConflict {
 				case "reject":
 					failJSON(w, 409, "cp_name_conflict", "name already exists: "+name)
@@ -290,7 +288,7 @@ func (s *Service) handleUsersImport(w http.ResponseWriter, r *http.Request) {
 
 func uniqueImportName(base string, byName map[string]int) string {
 	for i := 2; ; i++ {
-		cand := fmt.Sprintf("%s-%d", base, i)
+		cand := fmt.Sprintf("%s %d", base, i)
 		if _, ok := byName[cand]; !ok {
 			return cand
 		}

@@ -2072,7 +2072,49 @@ func (s *Service) handleUsersRotateCreds(w http.ResponseWriter, r *http.Request)
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	users[i].Creds = map[string]map[string]any{}
+	var body struct {
+		Preset string `json:"preset"`
+		Field  string `json:"field"`
+	}
+	// Empty body = rotate all creds (legacy).
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &body); err != nil {
+			failJSON(w, 400, "bad_request", err.Error())
+			return
+		}
+	}
+	preset := strings.TrimSpace(body.Preset)
+	field := strings.TrimSpace(body.Field)
+	if users[i].Creds == nil {
+		users[i].Creds = map[string]map[string]any{}
+	}
+	switch {
+	case preset == "" && field == "":
+		users[i].Creds = map[string]map[string]any{}
+	case preset != "":
+		keys := rotateCredKeysForPreset(preset)
+		if len(keys) == 0 {
+			failJSON(w, 400, "bad_request", "unknown preset")
+			return
+		}
+		if field == "" {
+			for _, k := range keys {
+				delete(users[i].Creds, k)
+			}
+		} else {
+			for _, k := range keys {
+				m := users[i].Creds[k]
+				if m == nil {
+					continue
+				}
+				delete(m, field)
+				users[i].Creds[k] = m
+			}
+		}
+	default:
+		failJSON(w, 400, "bad_request", "field requires preset")
+		return
+	}
 	if _, err := s.ensureCreds(&users[i]); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
@@ -2087,6 +2129,22 @@ func (s *Service) handleUsersRotateCreds(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	okJSON(w, 200, redactUser(users[i], true))
+}
+
+// rotateCredKeysForPreset resolves catalog keys (canonical + aliases) for one preset name/tag.
+func rotateCredKeysForPreset(preset string) []string {
+	for _, p := range presets.All() {
+		if p.Name == preset {
+			return presets.CredKeysForEnsure(p)
+		}
+		for _, a := range p.Aliases {
+			if a == preset {
+				return presets.CredKeysForEnsure(p)
+			}
+		}
+	}
+	// Fallback: treat as raw creds map key.
+	return []string{preset}
 }
 
 func (s *Service) handleUsersPutCreds(w http.ResponseWriter, r *http.Request) {

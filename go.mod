@@ -253,3 +253,6 @@ replace github.com/sagernet/wireguard-go => ./third_party/sing-box-lx/submodules
 
 // Same patched sing-vmess as hiddify-core / vendor/sing-box-lx (VLESS udp443 flow).
 replace github.com/sagernet/sing-vmess => ../sing-vmess
+
+// lx patches/sing-tun (FlowPortWarmer / l3router TCP reply) — required after lx merge.
+replace github.com/sagernet/sing-tun => ./third_party/sing-box-lx/patches/sing-tun

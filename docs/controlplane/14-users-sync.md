@@ -118,10 +118,12 @@ Global reset from hub ⇒ `global=0`, apply to nodes, hub watermarks=0; optional
 }
 ```
 
-- Match existing by `sync_id`. Missing `sync_id` → create as local (`origin=import`).
-- `on_name_conflict=merge_by_sync_id`: if a **local** user already has the same `name`, **adopt** it (set `sync_id`, seed `traffic_ingress_bytes` from prior `traffic_used_bytes`) instead of creating a duplicate.
+- Match existing by `sync_id` only. Missing `sync_id` → create as local (`origin=import`).
+- Name collisions with a **different** user (local or another `sync_id`) never adopt/overwrite.
+  `on_name_conflict=rename|merge_by_sync_id` assigns a deterministic suffix `" {n}"` (`Default` → `Default 2`).
+  `reject` returns `409 cp_name_conflict`.
 - `revision` ≤ stored ⇒ skip profile fields (idempotent).
-- Response includes `users: [{sync_id, local_id, action}]` for hub bindings (`created|updated|adopted|skipped|tombstoned`).
+- Response includes `users: [{sync_id, local_id, action}]` for hub bindings (`created|updated|skipped|tombstoned`).
 - One rematerialize after the batch.
 
 Hub watermarks key by **inventory server id** (not agent `node_id`) so reinstall does not double-count.

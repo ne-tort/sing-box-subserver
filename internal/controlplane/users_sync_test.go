@@ -5,6 +5,7 @@ package controlplane
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -358,23 +359,19 @@ func TestUsersSyncToggleOnOffKeepsSyncID(t *testing.T) {
 	}
 }
 
-func TestUsersSyncAdoptLocalByName(t *testing.T) {
+func TestUsersSyncRenameOnNameConflict(t *testing.T) {
 	t.Parallel()
 	svc, mux := newSyncTestSvc(t)
 
-	// Local-only user with traffic.
+	// Local-only user (e.g. server "Default") must not be adopted by name.
 	create := httptest.NewRecorder()
 	mux.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader([]byte(
-		`{"name":"dave"}`,
+		`{"name":"Default"}`,
 	))))
 	var created map[string]any
 	_ = json.Unmarshal(create.Body.Bytes(), &created)
 	data := created["data"].(map[string]any)
 	localID := data["id"].(string)
-
-	if _, err := svc.ApplyTrafficUsage(t.Context(), map[string]uint64{localID: 777}); err != nil {
-		t.Fatal(err)
-	}
 
 	syncID := "11111111-2222-4333-8444-555555555555"
 	impBody, _ := json.Marshal(map[string]any{
@@ -382,7 +379,7 @@ func TestUsersSyncAdoptLocalByName(t *testing.T) {
 		"policy": map[string]any{"secrets": "identity", "on_name_conflict": "merge_by_sync_id"},
 		"users": []any{
 			map[string]any{
-				"sync_id": syncID, "name": "dave", "sync_mode": "identity", "revision": 2, "enabled": true,
+				"sync_id": syncID, "name": "Default", "sync_mode": "identity", "revision": 2, "enabled": true,
 			},
 		},
 	})
@@ -394,42 +391,91 @@ func TestUsersSyncAdoptLocalByName(t *testing.T) {
 	var impEnv map[string]any
 	_ = json.Unmarshal(imp.Body.Bytes(), &impEnv)
 	res := impEnv["data"].(map[string]any)
-	if int(res["updated"].(float64)) != 1 {
-		t.Fatalf("want adopted/updated=1 got %v", res)
+	if int(res["created"].(float64)) != 1 {
+		t.Fatalf("want created=1 got %v", res)
+	}
+	if int(res["updated"].(float64)) != 0 {
+		t.Fatalf("want updated=0 (no adopt) got %v", res)
 	}
 	usersOut := res["users"].([]any)
 	row := usersOut[0].(map[string]any)
-	if row["local_id"] != localID || row["action"] != "adopted" {
+	if row["action"] != "created" {
 		t.Fatalf("row=%v", row)
+	}
+	importedID := row["local_id"].(string)
+	if importedID == localID {
+		t.Fatalf("imported overwrote local id %s", localID)
 	}
 
 	users, _ := svc.store.LoadUsers()
-	var found bool
+	var localOK, importedOK bool
 	for _, u := range users {
 		if u.ID == localID {
-			found = true
+			localOK = true
+			if u.SyncID != "" {
+				t.Fatalf("local user gained sync_id=%q", u.SyncID)
+			}
+			if u.Name != "Default" {
+				t.Fatalf("local name mutated to %q", u.Name)
+			}
+		}
+		if u.ID == importedID {
+			importedOK = true
 			if u.SyncID != syncID {
-				t.Fatalf("sync_id=%s", u.SyncID)
+				t.Fatalf("imported sync_id=%s", u.SyncID)
 			}
-			if !u.SyncActive() {
-				t.Fatal("expected sync active")
-			}
-			if u.TrafficIngressBytes != 777 {
-				t.Fatalf("ingress seeded want 777 got %d", u.TrafficIngressBytes)
+			if u.Name != "Default 2" {
+				t.Fatalf("imported name want %q got %q", "Default 2", u.Name)
 			}
 		}
 	}
-	if !found {
-		t.Fatal("user missing")
+	if !localOK || !importedOK {
+		t.Fatalf("localOK=%v importedOK=%v", localOK, importedOK)
+	}
+}
+
+func TestUsersSyncRenameSkipsTakenSuffixes(t *testing.T) {
+	t.Parallel()
+	_, mux := newSyncTestSvc(t)
+
+	for _, name := range []string{"alice", "alice 2"} {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader([]byte(
+			fmt.Sprintf(`{"name":%q}`, name),
+		))))
+		if rr.Code != 200 {
+			t.Fatalf("create %q: %d %s", name, rr.Code, rr.Body.String())
+		}
 	}
 
-	// Second import same revision → skip, keep same local id.
-	imp2 := httptest.NewRecorder()
-	mux.ServeHTTP(imp2, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users/import", bytes.NewReader(impBody)))
-	var imp2Env map[string]any
-	_ = json.Unmarshal(imp2.Body.Bytes(), &imp2Env)
-	if int(imp2Env["data"].(map[string]any)["skipped"].(float64)) != 1 {
-		t.Fatalf("skip=%v", imp2Env["data"])
+	syncID := "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+	impBody, _ := json.Marshal(map[string]any{
+		"source": "client",
+		"policy": map[string]any{"secrets": "full", "on_name_conflict": "rename"},
+		"users": []any{
+			map[string]any{
+				"sync_id": syncID, "name": "alice", "sync_mode": "full", "revision": 1, "enabled": true,
+				"sub_token": "tok-alice-3",
+			},
+		},
+	})
+	imp := httptest.NewRecorder()
+	mux.ServeHTTP(imp, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users/import", bytes.NewReader(impBody)))
+	if imp.Code != 200 {
+		t.Fatalf("import %d %s", imp.Code, imp.Body.String())
+	}
+	var impEnv map[string]any
+	_ = json.Unmarshal(imp.Body.Bytes(), &impEnv)
+	usersOut := impEnv["data"].(map[string]any)["users"].([]any)
+	id := usersOut[0].(map[string]any)["local_id"].(string)
+
+	get := httptest.NewRecorder()
+	mux.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/v1/controlplane/users/"+id+"?secrets=1", nil))
+	var getEnv map[string]any
+	_ = json.Unmarshal(get.Body.Bytes(), &getEnv)
+	gotName := getEnv["data"].(map[string]any)["name"].(string)
+	if gotName != "alice 3" {
+		t.Fatalf("name want alice 3 got %q", gotName)
 	}
 }
 

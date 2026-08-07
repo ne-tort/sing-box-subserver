@@ -194,12 +194,33 @@ func paramFieldSchema(field string, pp domain.ProtocolPreset, lang string) map[s
 		"help":        paramFieldHelp(field, pp, lang),
 	}
 	m = enrichFieldSchema(m, meta, lang)
+	if field == "fingerprint" {
+		m = applyUtlsFingerprintCatalog(m)
+	}
 	if guides := paramFieldRequiredGuides(field, pp, lang); len(guides) > 0 {
 		m["required_guides"] = guides
 		m["required_guide"] = guides[0]
 	} else if guide := paramFieldRequiredGuide(field, pp, lang); guide != nil {
 		m["required_guide"] = guide
 	}
+	return m
+}
+
+// applyUtlsFingerprintCatalog replaces fingerprint.enum with the embedded lxutls
+// catalog when built with with_lx_utls. Without the tag, utlsFingerprintChoices
+// returns nil and the ref/sqlite enum is kept.
+func applyUtlsFingerprintCatalog(m map[string]any) map[string]any {
+	choices := utlsFingerprintChoices()
+	if len(choices) == 0 {
+		return m
+	}
+	m["type"] = "enum"
+	m["enum"] = choices
+	labels := map[string]string{}
+	for _, v := range choices {
+		labels[v] = v
+	}
+	m["enum_labels"] = labels
 	return m
 }
 
