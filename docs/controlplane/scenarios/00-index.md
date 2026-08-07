@@ -8,7 +8,7 @@ under [`tests/vps_cp/`](../../../tests/vps_cp/).
 | [01](01-wizard-bootstrap.md) | Discover capabilities + ready shape | `test_01_bootstrap_meta` |
 | [02](02-single-presets.md) | from-presets → user → sub | `test_03_presets_install` |
 | [03](03-demux-443-dual.md) | Stable demux on :443 | `test_04_demux_groups`, `test_07` demux |
-| [04](04-tls-acme.md) | Cert-manager + params.sni | `test_05_tls_acme`, `test_07` acme |
+| [04](04-tls-acme.md) | SSL ACME + params.ssl_profile | `test_05_tls_acme`, `test_07` acme |
 | [05](05-reality.md) | Reality pool + TCP inbound | `test_06_reality`, `test_03` e2e-reality-tcp, `test_07` |
 | [06](06-client-remote-e2e.md) | Official sing-box client on VPS | `test_07_client_remote` |
 | [07](07-lab-transports.md) | allow_lab WS/gRPC Reality | `test_08_matrix_lab_transports` |

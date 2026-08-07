@@ -95,16 +95,24 @@ func (s *Service) handleSmoke(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	profile, err := s.ensureTLSProfile(false)
+	_ = s.ensureSSLProfiles()
+	sslList, err := s.loadSSLProfiles()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	cm, err := s.ensureCertManager()
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
+	defHost := s.publicHost(r)
+	defCert, _ := sslCertPaths(s.cfg.DataDir, defaultSSLProfileID)
+	for _, sp := range sslList {
+		if sp.ID == defaultSSLProfileID {
+			if sn := sp.ServerName(); sn != "" {
+				defHost = sn
+			}
+			defCert, _ = sslCertPaths(s.cfg.DataDir, sp.ID)
+			break
+		}
 	}
+	profile := domain.DefaultSelfSigned(defHost)
 	assignments, err := s.store.LoadRealityAssignments()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -121,22 +129,15 @@ func (s *Service) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	host := s.publicHost(r)
-	certPath, _ := tlsMaterialPaths(s.cfg.DataDir)
-	slotTLS, _, err := s.ensureDemuxSlotTLS(sets, cm)
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
 	in := smoke.Input{
 		User:               user,
 		Sets:               sets,
 		PublicHost:         host,
 		TLS:                profile,
-		CertManager:        cm,
 		RealityAssignments: assignments,
 		Hub:                hubPtr,
-		TLSCertPath:        certPath,
-		SlotTLS:            slotTLS,
+		TLSCertPath:        defCert,
+		SSLProfiles:        s.sslProfilesWithResolvedACMEEmail(sslList),
 	}
 	report, err := smoke.Run(r.Context(), in, body)
 	if err != nil {

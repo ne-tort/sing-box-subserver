@@ -10,69 +10,50 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/domain"
 )
 
-func TestEnsureSelfSignedReuseAndForce(t *testing.T) {
+func TestWriteSelfSignedPair(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	cert := filepath.Join(dir, "cert.crt")
+	key := filepath.Join(dir, "cert.key")
+	meta := cert + ".meta"
 	spec := domain.SelfSignedSpec{
 		CommonName: "vpn.test",
-		DNSSANs:    []string{"vpn.test", "localhost"},
+		DNSSANs:    []string{"vpn.test"},
 		KeyType:    "p256",
 		ValidDays:  30,
 	}
-	cert1, key1, changed, err := ensureSelfSigned(dir, spec, false)
+	if _, _, err := writeSelfSignedPair(cert, key, meta, spec, fingerprintSpec(spec)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(cert); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(key); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnsureSlotSelfSigned(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	c1, k1, ch1, err := ensureSlotSelfSigned(dir, "www.apple.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !changed {
+	if !ch1 {
 		t.Fatal("first write must change")
 	}
-	b1, err := os.ReadFile(cert1)
+	c2, k2, ch2, err := ensureSlotSelfSigned(dir, "www.apple.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, changed, err = ensureSelfSigned(dir, spec, false)
-	if err != nil {
-		t.Fatal(err)
+	if ch2 {
+		t.Fatal("reuse must not change")
 	}
-	if changed {
-		t.Fatal("same fingerprint must reuse")
+	if c1 != c2 || k1 != k2 {
+		t.Fatalf("paths differ")
 	}
-	b2, err := os.ReadFile(cert1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b1) != string(b2) {
-		t.Fatal("cert bytes changed on reuse")
-	}
-	_, _, changed, err = ensureSelfSigned(dir, spec, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !changed {
-		t.Fatal("force must rewrite")
-	}
-	b3, err := os.ReadFile(cert1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b1) == string(b3) {
-		t.Fatal("force rewrite must change cert bytes")
-	}
-	if _, err := os.Stat(key1); err != nil {
-		t.Fatal(err)
-	}
-	meta := filepath.Join(dir, "controlplane", "tls", "self_signed.meta.json")
-	if _, err := os.Stat(meta); err != nil {
-		t.Fatal(err)
-	}
-
-	// Spec change → rewrite without force.
-	spec.ValidDays = 60
-	_, _, changed, err = ensureSelfSigned(dir, spec, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !changed {
-		t.Fatal("spec change must rewrite")
+	if _, _, _, err := ensureSlotSelfSigned(dir, "foo.local"); err == nil {
+		t.Fatal("expected .local rejection")
 	}
 }

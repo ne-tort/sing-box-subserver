@@ -40,16 +40,46 @@ func buildParamsSchemaLang(pp domain.ProtocolPreset, detail bool, lang string) m
 
 	keys := collectParamKeys(pp)
 	for _, f := range keys {
-		if f == "" || f == "listen_port" || f == "sni" || f == "demux_sni" {
+		if f == "" || f == "listen_port" || f == "sni" || f == "self_signed_sni" || f == "demux_sni" || f == domain.BindingParamRealitySNI ||
+			f == "tls_alpn" || f == "tls_min_version" || f == "tls_max_version" ||
+			f == "tls_cipher_suites" || f == "tls_curve_preferences" || f == "ech" ||
+			f == domain.BindingParamSSLProfile {
 			continue
 		}
 		out[f] = paramFieldSchema(f, pp, lang)
 	}
 
-	if supportsAcmeSNI(pp) {
-		out["sni"] = enrichFieldSchema(sniFieldSchema(false, lang), domain.ParamFieldMeta{
-			Type: "string", Widget: "text", UiGroup: "tls", UiOrder: 90,
-		}, lang)
+	if supportsSSLProfile(pp) {
+		out[domain.BindingParamSSLProfile] = map[string]any{
+			"type":        "string",
+			"required":    false,
+			"title":       i18nPick(lang, "SSL profile", "SSL-профиль"),
+			"description": "SSL profile id from GET /v1/controlplane/ssl. Empty = Default self-signed profile.",
+			"ui_group":    "tls",
+			"ui_order":    90,
+			"widget":      "ssl_profile",
+			"help": map[string]any{
+				"summary":    "Select a server SSL profile (leaf certificate + handshake + optional ECH).",
+				"input_hint": "Leave empty for the Default self-signed profile.",
+				"format":     "default",
+			},
+		}
+	}
+	if domain.BindingUsesReality(pp, nil) {
+		out[domain.BindingParamRealitySNI] = map[string]any{
+			"type":        "string",
+			"required":    false,
+			"title":       i18nPick(lang, "Reality SNI", "Reality SNI"),
+			"description": "Optional SNI from the server Reality list. Empty = auto-pick.",
+			"ui_group":    "tls",
+			"ui_order":    91,
+			"widget":      "select",
+			"help": map[string]any{
+				"summary":    "Pin this inbound to a Reality pool SNI, or leave empty for automatic selection.",
+				"input_hint": "Leave empty for auto, or pick a hostname from the Reality list.",
+				"format":     "www.apple.com",
+			},
+		}
 	}
 	if detail {
 		out["demux_sni"] = map[string]any{
@@ -62,14 +92,9 @@ func buildParamsSchemaLang(pp domain.ProtocolPreset, detail bool, lang string) m
 			"widget":      "text",
 			"help": map[string]any{
 				"summary":    "SNI label matched by the demux front.",
-				"input_hint": "Usually the same domain as TLS / ACME.",
+				"input_hint": "Usually the same domain as the SSL profile.",
 				"format":     "example.com",
 			},
-		}
-		if _, ok := out["sni"]; !ok {
-			out["sni"] = enrichFieldSchema(sniFieldSchema(false, lang), domain.ParamFieldMeta{
-				Type: "string", Widget: "text", UiGroup: "tls", UiOrder: 90,
-			}, lang)
 		}
 	}
 
@@ -157,20 +182,6 @@ func fieldIsRequired(field string, pp domain.ProtocolPreset) bool {
 		}
 	}
 	return false
-}
-
-func sniFieldSchema(required bool, lang string) map[string]any {
-	return map[string]any{
-		"type":        "string",
-		"required":    required,
-		"title":       i18nPick(lang, "SNI / ACME domain", "SNI / домен ACME"),
-		"description": "Optional ACME domain from cert-manager; for TLS non-Reality inbounds. Also syncs demux_sni.",
-		"help": map[string]any{
-			"summary":    "Pick a domain already issued by ACME on this server.",
-			"input_hint": "Select from cert-manager domains, or leave empty for self-signed.",
-			"format":     "vpn.example.com",
-		},
-	}
 }
 
 func paramFieldSchema(field string, pp domain.ProtocolPreset, lang string) map[string]any {
@@ -325,7 +336,7 @@ func uiGroupsForPreset(pp domain.ProtocolPreset, lang string) []any {
 	return out
 }
 
-func supportsAcmeSNI(pp domain.ProtocolPreset) bool {
+func supportsSSLProfile(pp domain.ProtocolPreset) bool {
 	if meta, ok := pp.ParamMeta["tls_mode"]; ok && pp.CustomPreset {
 		for _, v := range meta.Enum {
 			if strings.EqualFold(strings.TrimSpace(v), "tls") {

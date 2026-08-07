@@ -38,7 +38,7 @@ Artifacts (subscriptions, status dumps) land in `tests/vps_cp/artifacts/`.
 | `test_02_dns_route` | GET/PUT dns+route templates | [08](../../docs/controlplane/scenarios/08-ownership-and-expiry.md) |
 | `test_03_presets_install` | from-presets, edit set, user, subscription dump, e2e-reality-tcp | [02](../../docs/controlplane/scenarios/02-single-presets.md), [05](../../docs/controlplane/scenarios/05-reality.md) |
 | `test_04_demux_groups` | substitutions, install :443, autoport, slot_snis persist | [03](../../docs/controlplane/scenarios/03-demux-443-dual.md) |
-| `test_05_tls_acme` | self-signed, cert-manager domain, params.sni, optional IP SAN | [04](../../docs/controlplane/scenarios/04-tls-acme.md) |
+| `test_05_tls_acme` | Default SSL, ACME profile, params.ssl_profile, optional IP | [04](../../docs/controlplane/scenarios/04-tls-acme.md) |
 | `test_06_reality` | profiles put + all-rejected | [05](../../docs/controlplane/scenarios/05-reality.md) |
 | `test_07_client_remote` | Client docker **on VPS** (`--network host`) | [06](../../docs/controlplane/scenarios/06-client-remote-e2e.md) |
 | `test_07_client_docker` | Optional local Docker Desktop (`CP_WIN_DOCKER=1`) | — |

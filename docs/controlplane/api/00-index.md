@@ -23,7 +23,7 @@ flowchart LR
 | [03-catalog](03-catalog.md) | Install UI | protocols, presets, demux-groups, ports |
 | [04-sets-lifecycle](04-sets-lifecycle.md) | Install UI | from-*, activate, replace, errors |
 | [05-users-subscription](05-users-subscription.md) | Clients | users, filters, merge contract |
-| [06-tls-acme-reality](06-tls-acme-reality.md) | Ops | TLS profile, cert-manager, Reality pool |
+| [06-tls-acme-reality](06-tls-acme-reality.md) | Ops | SSL profiles, Reality pool |
 | [07-errors-and-contracts](07-errors-and-contracts.md) | Integrators | Stable `error.code` map |
 
 ## Scenarios (end-to-end)

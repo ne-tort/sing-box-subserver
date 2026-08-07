@@ -5,7 +5,6 @@ package materialize
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -38,8 +37,8 @@ func TestBuildSelfSignedPaths(t *testing.T) {
 		PublicHost:  "vpn.example.com",
 		DataDir:     "/data",
 		TLS:         tls,
-		TLSCertPath: "/data/controlplane/tls/server.crt",
-		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		TLSCertPath: "/data/controlplane/ssl/default/cert.crt",
+		TLSKeyPath:  "/data/controlplane/ssl/default/cert.key",
 		ActiveSets:  []domain.InboundSet{trojanSet()},
 		Users:       []domain.User{trojanUser(now)},
 	})
@@ -55,10 +54,10 @@ func TestBuildSelfSignedPaths(t *testing.T) {
 	}
 	ib := firstInbound(t, doc)
 	tlsObj, _ := ib["tls"].(map[string]any)
-	if tlsObj["certificate_path"] != "/data/controlplane/tls/server.crt" {
+	if tlsObj["certificate_path"] != "/data/controlplane/ssl/default/cert.crt" {
 		t.Fatalf("cert path: %#v", tlsObj["certificate_path"])
 	}
-	if tlsObj["key_path"] != "/data/controlplane/tls/server.key" {
+	if tlsObj["key_path"] != "/data/controlplane/ssl/default/cert.key" {
 		t.Fatalf("key path: %#v", tlsObj["key_path"])
 	}
 	if _, ok := tlsObj["certificate_provider"]; ok {
@@ -78,8 +77,8 @@ func TestBuildCustomOutbounds(t *testing.T) {
 		PublicHost:  "vpn.example.com",
 		DataDir:     "/data",
 		TLS:         tls,
-		TLSCertPath: "/data/controlplane/tls/server.crt",
-		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		TLSCertPath: "/data/controlplane/ssl/default/cert.crt",
+		TLSKeyPath:  "/data/controlplane/ssl/default/cert.key",
 		ActiveSets:  []domain.InboundSet{trojanSet()},
 		Users:       []domain.User{trojanUser(now)},
 		Outbounds:   out,
@@ -101,192 +100,20 @@ func TestBuildCustomOutbounds(t *testing.T) {
 	}
 }
 
-func TestBuildCertManagerProviders(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-	cm := domain.CertManager{Email: "admin@example.com", Domains: []string{"vpn.example.com"}, KeyType: "p256"}
-	set := trojanSet()
-	set.Presets = nil
-	set.Bindings = []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSNI: "vpn.example.com"}}}
-	raw, err := Build(Input{
-		PublicHost:  "vpn.example.com",
-		DataDir:     "/var/lib/subserver",
-		TLS:         domain.DefaultSelfSigned("vpn.example.com"),
-		TLSCertPath: "/data/cert.pem",
-		TLSKeyPath:  "/data/key.pem",
-		CertManager: cm,
-		ActiveSets:  []domain.InboundSet{set},
-		Users:       []domain.User{trojanUser(now)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	provs, _ := doc["certificate_providers"].([]any)
-	if len(provs) != 1 {
-		t.Fatalf("providers=%d", len(provs))
-	}
-	p, _ := provs[0].(map[string]any)
-	if p["type"] != "acme" || p["tag"] != domain.TLSProviderTag {
-		t.Fatalf("provider: %#v", p)
-	}
-	wantDir := filepath.Join("/var/lib/subserver", "controlplane", "acme")
-	if p["data_directory"] != wantDir {
-		t.Fatalf("data_directory=%v want %s", p["data_directory"], wantDir)
-	}
-	ib := firstInbound(t, doc)
-	tlsObj, _ := ib["tls"].(map[string]any)
-	if tlsObj["certificate_provider"] != domain.TLSProviderTag {
-		t.Fatalf("certificate_provider=%v", tlsObj["certificate_provider"])
-	}
-	if tlsObj["server_name"] != "vpn.example.com" {
-		t.Fatalf("server_name=%v", tlsObj["server_name"])
-	}
-	if _, ok := tlsObj["certificate_path"]; ok {
-		t.Fatal("unexpected certificate_path for cert-manager")
-	}
-}
 
-func TestBuildCertManagerIPProviders(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-	cm := domain.CertManager{Email: "admin@example.com", Domains: []string{"203.0.113.10"}, Provider: "letsencrypt"}
-	set := trojanSet()
-	set.Presets = nil
-	set.Bindings = []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSNI: "203.0.113.10"}}}
-	raw, err := Build(Input{
-		PublicHost:  "203.0.113.10",
-		DataDir:     "/data",
-		TLS:         domain.DefaultSelfSigned("203.0.113.10"),
-		TLSCertPath: "/data/c.pem",
-		TLSKeyPath:  "/data/k.pem",
-		CertManager: cm,
-		ActiveSets:  []domain.InboundSet{set},
-		Users:       []domain.User{trojanUser(now)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	provs, _ := doc["certificate_providers"].([]any)
-	if len(provs) != 1 {
-		t.Fatalf("providers=%d", len(provs))
-	}
-	p, _ := provs[0].(map[string]any)
-	doms, _ := p["domain"].([]any)
-	if len(doms) != 1 || doms[0] != "203.0.113.10" {
-		t.Fatalf("domain=%v", p["domain"])
-	}
-	ib := firstInbound(t, doc)
-	tlsObj, _ := ib["tls"].(map[string]any)
-	if tlsObj["server_name"] != "203.0.113.10" {
-		t.Fatalf("server_name=%v", tlsObj["server_name"])
-	}
-	if tlsObj["certificate_provider"] != domain.TLSProviderTagIP {
-		t.Fatalf("certificate_provider=%v", tlsObj["certificate_provider"])
-	}
-	if p["tag"] != domain.TLSProviderTagIP {
-		t.Fatalf("provider tag=%v", p["tag"])
-	}
-}
 
-func TestBuildCertManagerMixedDNSAndIP(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-	cm := domain.CertManager{
-		Email: "admin@example.com",
-		Domains: []string{"203.0.113.10", "vpn.example.com"},
-		Provider: "letsencrypt",
-	}
-	set := trojanSet()
-	set.Presets = nil
-	set.Bindings = []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSNI: "vpn.example.com"}}}
-	raw, err := Build(Input{
-		PublicHost:  "203.0.113.10",
-		DataDir:     "/data",
-		TLS:         domain.DefaultSelfSigned("203.0.113.10"),
-		TLSCertPath: "/data/c.pem",
-		TLSKeyPath:  "/data/k.pem",
-		CertManager: cm,
-		ActiveSets:  []domain.InboundSet{set},
-		Users:       []domain.User{trojanUser(now)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	provs, _ := doc["certificate_providers"].([]any)
-	if len(provs) != 2 {
-		t.Fatalf("providers=%d %#v", len(provs), provs)
-	}
-	tags := map[string]bool{}
-	for _, raw := range provs {
-		p, _ := raw.(map[string]any)
-		tags[fmt.Sprint(p["tag"])] = true
-	}
-	if !tags[domain.TLSProviderTag] || !tags[domain.TLSProviderTagIP] {
-		t.Fatalf("tags=%v", tags)
-	}
-	ib := firstInbound(t, doc)
-	tlsObj, _ := ib["tls"].(map[string]any)
-	if tlsObj["certificate_provider"] != domain.TLSProviderTag {
-		t.Fatalf("dns inbound provider=%v", tlsObj["certificate_provider"])
-	}
-}
 
-func TestBuildCertManagerEmptyNoProviders(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-	raw, err := Build(Input{
-		PublicHost:  "vpn.example.com",
-		DataDir:     "/data",
-		TLS:         domain.DefaultSelfSigned("vpn.example.com"),
-		TLSCertPath: "/data/c.pem",
-		TLSKeyPath:  "/data/k.pem",
-		CertManager: domain.CertManager{Email: "a@b.c", Domains: []string{"vpn.example.com"}},
-		ActiveSets: []domain.InboundSet{{
-			Name: "a", Listen: "0.0.0.0", ListenPort: 8443, Presets: []string{"shadowsocks-tcp"},
-		}},
-		Users: []domain.User{{
-			Name: "u1", Enabled: true, CreatedAt: now,
-			Creds: map[string]map[string]any{"shadowsocks-tcp": {"password": "x"}},
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	// Providers still emit when domains non-empty (hot-add); inbound does not use them.
-	provs, _ := doc["certificate_providers"].([]any)
-	if len(provs) != 1 {
-		t.Fatalf("providers=%d want 1 when domains configured", len(provs))
-	}
-}
 
 func TestBuildDefaultPEMWithoutSNI(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
-	cm := domain.CertManager{Email: "a@b.c", Domains: []string{"vpn.example.com"}}
 	raw, err := Build(Input{
 		PublicHost:  "vpn.example.com",
 		DataDir:     "/data",
 		TLS:         domain.DefaultSelfSigned("vpn.example.com"),
 		TLSCertPath: "/data/c.pem",
 		TLSKeyPath:  "/data/k.pem",
-		CertManager: cm,
-		ActiveSets:  []domain.InboundSet{trojanSet()},
+			ActiveSets:  []domain.InboundSet{trojanSet()},
 		Users:       []domain.User{trojanUser(now)},
 	})
 	if err != nil {
@@ -479,20 +306,27 @@ func TestRenderSubscriptionInsecureOnlySelfSigned(t *testing.T) {
 	user := trojanUser(now)
 	user.SubToken = "tok"
 
-	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, sets, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), SubscriptionFilters{
+		SSLProfiles: map[string]domain.SSLProfile{
+			"default": {ID: "default", Name: "Default", Type: domain.SSLTypeSelfSigned, Domain: "vpn.example.com"},
+		},
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertSubInsecure(t, body, true)
 
-	cm := domain.CertManager{Email: "a@b.c", Domains: []string{"vpn.example.com"}}
 	setsACME := []domain.InboundSet{{
 		Name: "a", Listen: "0.0.0.0", ListenPort: 443,
-		Bindings: []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSNI: "vpn.example.com"}}},
+		Bindings: []domain.SetBinding{{Preset: "trojan-tcp", Params: map[string]string{domain.BindingParamSSLProfile: "acme1"}}},
 	}}
 	userACME := trojanUser(now)
 	userACME.SubToken = "tok"
-	body, err = RenderSubscription(userACME, setsACME, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), cm, SubscriptionFilters{}, nil, nil)
+	body, err = RenderSubscription(userACME, setsACME, "vpn.example.com", domain.DefaultSelfSigned("vpn.example.com"), SubscriptionFilters{
+		SSLProfiles: map[string]domain.SSLProfile{
+			"acme1": {ID: "acme1", Name: "vpn", Type: domain.SSLTypeACME, Domain: "vpn.example.com", Email: "a@b.c"},
+		},
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +348,7 @@ func TestRenderSubscriptionPresetFilterMulti(t *testing.T) {
 			"shadowsocks-tcp": {"password": "s"},
 		},
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Presets: []string{"vless-tcp", "trojan-tcp"}}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp", "trojan-tcp"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +380,7 @@ func TestBuildRealityIgnoresParamsSNI(t *testing.T) {
 		Name: "r1", Listen: "0.0.0.0", ListenPort: 443,
 		Bindings: []domain.SetBinding{{
 			Preset: "vless-reality-tcp",
-			Params: map[string]string{domain.BindingParamSNI: "vpn.example.com"},
+			Params: map[string]string{domain.BindingParamSSLProfile: "vpn.example.com"},
 		}},
 	}
 	user := domain.User{
@@ -570,15 +404,13 @@ func TestBuildRealityIgnoresParamsSNI(t *testing.T) {
 			UpdatedAt:        now,
 		},
 	}
-	cm := domain.CertManager{Email: "a@b.c", Domains: []string{"vpn.example.com"}}
 	raw, err := Build(Input{
 		PublicHost:         "198.51.100.10",
 		DataDir:            "/data",
 		TLS:                domain.DefaultSelfSigned("198.51.100.10"),
 		TLSCertPath:        "/data/c.pem",
 		TLSKeyPath:         "/data/k.pem",
-		CertManager:        cm,
-		ActiveSets:         []domain.InboundSet{set},
+			ActiveSets:         []domain.InboundSet{set},
 		Users:              []domain.User{user},
 		RealityAssignments: assignments,
 	})
@@ -629,8 +461,8 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 		PublicHost:         "198.51.100.10",
 		DataDir:            "/data",
 		TLS:                domain.DefaultSelfSigned("198.51.100.10"),
-		TLSCertPath:        "/data/controlplane/tls/server.crt",
-		TLSKeyPath:         "/data/controlplane/tls/server.key",
+		TLSCertPath:        "/data/controlplane/ssl/default/cert.crt",
+		TLSKeyPath:         "/data/controlplane/ssl/default/cert.key",
 		ActiveSets:         []domain.InboundSet{set},
 		Users:              []domain.User{user},
 		RealityAssignments: assignments,
@@ -651,7 +483,7 @@ func TestBuildAndSubscriptionReality(t *testing.T) {
 	if realityObj["private_key"] != assignments["r1/vless_reality"].PrivateKeyBase64 {
 		t.Fatalf("private_key=%v", realityObj["private_key"])
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "198.51.100.10", domain.DefaultSelfSigned("198.51.100.10"), domain.CertManager{}, SubscriptionFilters{}, assignments, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "198.51.100.10", domain.DefaultSelfSigned("198.51.100.10"), SubscriptionFilters{}, assignments, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -695,7 +527,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 	}
 
 	t.Run("flow xtls only", func(t *testing.T) {
-		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}}, nil, nil)
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -720,7 +552,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 	})
 
 	t.Run("flow none only", func(t *testing.T) {
-		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"none"}}, nil, nil)
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"none"}}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -745,7 +577,7 @@ func TestRenderSubscriptionVlessFlowAndNetworkFilters(t *testing.T) {
 	})
 
 	t.Run("network udp", func(t *testing.T) {
-		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}, Network: "udp"}, nil, nil)
+		body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Presets: []string{"vless-tcp"}, Flow: []string{"xtls-rprx-vision"}, Network: "udp"}, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -791,7 +623,7 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 		},
 	}
 
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"pkt-xudp"}}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Variants: []string{"flow-udp-vision"}, Tags: []string{"mobile"}, Profiles: []string{"pkt-xudp"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -814,7 +646,7 @@ func TestRenderSubscriptionVariantTagProfileFilters(t *testing.T) {
 		t.Fatalf("packet_encoding=%v want xudp from pkt-xudp profile", ob["packet_encoding"])
 	}
 
-	bodyNone, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{Variants: []string{"flow-none"}, Profiles: []string{"pkt-none"}}, nil, nil)
+	bodyNone, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{Variants: []string{"flow-none"}, Profiles: []string{"pkt-none"}}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -853,8 +685,8 @@ func TestMaterializeVlessHysteriaTransport(t *testing.T) {
 		PublicHost:  "h.example",
 		DataDir:     "/data",
 		TLS:         tls,
-		TLSCertPath: "/data/controlplane/tls/server.crt",
-		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		TLSCertPath: "/data/controlplane/ssl/default/cert.crt",
+		TLSKeyPath:  "/data/controlplane/ssl/default/cert.key",
 		ActiveSets:  []domain.InboundSet{set},
 		Users:       []domain.User{user},
 	})
@@ -881,7 +713,7 @@ func TestMaterializeVlessHysteriaTransport(t *testing.T) {
 		t.Fatalf("users=%d want 1 (flow-none only)", len(users))
 	}
 
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -921,8 +753,8 @@ func TestMaterializeVlessWSTransportDefaults(t *testing.T) {
 		PublicHost:  "h.example",
 		DataDir:     "/data",
 		TLS:         tls,
-		TLSCertPath: "/data/controlplane/tls/server.crt",
-		TLSKeyPath:  "/data/controlplane/tls/server.key",
+		TLSCertPath: "/data/controlplane/ssl/default/cert.crt",
+		TLSKeyPath:  "/data/controlplane/ssl/default/cert.key",
 		ActiveSets:  []domain.InboundSet{set},
 		Users:       []domain.User{user},
 	})
@@ -956,7 +788,7 @@ func TestMaterializeVlessWSTransportDefaults(t *testing.T) {
 		t.Fatalf("flow should be absent: %v", u)
 	}
 
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -995,7 +827,7 @@ func TestMaterializeSS2022SubscriptionCombinedPassword(t *testing.T) {
 		},
 	}
 	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example",
-		domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+		domain.DefaultSelfSigned("h.example"), SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1178,7 +1010,7 @@ func TestMaterializeDERPKeys(t *testing.T) {
 	if u["public_key"] != "H2ozVoKXvYy7WKG1lec0LfEepCt2FphorktglinGyws" {
 		t.Fatalf("user public_key=%v", u)
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1284,7 +1116,7 @@ func TestMaterializeCarrierJitsiParamsAndSubscription(t *testing.T) {
 		t.Fatalf("shared_auth should omit users: %v", ib["users"])
 	}
 
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1343,7 +1175,7 @@ func TestMaterializeCarrierPeerSyncListen(t *testing.T) {
 		t.Fatalf("peer=%v", link["peer"])
 	}
 	body, err := RenderSubscription(user, []domain.InboundSet{set}, "edge.example",
-		domain.DefaultSelfSigned("edge.example"), domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+		domain.DefaultSelfSigned("edge.example"), SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1424,7 +1256,7 @@ func TestMaterializeCloudflaredNoSubAndSSHPubkey(t *testing.T) {
 		t.Fatalf("cf=%v ssh=%v", foundCF, foundSSH)
 	}
 	body, err := RenderSubscription(user, []domain.InboundSet{cfSet, sshSet}, "h.example",
-		domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+		domain.DefaultSelfSigned("h.example"), SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1648,8 +1480,8 @@ func TestCatalogsqliteVlessReadyMatrix(t *testing.T) {
 				PublicHost:  "h.example",
 				DataDir:     "/data",
 				TLS:         tls,
-				TLSCertPath: "/data/controlplane/tls/server.crt",
-				TLSKeyPath:  "/data/controlplane/tls/server.key",
+				TLSCertPath: "/data/controlplane/ssl/default/cert.crt",
+				TLSKeyPath:  "/data/controlplane/ssl/default/cert.key",
 				ActiveSets:  []domain.InboundSet{set},
 				Users:       []domain.User{user},
 			})
@@ -1687,7 +1519,7 @@ func TestCatalogsqliteVlessReadyMatrix(t *testing.T) {
 					t.Fatalf("ws early data=%v", tr["max_early_data"])
 				}
 			}
-			body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+			body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", tls, SubscriptionFilters{}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

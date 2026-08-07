@@ -6,7 +6,10 @@ from __future__ import annotations
 def test_reality_get_and_put_partial(api, artifacts_dir):
     before = api.data(api.get("/v1/controlplane/reality"))
     api.dump(artifacts_dir, "reality_before.json", before)
-    assert "effective_profiles" in before or "default_profiles" in before or "profiles" in before or "using_user_overrides" in before
+    assert "profiles" in before
+    assert "seed_defaults" in before
+    assert isinstance(before["profiles"], list)
+    assert len(before["profiles"]) >= 1  # seeded on first start
 
     # Valid-looking profile
     put = api.data(
@@ -27,6 +30,7 @@ def test_reality_get_and_put_partial(api, artifacts_dir):
     assert "accepted" in put
     assert len(put["accepted"]) >= 1
     assert put.get("rejected") == [] or isinstance(put.get("rejected"), list)
+    assert put.get("profiles") is not None
 
 
 def test_reality_all_rejected(api):

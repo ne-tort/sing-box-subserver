@@ -4,15 +4,15 @@ Captured from live tests on `163.5.180.181` (2026-07-28).
 
 ## Done on VPS
 
-- [x] self_signed default + trojan handshake + regenerate Force reload
-- [x] cert-manager domain ACME via TLS-ALPN-01 and HTTP-01 (nginx stopped)
-- [x] cert-manager IP (LE shortlived)
+- [x] Default SSL profile self_signed + trojan handshake + regenerate
+- [x] SSL ACME domain via TLS-ALPN-01 and HTTP-01 (nginx stopped)
+- [x] SSL ACME IP (`acme_ip`)
 - [x] `alternative_http_port` + host REDIRECT (host network)
 - [x] presets catalog + demux-groups API + `cp_invalid_demux`
 - [x] Deploy default = **host network** (`deploy/docker-compose.yml`, install-edge, VPS scripts)
-- [x] cert-manager `material_status.ready` from certmagic PEM presence
-- [x] Management API + `/v1/sub` HTTPS (self_signed / ACME / interim)
-- [x] ACME watchdog logs obtain stalls; mgmt falls back to interim self_signed PEMs
+- [x] SSL profile `status.state` from x509 / certmagic PEM presence
+- [x] Management API + `/v1/sub` HTTPS (Default SSL profile)
+- [x] ACME watchdog logs obtain stalls; mgmt uses Default SSL leaf
 
 ## Gaps / follow-ups
 
@@ -36,10 +36,12 @@ docker compose up -d   # network_mode: host — no -p flags
 HTTP-01 with free :80 (host network binds 80/443 directly):
 
 ```bash
-curl -X PUT .../v1/controlplane/cert-manager -d '{
-  "email":"ops@example.com","domains":["wiki.ai-qwerty.ru"],"provider":"letsencrypt"
+# create/update ACME SSL profile, then bind with params.ssl_profile
+curl -X POST .../v1/controlplane/ssl -d '{"name":"prod"}'
+curl -X PUT .../v1/controlplane/ssl/{id} -d '{
+  "type":"acme","domain":"wiki.ai-qwerty.ru","email":"ops@example.com","provider":"letsencrypt"
 }'
-# then set bindings[].params.sni on TLS inbounds; poll cert-manager material_status.ready
+# poll GET /ssl/{id} until status.state == ready
 ```
 
 Helpers: `scripts/vps_acme_http01_catalogs.sh`, `scripts/vps_acme_alt_http.sh`.

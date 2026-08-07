@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,8 +24,7 @@ func (s *Service) ServingHTTPS() bool {
 	return s != nil
 }
 
-// GetCertificate selects the active management certificate:
-// ACME PEMs from cert-manager when issued; otherwise safety self_signed PEMs.
+// GetCertificate selects the active management certificate from the Default SSL profile.
 func (s *Service) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	if s == nil {
 		return nil, fmt.Errorf("controlplane unavailable")
@@ -39,45 +37,33 @@ func (s *Service) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, erro
 }
 
 func (s *Service) mgmtMaterialPaths() (certPath, keyPath, source string, err error) {
-	p, err := s.ensureTLSProfile(false)
+	_ = s.ensureSSLProfiles()
+	p, ok, err := s.findSSLProfile(defaultSSLProfileID)
 	if err != nil {
 		return "", "", "", err
 	}
-	if err := s.ensureSafetySelfSignedPEMs(p); err != nil {
-		return "", "", "", err
+	if !ok {
+		return "", "", "", fmt.Errorf("default ssl profile missing")
 	}
-	safetyCert, safetyKey := tlsMaterialPaths(s.cfg.DataDir)
-
-	cm, err := s.ensureCertManager()
+	p, err = s.ensureSSLProfileMaterial(p, false)
 	if err != nil {
 		return "", "", "", err
 	}
-	domains := cm.NormalizedDomains()
-	if len(domains) > 0 {
-		root := filepath.Join(acmeDataDirectory(s.cfg.DataDir), "certificates")
-		if c, k, ok := acmeCertKeyPaths(root, domains[0]); ok {
-			return c, k, "acme", nil
+	certPath, keyPath = sslCertPaths(s.cfg.DataDir, p.ID)
+	if _, err := os.Stat(certPath); err != nil {
+		return "", "", "", fmt.Errorf("default ssl cert: %w", err)
+	}
+	if _, err := os.Stat(keyPath); err != nil {
+		return "", "", "", fmt.Errorf("default ssl key: %w", err)
+	}
+	if p.IsACME() {
+		st := s.computeSSLStatus(p)
+		if st.State == domain.SSLStateReady {
+			return certPath, keyPath, "ssl_acme", nil
 		}
-		return safetyCert, safetyKey, "self_signed_interim", nil
+		return certPath, keyPath, "ssl_self_signed_interim", nil
 	}
-	return safetyCert, safetyKey, "self_signed", nil
-}
-
-func (s *Service) ensureSafetySelfSignedPEMs(p domain.TLSProfile) error {
-	host := ""
-	if s.cfg.Cfg != nil {
-		host = s.cfg.Cfg.Controlplane.PublicHost
-	}
-	spec := p.SelfSigned
-	if spec == nil {
-		fallback := domain.DefaultSelfSigned(host)
-		spec = fallback.SelfSigned
-	}
-	if spec == nil {
-		return fmt.Errorf("no self_signed spec for safety PEMs")
-	}
-	_, _, _, err := ensureSelfSigned(s.cfg.DataDir, *spec, false)
-	return err
+	return certPath, keyPath, "ssl_self_signed", nil
 }
 
 type mgmtCertCache struct {

@@ -262,13 +262,23 @@ func BundlePathology() (map[string]any, error) {
 // BundlePathologyWith builds a Pathology block. When auto is false, fills a
 // compatible minimal advanced set (persona/pad_budget/preset/intensity/frame/cipher/dialog).
 func BundlePathologyWith(auto bool) (map[string]any, error) {
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return nil, err
+	return BundlePathologyWithKey(auto, "")
+}
+
+// BundlePathologyWithKey builds a Pathology block. If preserveKey is non-empty it
+// is reused; otherwise a fresh random PSK is generated.
+func BundlePathologyWithKey(auto bool, preserveKey string) (map[string]any, error) {
+	keyStr := strings.TrimSpace(preserveKey)
+	if keyStr == "" {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return nil, err
+		}
+		keyStr = base64.StdEncoding.EncodeToString(key)
 	}
 	out := map[string]any{
 		"enabled": true,
-		"key":     base64.StdEncoding.EncodeToString(key),
+		"key":     keyStr,
 		"auto":    auto,
 	}
 	if !auto {
@@ -309,15 +319,29 @@ func PathologyAuto(existing map[string]any) bool {
 	return true
 }
 
-// RegeneratePathology replaces the PSK (and advanced knobs when auto=false),
-// preserving the existing auto flag (default true).
-func RegeneratePathology(existing map[string]any) (map[string]any, error) {
-	return BundlePathologyWith(PathologyAuto(existing))
+// PathologyKey extracts a non-empty key string from an existing pathology map.
+func PathologyKey(existing map[string]any) string {
+	if !PathologyHasKey(existing) {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(existing["key"]))
 }
 
-// RotatePathologyKey is kept as an alias of RegeneratePathology.
+func pathologyKeyOf(existing map[string]any) string {
+	return PathologyKey(existing)
+}
+
+// RegeneratePathology refreshes auto/advanced knobs but preserves an existing PSK.
+// A new key is generated only when the previous map had none.
+// Ordinary regenerate must never rotate the PSK (sticky like WG user keys; future
+// rotation belongs on client creds UX).
+func RegeneratePathology(existing map[string]any) (map[string]any, error) {
+	return BundlePathologyWithKey(PathologyAuto(existing), pathologyKeyOf(existing))
+}
+
+// RotatePathologyKey forces a new random PSK (and refreshes knobs like regenerate).
 func RotatePathologyKey(existing map[string]any) (map[string]any, error) {
-	return RegeneratePathology(existing)
+	return BundlePathologyWithKey(PathologyAuto(existing), "")
 }
 
 // PathologyHasKey reports whether pathology map carries a non-empty key.

@@ -98,6 +98,7 @@ type BindingSmoke struct {
 	OK         bool   `json:"ok"`
 	LatencyMs  *int   `json:"latency_ms,omitempty"`
 	Skipped    bool   `json:"skipped,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
 	FinishedAt string `json:"finished_at,omitempty"`
 }
 
@@ -130,6 +131,7 @@ func (r *Report) SmokeFor(setName, preset string) *BindingSmoke {
 			OK:         res.OK,
 			LatencyMs:  res.LatencyMs,
 			Skipped:    res.Skipped,
+			SkipReason: res.SkipReason,
 			FinishedAt: r.FinishedAt,
 		}
 	}
@@ -142,11 +144,11 @@ type Input struct {
 	Sets               []domain.InboundSet
 	PublicHost         string
 	TLS                domain.TLSProfile
-	CertManager        domain.CertManager
 	RealityAssignments map[string]domain.RealityAssignment
 	Hub                *domain.WgHub
 	TLSCertPath        string
 	SlotTLS            map[string]materialize.SlotTLSMaterial
+	SSLProfiles        []domain.SSLProfile
 }
 
 // IsSmokeUser reports whether name/id is the reserved smoke account.

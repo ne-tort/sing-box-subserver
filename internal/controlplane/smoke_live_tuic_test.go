@@ -80,7 +80,7 @@ func TestAPITuicAllReadySchemaAndMaterialize(t *testing.T) {
 				}
 			}
 			body, err := materialize.RenderSubscription(
-				user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{},
+				user, []domain.InboundSet{set}, "h.example", tls,
 				materialize.SubscriptionFilters{}, nil, nil,
 			)
 			if err != nil {

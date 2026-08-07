@@ -40,8 +40,6 @@ type ControlplaneConfig struct {
 	PublicHost    string `yaml:"public_host" json:"public_host"`
 	PublicPort    int    `yaml:"public_port" json:"public_port"`
 	ExpiryTickSec int    `yaml:"expiry_tick_sec" json:"expiry_tick_sec"`
-	// AcmeEmail is used by auto free-DNS ACME bootstrap when cert_manager.email is empty.
-	AcmeEmail string `yaml:"acme_email" json:"acme_email"`
 }
 
 type PullConfig struct {

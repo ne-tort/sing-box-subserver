@@ -6,19 +6,27 @@ Normative types for implementation and API. Field names are JSON/`snake_case` un
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `id` | string | Stable opaque id (ulid/uuid) |
+| `id` | string | Stable opaque id (local to this agent) |
 | `name` | string | Display; unique recommended |
 | `enabled` | bool | Default true |
 | `created_at` / `updated_at` | RFC3339 | |
 | `expires_at` | RFC3339 \| null | Optional lifetime end |
 | `traffic_limit_bytes` | uint64 \| null | Quota hook; enforced when used ≥ limit |
-| `traffic_used_bytes` | uint64 | Default 0; written by `with_traffic` cpbridge or admin PATCH |
+| `traffic_used_bytes` | uint64 | Display/quota total; local users mirrored from dataplane; sync users may receive hub **global** |
+| `traffic_ingress_bytes` | uint64 | Local dataplane contribution since `traffic_epoch` (sync delta source) |
+| `traffic_epoch` | uint64 | Ingress generation; bumps on local reset |
 | `traffic_reset_at` | RFC3339 \| null | Next reset instant (optional) |
 | `traffic_reset_period_sec` | uint64 \| null | Optional period after reset |
 | `speed_up_bytes_per_sec` | int64 | Shaping upload cap (0 = unlimited); requires `with_traffic` |
 | `speed_down_bytes_per_sec` | int64 | Shaping download cap (0 = unlimited); requires `with_traffic` |
 | `sub_token` | string | Secret; high entropy; URL-safe |
 | `creds` | object | Map `preset_name` → protocol-specific secret object |
+| `sync_id` | string \| omit | Cross-node UUID; empty ⇒ local-only. Once set, keep it for ignore detection — do **not** wipe on opt-out |
+| `sync_mode` | `local` \| `identity` \| `full` | Default `local`; see [14-users-sync](14-users-sync.md). After a `sync_id` is issued, opt-out uses `sync_enabled=false`, not `sync_mode=local` |
+| `sync_enabled` | bool | Default true when syncable; **false** = this node ignores the user in sync exchange (user stays on disk; hub may keep a clone) |
+| `deleted_at` | RFC3339 \| omit | Soft-delete tombstone |
+| `origin` | `local` \| `import` \| `sync` | Audit |
+| `revision` | uint64 | Profile meta revision (not traffic) |
 
 WireGuard hub creds live under `creds.wg` (mirrored to `wg_awg2`/`wg_awg3` aliases):
 `private_key`, `public_key`, sticky `wg_host_index` (2–254).
@@ -57,9 +65,12 @@ persist — do not fail old users.
 
 A user is **eligible** for materialize and subscription iff all hold:
 
-1. `enabled == true`
-2. `expires_at` is null or `now < expires_at`
-3. `traffic_limit_bytes` is null **or** `traffic_used_bytes < traffic_limit_bytes`
+1. `deleted_at` is unset
+2. `enabled == true`
+3. `expires_at` is null or `now < expires_at`
+4. `traffic_limit_bytes` is null **or** `traffic_used_bytes < traffic_limit_bytes`
+
+Cross-node sync: [14-users-sync](14-users-sync.md).
 
 Ineligible users are omitted from inbound `users[]` and receive `403` on sub fetch.
 
@@ -69,11 +80,12 @@ When eligibility flips while `config_mode=controlplane` and any set is active �
 
 When `traffic_reset_at <= now`:
 
-- set `traffic_used_bytes = 0`
+- set `traffic_used_bytes = 0`, `traffic_ingress_bytes = 0`, bump `traffic_epoch`
 - advance `traffic_reset_at` by `traffic_reset_period_sec` if period set, else clear reset_at
 - if user becomes eligible again → materialize + Apply
 
-Actual increment of `traffic_used_bytes` is **out of scope** (future module).
+Dataplane increments land in `traffic_ingress_bytes` (and, for non-sync users, also
+`traffic_used_bytes`) via `with_traffic` cpbridge.
 
 ## ProtocolPreset / InvariantPreset
 
@@ -192,41 +204,24 @@ Global `config_mode` is **not** duplicated here — see root [`config-owner.json
 
 Boot reconciliation (see [05-api](05-api.md)): orphan `controlplane` without `active_sets` → `idle`; stale `active_sets` while not `controlplane` → cleared.
 
-## TLSProfile (`tls_profile.json`)
+## SSL profiles (`ssl_profiles.json`)
 
-Always self-signed material for default TLS / mgmt safety PEMs. See [11-tls](11-tls.md).
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `self_signed` | object | `common_name`, `dns_sans`, `ip_sans`, `key_type`, `valid_days`, `organization` |
-
-Defaults on first boot: from `controlplane.public_host` (IP → `ip_sans`).
-
-## CertManager (`cert_manager.json`)
-
-ACME domain pool; inbounds opt in via `bindings[].params.sni`.
+First-class TLS/ACME/ECH unit. See [11-tls](11-tls.md).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `email` | string | Required when `domains` non-empty; bootstrap may fill from `controlplane.acme_email` in `agent.yaml` |
-| `domains` | string[] | DNS names and optionally **one** bare IP. Materialize splits them into `cp-tls` (DNS) + `cp-tls-ip` (LE shortlived). Auto free-DNS may add DNS names when `public_host` is an IPv4 |
-| `provider` | string | `letsencrypt` (default), `zerossl`, or URL |
-| `key_type` | string | optional |
-| challenge flags | bool/int | `disable_http_challenge`, `alternative_*_port`, `dns01_challenge` |
+| `id` | string | `default` reserved |
+| `name` | string | Display name |
+| `type` | string | `self_signed` \| `acme` \| `acme_ip` |
+| `domain` / `ip` | string | Identity for leaf / ACME |
+| `email` / `provider` | string | ACME settings |
+| handshake / ECH | … | `alpn`, versions, ciphers, `ech_enabled`, `ech_sni` |
 
-Do not put more than one bare IP in CertManager. DNS names + one IP are allowed via dual `certificate_providers`. Reinstall preserves `controlplane/acme/`, `cert_manager.json`, and `free_dns.json` so Let's Encrypt account/PEMs are reused.
+PEMs live under `controlplane/ssl/<id>/`. Binding: `params.ssl_profile=<id>` (empty → `default`).
 
 ### Free DNS state (`free_dns.json`)
 
-Operator-independent auto names for IP VPS:
-
-| Field | Notes |
-|-------|-------|
-| `ipv4` | Public IPv4 used for dashed hosts / addr.tools update |
-| `addr_secret` / `addr_host` | Stable dyn.addr.tools secret → sha224 host |
-| `providers.{sslip,nip,addrtools}` | `{host,status,…}`; failed providers are skipped quietly |
-
-Heartbeat refreshes addr.tools about once per day (required before ~90d expiry).
+Operator-independent auto names for IP VPS (addr.tools heartbeat). Not coupled to SSL profiles.
 
 ## ConfigFragments (`config_fragments.json`)
 
@@ -243,10 +238,10 @@ Outbounds here are **server dataplane** outbounds only (not subscription `/v1/su
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `user_profiles` | `RealityEndpoint[]` | Operator overrides from `PUT /reality` |
-| `effective_profiles` | `RealityEndpoint[]` | Validated pool currently used by runtime |
-| `using_user_overrides` | bool | `true` only when validated user pool is non-empty |
-| `updated_at` | RFC3339 \| null | Last validation/update time |
+| `profiles` | `RealityEndpoint[]` | Editable SNI pool (source of truth). Seeded once from curated defaults when missing/empty |
+| `updated_at` | RFC3339 \| null | Last PUT / seed time |
+
+Legacy files with `user_profiles` / `effective_profiles` / `using_user_overrides` are migrated on load into `profiles` (prefer user list when overrides were active).
 
 ### RealityEndpoint
 
@@ -255,6 +250,8 @@ Outbounds here are **server dataplane** outbounds only (not subscription `/v1/su
 | `sni` | string | Required domain |
 | `handshake_server` | string | Optional; default = `sni` |
 | `handshake_port` | uint16 | Optional; default = `443` |
+
+Optional binding pin: `bindings[].params.reality_sni` (empty/absent = auto-pick from `profiles`). Legacy `demux_sni` is still read as a prefer alias for Reality.
 
 ## Reality assignments (`reality_assignments.json`)
 

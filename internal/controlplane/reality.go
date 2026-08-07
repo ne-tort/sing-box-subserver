@@ -3,13 +3,14 @@
 package controlplane
 
 import (
-	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,179 +19,8 @@ import (
 	"github.com/ne-tort/sing-box-subserver/internal/controlplane/presets"
 )
 
-const realityValidationInterval = 5 * time.Minute
-
-var likelyCDNSuffixes = []string{
-	".cloudflare.com",
-	".cloudfront.net",
-	".fastly.net",
-	".fastlylb.net",
-	".akamaiedge.net",
-	".akamai.net",
-	".edgekey.net",
-	".edgesuite.net",
-	".jsdelivr.net",
-	".unpkg.com",
-}
-
 func defaultRealityProfiles() []domain.RealityEndpoint {
-	// Keep in sync with demuxgroups realitySNIPool.
-	// Curated via scripts/_curate_reality_sni.py: known hosts, correct www/bare,
-	// no Google/Yahoo/Cloudflare/CDN edges, no RU sites; TLS+redirect checked.
-	// www.microsoft.com removed: TLS dial works but Reality handshake fails
-	// (REALITY: processed invalid connection) on current lx + official clients.
-	return []domain.RealityEndpoint{
-		{SNI: "www.apple.com"},
-		{SNI: "www.ieee.org"},
-		{SNI: "www.amazon.com"},
-		{SNI: "gateway.icloud.com"},
-		{SNI: "www.bing.com"},
-		{SNI: "www.wikipedia.org"},
-		{SNI: "github.com"},
-		{SNI: "stackoverflow.com"},
-		{SNI: "www.mozilla.org"},
-		{SNI: "ubuntu.com"},
-		{SNI: "www.debian.org"},
-		{SNI: "www.kernel.org"},
-		{SNI: "www.python.org"},
-		{SNI: "nodejs.org"},
-		{SNI: "www.php.net"},
-		{SNI: "www.mysql.com"},
-		{SNI: "www.postgresql.org"},
-		{SNI: "www.docker.com"},
-		{SNI: "kubernetes.io"},
-		{SNI: "www.hashicorp.com"},
-		{SNI: "www.atlassian.com"},
-		{SNI: "www.jetbrains.com"},
-		{SNI: "www.adobe.com"},
-		{SNI: "www.autodesk.com"},
-		{SNI: "www.oracle.com"},
-		{SNI: "www.ibm.com"},
-		{SNI: "www.amd.com"},
-		{SNI: "www.nvidia.com"},
-		{SNI: "www.dell.com"},
-		{SNI: "www.lenovo.com"},
-		{SNI: "www.asus.com"},
-		{SNI: "www.samsung.com"},
-		{SNI: "www.sony.com"},
-		{SNI: "www.lg.com"},
-		{SNI: "www.qualcomm.com"},
-		{SNI: "www.broadcom.com"},
-		{SNI: "www.ericsson.com"},
-		{SNI: "www.nokia.com"},
-		{SNI: "www.siemens.com"},
-		{SNI: "www.bosch.com"},
-		{SNI: "www.honeywell.com"},
-		{SNI: "www.salesforce.com"},
-		{SNI: "www.sap.com"},
-		{SNI: "www.servicenow.com"},
-		{SNI: "www.workday.com"},
-		{SNI: "slack.com"},
-		{SNI: "www.notion.so"},
-		{SNI: "www.figma.com"},
-		{SNI: "www.dropbox.com"},
-		{SNI: "www.box.com"},
-		{SNI: "asana.com"},
-		{SNI: "monday.com"},
-		{SNI: "www.shopify.com"},
-		{SNI: "stripe.com"},
-		{SNI: "www.paypal.com"},
-		{SNI: "www.square.com"},
-		{SNI: "www.mastercard.com"},
-		{SNI: "www.americanexpress.com"},
-		{SNI: "www.netflix.com"},
-		{SNI: "www.disney.com"},
-		{SNI: "www.twitch.tv"},
-		{SNI: "www.imdb.com"},
-		{SNI: "www.nytimes.com"},
-		{SNI: "www.theguardian.com"},
-		{SNI: "www.reuters.com"},
-		{SNI: "www.bloomberg.com"},
-		{SNI: "www.forbes.com"},
-		{SNI: "www.wsj.com"},
-		{SNI: "www.ft.com"},
-		{SNI: "www.economist.com"},
-		{SNI: "www.ieee.org"},
-		{SNI: "www.acm.org"},
-		{SNI: "www.ted.com"},
-		{SNI: "www.duolingo.com"},
-		{SNI: "www.edx.org"},
-		{SNI: "udemy.com"},
-		{SNI: "www.khanacademy.org"},
-		{SNI: "wordpress.org"},
-		{SNI: "wordpress.com"},
-		{SNI: "www.wired.com"},
-		{SNI: "techcrunch.com"},
-		{SNI: "www.theverge.com"},
-		{SNI: "arstechnica.com"},
-		{SNI: "www.npr.org"},
-		{SNI: "www.pbs.org"},
-		{SNI: "www.nationalgeographic.com"},
-		{SNI: "time.com"},
-		{SNI: "www.ap.org"},
-		{SNI: "www.nike.com"},
-		{SNI: "www.adidas.com"},
-		{SNI: "www.ikea.com"},
-		{SNI: "www.uniqlo.com"},
-		{SNI: "www.zara.com"},
-		{SNI: "www.target.com"},
-		{SNI: "www.walmart.com"},
-		{SNI: "www.costco.com"},
-		{SNI: "www.bestbuy.com"},
-		{SNI: "www.homedepot.com"},
-		{SNI: "www.ebay.com"},
-		{SNI: "www.etsy.com"},
-		{SNI: "www.booking.com"},
-		{SNI: "www.airbnb.com"},
-		{SNI: "www.expedia.com"},
-		{SNI: "www.tripadvisor.com"},
-		{SNI: "www.marriott.com"},
-		{SNI: "www.hilton.com"},
-		{SNI: "www.uber.com"},
-		{SNI: "www.lyft.com"},
-		{SNI: "www.agoda.com"},
-		{SNI: "www.kayak.com"},
-		{SNI: "www.toyota.com"},
-		{SNI: "www.honda.com"},
-		{SNI: "www.bmw.com"},
-		{SNI: "www.mercedes-benz.com"},
-		{SNI: "www.audi.com"},
-		{SNI: "www.ford.com"},
-		{SNI: "www.tesla.com"},
-		{SNI: "www.boeing.com"},
-		{SNI: "www.airbus.com"},
-		{SNI: "www.emirates.com"},
-		{SNI: "www.qatarairways.com"},
-		{SNI: "www.singaporeair.com"},
-		{SNI: "www.lufthansa.com"},
-		{SNI: "www.airfrance.com"},
-		{SNI: "www.klm.com"},
-		{SNI: "www.britishairways.com"},
-		{SNI: "www.united.com"},
-		{SNI: "www.aa.com"},
-		{SNI: "www.verizon.com"},
-		{SNI: "www.att.com"},
-		{SNI: "www.tmobile.com"},
-		{SNI: "www.vodafone.com"},
-		{SNI: "www.orange.com"},
-		{SNI: "www.bt.com"},
-		{SNI: "www.hsbc.com"},
-		{SNI: "www.barclays.co.uk"},
-		{SNI: "www.jpmorgan.com"},
-		{SNI: "www.goldmansachs.com"},
-		{SNI: "www.morganstanley.com"},
-		{SNI: "www.bankofamerica.com"},
-		{SNI: "www.wellsfargo.com"},
-		{SNI: "www.chase.com"},
-		{SNI: "www.citi.com"},
-		{SNI: "www.nasa.gov"},
-		{SNI: "www.nih.gov"},
-		{SNI: "www.cdc.gov"},
-		{SNI: "www.who.int"},
-		{SNI: "www.un.org"},
-		{SNI: "www.imf.org"},
-		{SNI: "www.worldbank.org"},
-	}
+	return domain.DefaultRealityProfiles()
 }
 
 func normalizeRealityEndpoint(in domain.RealityEndpoint) (domain.RealityEndpoint, error) {
@@ -219,38 +49,6 @@ func normalizeRealityEndpoint(in domain.RealityEndpoint) (domain.RealityEndpoint
 	}, nil
 }
 
-func isLikelyCDNHost(host string) bool {
-	h := strings.ToLower(strings.TrimSpace(host))
-	for _, s := range likelyCDNSuffixes {
-		if strings.HasSuffix(h, s) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Service) validateRealityEndpoint(ctx context.Context, ep domain.RealityEndpoint) bool {
-	// Conservative filter: skip hosts that look like direct CDN edge entries.
-	if isLikelyCDNHost(ep.SNI) || isLikelyCDNHost(ep.HandshakeServer) {
-		return false
-	}
-	resolver := net.DefaultResolver
-	if _, err := resolver.LookupIPAddr(ctx, ep.SNI); err != nil {
-		return false
-	}
-	if _, err := resolver.LookupIPAddr(ctx, ep.HandshakeServer); err != nil {
-		return false
-	}
-	address := net.JoinHostPort(ep.HandshakeServer, strconv.Itoa(int(ep.HandshakePort)))
-	dialer := net.Dialer{Timeout: 2 * time.Second}
-	c, err := dialer.DialContext(ctx, "tcp", address)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
-}
-
 func randomRealityShortID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -274,18 +72,110 @@ func realityInboundKey(setName, presetName string) string {
 	return setName + "/" + presetName
 }
 
-func (s *Service) loadRealityConfig() (domain.RealityConfig, error) {
-	cfg, ok, err := s.store.LoadRealityConfig()
-	if err != nil {
-		return domain.RealityConfig{}, err
+func normalizedRealityDefaults() []domain.RealityEndpoint {
+	base := defaultRealityProfiles()
+	out := make([]domain.RealityEndpoint, 0, len(base))
+	for _, p := range base {
+		ep, err := normalizeRealityEndpoint(p)
+		if err != nil {
+			continue
+		}
+		out = append(out, ep)
 	}
-	if ok {
+	return out
+}
+
+func normalizeRealityPoolInPlace(in []domain.RealityEndpoint) ([]domain.RealityEndpoint, bool) {
+	if len(in) == 0 {
+		return in, false
+	}
+	out := make([]domain.RealityEndpoint, 0, len(in))
+	changed := false
+	seen := map[string]struct{}{}
+	for _, raw := range in {
+		ep, err := normalizeRealityEndpoint(raw)
+		if err != nil {
+			changed = true
+			continue
+		}
+		key := ep.SNI + "|" + ep.HandshakeServer + "|" + strconv.Itoa(int(ep.HandshakePort))
+		if _, ok := seen[key]; ok {
+			changed = true
+			continue
+		}
+		seen[key] = struct{}{}
+		if ep != raw {
+			changed = true
+		}
+		out = append(out, ep)
+	}
+	return out, changed
+}
+
+// legacyRealityConfigFile reads old dual-pool JSON for one-shot migration.
+type legacyRealityConfigFile struct {
+	Profiles           []domain.RealityEndpoint `json:"profiles"`
+	UpdatedAt          *time.Time               `json:"updated_at"`
+	UserProfiles       []domain.RealityEndpoint `json:"user_profiles"`
+	EffectiveProfiles  []domain.RealityEndpoint `json:"effective_profiles"`
+	UsingUserOverrides bool                     `json:"using_user_overrides"`
+}
+
+func migrateRealityConfig(raw legacyRealityConfigFile) (domain.RealityConfig, bool) {
+	now := time.Now().UTC()
+	pick := func(list []domain.RealityEndpoint) domain.RealityConfig {
+		fixed, _ := normalizeRealityPoolInPlace(list)
+		ua := raw.UpdatedAt
+		if ua == nil {
+			ua = &now
+		}
+		return domain.RealityConfig{Profiles: fixed, UpdatedAt: ua}
+	}
+	if len(raw.Profiles) > 0 {
+		return pick(raw.Profiles), len(raw.UserProfiles) > 0 || len(raw.EffectiveProfiles) > 0 || raw.UsingUserOverrides
+	}
+	if raw.UsingUserOverrides && len(raw.UserProfiles) > 0 {
+		return pick(raw.UserProfiles), true
+	}
+	if len(raw.EffectiveProfiles) > 0 {
+		return pick(raw.EffectiveProfiles), true
+	}
+	if len(raw.UserProfiles) > 0 {
+		return pick(raw.UserProfiles), true
+	}
+	return domain.RealityConfig{}, false
+}
+
+func (s *Service) loadRealityConfig() (domain.RealityConfig, error) {
+	// Prefer raw read for legacy migration when Profiles is empty but old fields exist.
+	if cfg, ok, err := s.loadRealityConfigMigrating(); err != nil {
+		return domain.RealityConfig{}, err
+	} else if ok {
+		if len(cfg.Profiles) == 0 {
+			now := time.Now().UTC()
+			cfg = domain.RealityConfig{Profiles: normalizedRealityDefaults(), UpdatedAt: &now}
+			if err := s.store.SaveRealityConfig(cfg); err != nil {
+				return domain.RealityConfig{}, err
+			}
+			return cfg, nil
+		}
+		fixed, changed := normalizeRealityPoolInPlace(cfg.Profiles)
+		if changed {
+			cfg.Profiles = fixed
+			if err := s.store.SaveRealityConfig(cfg); err != nil {
+				return domain.RealityConfig{}, err
+			}
+		} else if cfg.UpdatedAt == nil {
+			now := time.Now().UTC()
+			cfg.UpdatedAt = &now
+			_ = s.store.SaveRealityConfig(cfg)
+		}
 		return cfg, nil
 	}
 	now := time.Now().UTC()
-	cfg = domain.RealityConfig{
-		EffectiveProfiles: normalizedRealityDefaults(),
-		UpdatedAt:         &now,
+	cfg := domain.RealityConfig{
+		Profiles:  normalizedRealityDefaults(),
+		UpdatedAt: &now,
 	}
 	if err := s.store.SaveRealityConfig(cfg); err != nil {
 		return domain.RealityConfig{}, err
@@ -293,24 +183,29 @@ func (s *Service) loadRealityConfig() (domain.RealityConfig, error) {
 	return cfg, nil
 }
 
-func (s *Service) validateRealityPool(ctx context.Context, profiles []domain.RealityEndpoint) []domain.RealityEndpoint {
-	out := make([]domain.RealityEndpoint, 0, len(profiles))
-	seen := map[string]struct{}{}
-	for _, raw := range profiles {
-		ep, err := normalizeRealityEndpoint(raw)
-		if err != nil {
-			continue
+func (s *Service) loadRealityConfigMigrating() (domain.RealityConfig, bool, error) {
+	raw, err := os.ReadFile(s.store.RealityConfigPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return domain.RealityConfig{}, false, nil
 		}
-		key := ep.SNI + "|" + ep.HandshakeServer + "|" + strconv.Itoa(int(ep.HandshakePort))
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		if s.validateRealityEndpoint(ctx, ep) {
-			seen[key] = struct{}{}
-			out = append(out, ep)
-		}
+		return domain.RealityConfig{}, false, err
 	}
-	return out
+	var leg legacyRealityConfigFile
+	if err := json.Unmarshal(raw, &leg); err != nil {
+		return domain.RealityConfig{}, false, err
+	}
+	cfg, migrated := migrateRealityConfig(leg)
+	if len(cfg.Profiles) > 0 {
+		if migrated || len(leg.UserProfiles) > 0 || len(leg.EffectiveProfiles) > 0 {
+			if err := s.store.SaveRealityConfig(cfg); err != nil {
+				return domain.RealityConfig{}, false, err
+			}
+		}
+		return cfg, true, nil
+	}
+	// File exists but empty — treat as present empty.
+	return domain.RealityConfig{UpdatedAt: leg.UpdatedAt}, true, nil
 }
 
 func hasRealityPreset(sets []domain.InboundSet) bool {
@@ -337,96 +232,6 @@ func presetHasTrait(p domain.ProtocolPreset, trait string) bool {
 	return false
 }
 
-func (s *Service) refreshRealityConfig(ctx context.Context, force bool) (domain.RealityConfig, bool, error) {
-	cfg, err := s.loadRealityConfig()
-	if err != nil {
-		return domain.RealityConfig{}, false, err
-	}
-	if !force && cfg.UpdatedAt != nil && time.Since(*cfg.UpdatedAt) < realityValidationInterval {
-		fixed, nChanged := normalizeRealityPoolInPlace(cfg.EffectiveProfiles)
-		cfg.EffectiveProfiles = fixed
-		if nChanged {
-			if err := s.store.SaveRealityConfig(cfg); err != nil {
-				return domain.RealityConfig{}, false, err
-			}
-			return cfg, true, nil
-		}
-		return cfg, false, nil
-	}
-	defaults := s.validateRealityPool(ctx, defaultRealityProfiles())
-	if len(defaults) == 0 {
-		defaults = normalizedRealityDefaults()
-	}
-	effective := defaults
-	usingUser := false
-	if len(cfg.UserProfiles) > 0 {
-		validUser := s.validateRealityPool(ctx, cfg.UserProfiles)
-		if len(validUser) > 0 {
-			effective = validUser
-			usingUser = true
-		} else {
-			// Silent failover: invalid user profile list is dropped.
-			cfg.UserProfiles = nil
-		}
-	}
-	now := time.Now().UTC()
-	changed := usingUser != cfg.UsingUserOverrides || !sameRealityPool(cfg.EffectiveProfiles, effective) || len(cfg.UserProfiles) == 0 && cfg.UsingUserOverrides
-	cfg.EffectiveProfiles = effective
-	cfg.UsingUserOverrides = usingUser
-	cfg.UpdatedAt = &now
-	if changed {
-		if err := s.store.SaveRealityConfig(cfg); err != nil {
-			return domain.RealityConfig{}, false, err
-		}
-	}
-	return cfg, changed, nil
-}
-
-func normalizedRealityDefaults() []domain.RealityEndpoint {
-	base := defaultRealityProfiles()
-	out := make([]domain.RealityEndpoint, 0, len(base))
-	for _, p := range base {
-		ep, err := normalizeRealityEndpoint(p)
-		if err != nil {
-			continue
-		}
-		out = append(out, ep)
-	}
-	return out
-}
-
-func normalizeRealityPoolInPlace(in []domain.RealityEndpoint) ([]domain.RealityEndpoint, bool) {
-	if len(in) == 0 {
-		return in, false
-	}
-	out := make([]domain.RealityEndpoint, 0, len(in))
-	changed := false
-	for _, raw := range in {
-		ep, err := normalizeRealityEndpoint(raw)
-		if err != nil {
-			changed = true
-			continue
-		}
-		if ep != raw {
-			changed = true
-		}
-		out = append(out, ep)
-	}
-	return out, changed
-}
-
-func sameRealityPool(a, b []domain.RealityEndpoint) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func poolContainsEndpoint(pool []domain.RealityEndpoint, ep domain.RealityEndpoint) bool {
 	for _, p := range pool {
 		if p.SNI == ep.SNI && p.HandshakeServer == ep.HandshakeServer && p.HandshakePort == ep.HandshakePort {
@@ -434,6 +239,16 @@ func poolContainsEndpoint(pool []domain.RealityEndpoint, ep domain.RealityEndpoi
 		}
 	}
 	return false
+}
+
+func realityPreferSNI(params map[string]string) string {
+	if params == nil {
+		return ""
+	}
+	if v := strings.ToLower(strings.TrimSpace(params[domain.BindingParamRealitySNI])); v != "" {
+		return v
+	}
+	return strings.ToLower(strings.TrimSpace(params["demux_sni"]))
 }
 
 func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []domain.RealityEndpoint) (map[string]domain.RealityAssignment, bool, error) {
@@ -452,8 +267,6 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 	needed := map[string]struct{}{}
 	type needItem struct {
 		key       string
-		setName   string
-		preset    string
 		preferSNI string
 	}
 	var items []needItem
@@ -465,14 +278,10 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 			}
 			key := realityInboundKey(set.Name, p.Name)
 			needed[key] = struct{}{}
-			prefer := ""
-			if b.Params != nil {
-				prefer = strings.ToLower(strings.TrimSpace(b.Params["demux_sni"]))
-			}
-			items = append(items, needItem{key: key, setName: set.Name, preset: p.Name, preferSNI: prefer})
+			items = append(items, needItem{key: key, preferSNI: realityPreferSNI(b.Params)})
 		}
 	}
-	usedSNI := map[string]string{} // sni → inbound key (only among needed)
+	usedSNI := map[string]string{}
 	for _, it := range items {
 		a, ok := assignments[it.key]
 		if !ok || a.SNI == "" {
@@ -499,7 +308,7 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 		}
 		sni := strings.ToLower(a.SNI)
 		if owner, taken := usedSNI[sni]; taken && owner != it.key {
-			continue // duplicate — will reassign below
+			continue
 		}
 		usedSNI[sni] = it.key
 	}
@@ -533,7 +342,6 @@ func (s *Service) ensureRealityAssignments(sets []domain.InboundSet, profiles []
 				usedSNI[cur] = key
 				continue
 			}
-			// duplicate SNI — fall through
 		}
 		ep, err := pickRealityEndpoint(profiles, preferSNI, usedSNI, key)
 		if err != nil {
@@ -592,10 +400,9 @@ func findRealityEndpointBySNI(pool []domain.RealityEndpoint, sni string) (domain
 	return domain.RealityEndpoint{}, false
 }
 
-// pickRealityEndpoint prefers demux_sni, then any unused SNI from the validated pool.
 func pickRealityEndpoint(pool []domain.RealityEndpoint, preferSNI string, usedSNI map[string]string, selfKey string) (domain.RealityEndpoint, error) {
 	if len(pool) == 0 {
-		return domain.RealityEndpoint{}, fmt.Errorf("no validated reality profiles available")
+		return domain.RealityEndpoint{}, fmt.Errorf("no reality profiles available")
 	}
 	prefer := strings.ToLower(strings.TrimSpace(preferSNI))
 	if prefer != "" {
@@ -614,7 +421,6 @@ func pickRealityEndpoint(pool []domain.RealityEndpoint, preferSNI string, usedSN
 		unused = append(unused, ep)
 	}
 	if len(unused) == 0 {
-		// Last resort: allow reuse (demux sync will still force match per inbound).
 		return randomRealityEndpoint(pool)
 	}
 	return randomRealityEndpoint(unused)
@@ -622,7 +428,7 @@ func pickRealityEndpoint(pool []domain.RealityEndpoint, preferSNI string, usedSN
 
 func randomRealityEndpoint(pool []domain.RealityEndpoint) (domain.RealityEndpoint, error) {
 	if len(pool) == 0 {
-		return domain.RealityEndpoint{}, fmt.Errorf("no validated reality profiles available")
+		return domain.RealityEndpoint{}, fmt.Errorf("no reality profiles available")
 	}
 	var b [2]byte
 	if _, err := rand.Read(b[:]); err != nil {

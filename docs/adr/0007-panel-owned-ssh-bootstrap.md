@@ -19,11 +19,9 @@ or with panel web TLS.
    (`deploy/install-edge-image.sh`, `SUBSERVER_IMAGE`) over remote `git clone` + build.
 2. **Control plane** after install is **HTTP Bearer** to the agent. No SSH for routine apply,
    token rotate, box stop/start.
-3. **Dataplane certificates** on the edge are owned by **sing-box ACME / TLS profiles**
-   materialised into server JSON. As of the embedded `with_controlplane` module, operators
-   configure ACME via **`/v1/controlplane/cert-manager`** (and self-signed via `/tls`);
-   inbounds opt in with `bindings[].params.sni`. This **supersedes** the earlier “no ACME
-   CRUD in agent v1” clause from the first draft of this ADR.
+3. **Dataplane certificates** on the edge are owned by **SSL profiles**
+   (`/v1/controlplane/ssl`) materialised into server JSON. Inbounds opt in with
+   `bindings[].params.ssl_profile` (empty → profile `default`).
 4. **Management listen** defaults to loopback or firewall-restricted bind; optional static
    `tls.cert/key` on the agent. No ACME for **management** API in v1 (self-signed or
    operator-supplied files only).

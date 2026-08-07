@@ -84,7 +84,7 @@ func TestBuildInstallSlotSNIOverride(t *testing.T) {
 	}
 	found := false
 	for _, b := range res.Set.Bindings {
-		if b.Params["demux_sni"] == "vpn.example.com" && b.Params["sni"] == "vpn.example.com" {
+		if b.Params["demux_sni"] == "vpn.example.com" {
 			found = true
 		}
 		if strings.Contains(b.Preset, "reality") && b.Params["sni"] != "" {
@@ -92,7 +92,7 @@ func TestBuildInstallSlotSNIOverride(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected TLS slot_sni to set demux_sni+sni, bindings=%v slot_snis=%v", res.Set.Bindings, res.SlotSNIs)
+		t.Fatalf("expected TLS slot_sni to set demux_sni, bindings=%v slot_snis=%v", res.Set.Bindings, res.SlotSNIs)
 	}
 }
 
@@ -258,10 +258,13 @@ func TestUniqueSlotSNIsForMultiTLSGroups(t *testing.T) {
 					}
 					continue
 				}
-				if sni == "" {
-					t.Fatalf("slot %s missing SNI", slot.ID)
-				}
-				if other, ok := seen[sni]; ok {
+			if sni == "" {
+				t.Fatalf("slot %s missing SNI", slot.ID)
+			}
+			if strings.HasSuffix(sni, ".local") {
+				t.Fatalf("slot %s must not use .local SNI, got %q", slot.ID, sni)
+			}
+			if other, ok := seen[sni]; ok {
 					t.Fatalf("duplicate SNI %q on slots %s and %s", sni, other, slot.ID)
 				}
 				seen[sni] = slot.ID

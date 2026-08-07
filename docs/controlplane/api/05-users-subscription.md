@@ -14,6 +14,8 @@ Content-Type: application/json
 
 Returns (once): `sub_token`, `subscription_path`, `subscription_url`, generated `creds`.
 
+Cross-node sync / import / export / metrics: [../14-users-sync.md](../14-users-sync.md).
+
 HTTP status may be **200** (create) while sets use **201** — clients should check `ok` + body, not only status.
 
 If no active set / WG hub: later `GET /v1/sub/{token}` → `409` `cp_no_active_set`. Wizard order: **ready first**, then user, then sub.

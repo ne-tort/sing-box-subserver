@@ -9,7 +9,7 @@ Produce a **complete** server-side sing-box JSON document from:
 - embedded `ProtocolPreset`s referenced by those sets
 - **eligible** local users (`speed_*` → WG peer `up_mbps`/`down_mbps`)
 - agent `controlplane.public_host`
-- validated Reality profile pool + sticky Reality assignments
+- Reality `profiles` pool + sticky Reality assignments
 
 Then `supervisor.Apply` with `source=controlplane`.
 
@@ -50,11 +50,11 @@ flowchart LR
 6. `route` / `dns` — from fragments or minimal defaults so validate succeeds.
 7. If TLS profile mode is `acme_*`: emit `certificate_providers` with tag `cp-tls`.
 8. Attach TLS to each TLS-capable inbound (`certificate_path`/`key_path` or `certificate_provider`) — see [11-tls](11-tls.md).
-9. For `reality` trait presets:
-   - choose sticky assignment `{set}/{preset}` from validated profile pool,
-   - generate key material per inbound (private/public key + short_id) on first use,
+9. For Reality bindings (`BindingUsesReality`: trait `reality` or custom `tls_mode=reality`):
+   - choose sticky assignment `{set}/{preset}` from `profiles` (prefer `params.reality_sni`, else unused, else reuse),
+   - generate key material per inbound (private/public key + short_id) only when SNI is (re)assigned,
    - render inbound `tls.reality` and subscription outbound `tls.reality`.
-10. Persist sticky assignments and reuse them across rematerialize until profile becomes invalid/unavailable.
+10. Persist sticky assignments and reuse them across rematerialize until the chosen endpoint leaves the pool or prefer forces a change.
 11. Omit Clash experimental; omit panel-only objects.
 
 Default dns / route / outbounds JSON is defined inline in `domain.Default*Fragment()` (see unit tests).

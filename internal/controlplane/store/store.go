@@ -151,76 +151,6 @@ func (s *Store) ClearActiveSets() error {
 	return writeJSON(s.path("state.json"), st)
 }
 
-func (s *Store) LoadTLSProfile() (domain.TLSProfile, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	raw, err := os.ReadFile(s.path("tls_profile.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return domain.TLSProfile{}, false, nil
-	}
-	if err != nil {
-		return domain.TLSProfile{}, false, err
-	}
-	var legacy domain.LegacyTLSProfileJSON
-	if err := json.Unmarshal(raw, &legacy); err != nil {
-		return domain.TLSProfile{}, false, err
-	}
-	p := domain.TLSProfile{SelfSigned: legacy.SelfSigned}
-	if p.SelfSigned == nil {
-		// Old file with only ACME — treat as missing self_signed (caller seeds default).
-		return domain.TLSProfile{}, true, nil
-	}
-	return p, true, nil
-}
-
-func (s *Store) SaveTLSProfile(p domain.TLSProfile) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return writeJSON(s.path("tls_profile.json"), p)
-}
-
-// LoadLegacyACMEFromTLSProfile reads acme block from old tls_profile.json for one-shot migration.
-func (s *Store) LoadLegacyACMEFromTLSProfile() (*domain.CertManager, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	raw, err := os.ReadFile(s.path("tls_profile.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var legacy domain.LegacyTLSProfileJSON
-	if err := json.Unmarshal(raw, &legacy); err != nil {
-		return nil, err
-	}
-	if legacy.ACME == nil || len(legacy.ACME.Domains) == 0 {
-		return nil, nil
-	}
-	cm := *legacy.ACME
-	return &cm, nil
-}
-
-func (s *Store) LoadCertManager() (domain.CertManager, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var cm domain.CertManager
-	err := readJSON(s.path("cert_manager.json"), &cm)
-	if errors.Is(err, os.ErrNotExist) {
-		return domain.CertManager{}, false, nil
-	}
-	if err != nil {
-		return domain.CertManager{}, false, err
-	}
-	return cm, true, nil
-}
-
-func (s *Store) SaveCertManager(cm domain.CertManager) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return writeJSON(s.path("cert_manager.json"), cm)
-}
-
 func (s *Store) LoadConfigFragments() (domain.ConfigFragments, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -298,6 +228,10 @@ func (s *Store) ClearRulesets() error {
 	return os.RemoveAll(filepath.Join(s.dir, "rulesets"))
 }
 
+func (s *Store) RealityConfigPath() string {
+	return s.path("reality_config.json")
+}
+
 func (s *Store) LoadRealityConfig() (domain.RealityConfig, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -364,6 +298,32 @@ func (s *Store) SaveRealityAssignments(assignments map[string]domain.RealityAssi
 		assignments = map[string]domain.RealityAssignment{}
 	}
 	return writeJSON(s.path("reality_assignments.json"), realityAssignmentsFile{Assignments: assignments})
+}
+
+func (s *Store) LoadSSLProfiles() (domain.SSLProfilesFile, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var f domain.SSLProfilesFile
+	err := readJSON(s.path("ssl_profiles.json"), &f)
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.SSLProfilesFile{}, false, nil
+	}
+	if err != nil {
+		return domain.SSLProfilesFile{}, false, err
+	}
+	if f.Profiles == nil {
+		f.Profiles = []domain.SSLProfile{}
+	}
+	return f, true, nil
+}
+
+func (s *Store) SaveSSLProfiles(f domain.SSLProfilesFile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f.Profiles == nil {
+		f.Profiles = []domain.SSLProfile{}
+	}
+	return writeJSON(s.path("ssl_profiles.json"), f)
 }
 
 func (s *Store) Dir() string { return s.dir }

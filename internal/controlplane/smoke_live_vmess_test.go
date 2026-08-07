@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -21,8 +22,9 @@ import (
 func TestLiveSmokeVmessTCP(t *testing.T) {
 	dir := t.TempDir()
 	tls := domain.DefaultSelfSigned("127.0.0.1")
-	cert, key, _, err := ensureSelfSigned(dir, *tls.SelfSigned, true)
-	if err != nil {
+	cert := filepath.Join(dir, "controlplane", "ssl", "default", "cert.crt")
+	key := filepath.Join(dir, "controlplane", "ssl", "default", "cert.key")
+	if _, _, err := writeSelfSignedPair(cert, key, cert+".meta", *tls.SelfSigned, "smoke"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -175,7 +177,7 @@ func TestAPIVmessAllReadySchemaAndMaterialize(t *testing.T) {
 				t.Fatal("no inbounds")
 			}
 			body, err := materialize.RenderSubscription(
-				user, []domain.InboundSet{set}, "h.example", tls, domain.CertManager{},
+				user, []domain.InboundSet{set}, "h.example", tls,
 				materialize.SubscriptionFilters{}, assignments, nil,
 			)
 			if err != nil {

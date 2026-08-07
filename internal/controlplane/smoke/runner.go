@@ -70,7 +70,7 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 	}
 
 	subBody, err := materialize.RenderSubscription(
-		in.User, sets, in.PublicHost, in.TLS, in.CertManager, filters, in.RealityAssignments, in.Hub,
+		in.User, sets, in.PublicHost, in.TLS, filters, in.RealityAssignments, in.Hub,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render subscription: %w", err)
@@ -227,6 +227,23 @@ func Run(ctx context.Context, in Input, req Request) (*Report, error) {
 
 	timeout := req.EffectiveTimeout()
 	urls := req.EffectiveURLs()
+
+	// Control probe: if no URL is reachable without SOCKS, mark inconclusive
+	// instead of failing every inbound (external site / egress outage).
+	cctx, ccancel := context.WithTimeout(ctx, timeout*time.Duration(len(urls)+1))
+	controlOK, _, _ := ProbeDirect(cctx, urls, timeout)
+	ccancel()
+	if !controlOK {
+		for _, t := range targets {
+			r := t.Result
+			r.Skipped = true
+			r.SkipReason = "egress_inconclusive"
+			r.OK = false
+			results = append(results, r)
+		}
+		return &Report{DurationMs: time.Since(start).Milliseconds(), Results: results}, nil
+	}
+
 	sem := make(chan struct{}, defaultParallel)
 	var wg sync.WaitGroup
 	var mu sync.Mutex

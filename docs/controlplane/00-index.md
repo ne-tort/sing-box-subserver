@@ -57,6 +57,8 @@ flowchart TD
 | [10-scenarios.md](10-scenarios.md) | scenarios/ | Pointer to scenarios tree |
 | [11-tls.md](11-tls.md) | 04–06 | TLS profiles (self-signed / ACME) |
 | [12-vps-test-backlog.md](12-vps-test-backlog.md) | ops | Live VPS findings / follow-ups |
+| [13-commits.md](13-commits.md) | 05–08, 06 | Block commits (async apply + heads) |
+| [14-users-sync.md](14-users-sync.md) | 04–05, 08, 13 | Users import/export + metrics sync |
 | [adr/](adr/) | 01–08 | Locked module decisions |
 
 ## Read order

@@ -36,8 +36,8 @@ This file remains the **endpoint catalog**. Prefer the modules above for install
     "demux_groups_count": 13,
     "sets_count": 2,
     "demux_in_binary": true,
-    "cert_manager": { "enabled": false, "domains": [] },
-    "tls_material_status": { "ready": true, "active_material": "self_signed_pem" },
+    "ssl_profiles": [{ "id": "default", "name": "Default", "type": "self_signed", "state": "ready" }],
+    "tls_material_status": { "ready": true, "ssl_profile_id": "default", "ssl_state": "ready" },
     "ready": {
       "ok": true,
       "box_up": true,
@@ -59,9 +59,9 @@ This file remains the **endpoint catalog**. Prefer the modules above for install
       "issues": []
     },
     "reality": {
-      "using_user_overrides": false,
-      "effective_profiles": [{ "sni": "www.apple.com", "handshake_server": "www.apple.com", "handshake_port": 443 }],
-      "active_assignments": [{ "inbound_key": "rset/vless-reality-tcp", "sni": "www.apple.com" }]
+      "profiles": [{ "sni": "www.apple.com", "handshake_server": "www.apple.com", "handshake_port": 443 }],
+      "seed_defaults": [{ "sni": "www.apple.com" }],
+      "active_assignments": [{ "inbound_key": "rset/vless_reality", "sni": "www.apple.com" }]
     },
     "last_materialize_sha256": "...",
     "last_materialize_at": "..."
@@ -69,7 +69,7 @@ This file remains the **endpoint catalog**. Prefer the modules above for install
 }
 ```
 
-`ready.ok` is the **wizard poll signal** after `activate` / `from-*` with `activate:true`: ownership healthy, active sets **or** enabled WG hub, last materialize without error, self-signed TLS ready, ACME ready when active bindings use `params.sni`, supervisor `Running` + `box_up`.
+`ready.ok` is the **wizard poll signal** after `activate` / `from-*` with `activate:true`: ownership healthy, active sets **or** enabled WG hub, last materialize without error, Default SSL profile ready, ACME SSL profiles ready when used by active bindings, supervisor `Running` + `box_up`.
 
 `GET /status/details` additionally returns:
 - `owner_transitions` (full recent log, up to 20 entries),
@@ -84,8 +84,8 @@ On bootstrap, if `config_mode=controlplane` but there is no live dataplane (`act
 If `config_mode` is not `controlplane` but `active_sets` is non-empty, stale entries are cleared on bootstrap.
 
 `config_mode` is the **global** owner value from `configowner` (may be `direct` / `subscribed` / `idle` even if CP data exists).
-`demux_in_binary` reflects compile-time `with_demux`. `tls_material_status` mirrors `GET /tls` readiness (ops polling).
-`reality` reflects validated profile pool and active Reality inbound assignments.
+`demux_in_binary` reflects compile-time `with_demux`. `tls_material_status` mirrors Default SSL profile readiness (ops polling).
+`reality` reflects the editable profile pool and active Reality inbound assignments.
 
 ---
 
@@ -93,11 +93,17 @@ If `config_mode` is not `controlplane` but `active_sets` is non-empty, stale ent
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/users` | List (secrets redacted: no raw `sub_token` / password fields; show `has_token`, preset names present) |
-| POST | `/v1/controlplane/users` | Create `{name, enabled?, expires_at?, traffic_limit_bytes?, traffic_reset_at?, traffic_reset_period_sec?, speed_up_bytes_per_sec?, speed_down_bytes_per_sec?, creds?, …}` → returns user **with** `sub_token` + `creds` once + `subscription_path` + `subscription_url` |
+| GET | `/v1/controlplane/users` | List (secrets redacted; hide soft-deleted unless `?include_deleted=1`) |
+| POST | `/v1/controlplane/users` | Create `{name, enabled?, sync_id?, sync_mode?, sync_enabled?, …, creds?}` → secrets once + subscription URLs |
+| GET | `/v1/controlplane/users/export` | Sync/local export bundle — see [14-users-sync](14-users-sync.md) |
+| POST | `/v1/controlplane/users/import` | Bulk upsert by `sync_id` |
+| GET | `/v1/controlplane/users/sync/metrics` | Ingress / used report (includes `sync_enabled=false` for ignore warning) |
+| POST | `/v1/controlplane/users/sync/metrics` | Apply `global_used` / reset ingress or global |
+| POST | `/v1/controlplane/users/sync/membership` | Bulk `sync_enabled` by `sync_id` |
+| POST | `/v1/controlplane/users/{id}/sync` | Toggle sync on this node: `{enabled, mode?}` — see [14-users-sync](14-users-sync.md) |
 | GET | `/v1/controlplane/users/{id}` | Get (redacted; `?secrets=1` returns `sub_token`, `creds`, `subscription_path`, `subscription_url`) |
-| PATCH | `/v1/controlplane/users/{id}` | Update mutable fields including traffic hooks and `speed_*` shaping (not bulk creds replace); rename unique → else `409` |
-| DELETE | `/v1/controlplane/users/{id}` | Delete; triggers rematerialize if any set active |
+| PATCH | `/v1/controlplane/users/{id}` | Update mutable fields including sync flags and traffic hooks (not bulk creds); rename unique → else `409` |
+| DELETE | `/v1/controlplane/users/{id}` | Soft-delete (tombstone); `?hard=1` hard remove; rematerialize if sets active |
 | PUT | `/v1/controlplane/users/{id}/creds` | Merge operator `creds` into user; auto-fill missing presets/fields; rematerialize; returns secrets once |
 | POST | `/v1/controlplane/users/{id}/rotate-token` | New `sub_token`; returns token once + URLs |
 | POST | `/v1/controlplane/users/{id}/rotate-creds` | Wipe + regenerate all preset creds (forces rematerialize) |
@@ -132,20 +138,20 @@ Errors: `400` validation / `cp_invalid_creds` (unknown preset/field, empty or no
 
 Profiles: `wg` (plain), `wg_awg2` (nested `awg2`), `wg_awg3` (nested `awg3`), `wg_pathology` (nested `pathology`). Subnet default `10.8.0.0/24`. Sugar-only emit (`subnet` / peer `ip` / `exit_node` / `use_exit_node` / `advertise_exit_node`); no `allowed_ips` in hub or subscription JSON. Non-empty `exit_user_id` forces `peer_relay=true` and must reference a user with WG creds. Legacy flat `awg` / root `jc`/`h1`/… are not accepted.
 
-## TLS (self-signed) + cert-manager
+## SSL profiles
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/tls` | Self-signed profile + `material_status` |
-| PUT | `/v1/controlplane/tls` | Upsert `{self_signed}`; validation failure → `400` `cp_invalid_tls`; ensures PEM; rematerialize if active (persist-then-422) |
-| POST | `/v1/controlplane/tls/regenerate` | Force reissue self-signed PEM |
-| GET | `/v1/controlplane/cert-manager` | Domains, provider settings, per-domain status; includes `free_dns` summary and `domain_status[].source` (`manual` \| `sslip` \| `nip` \| `addrtools`) when auto free-DNS ran |
-| PUT | `/v1/controlplane/cert-manager` | Replace ACME settings + domains list; invalid → `400` `cp_invalid_cert_manager`; rematerialize persist-then-422 |
-| POST | `/v1/controlplane/cert-manager/ensure-free-dns` | Idempotent auto free-DNS (sslip/nip/addr.tools) + ACME ensure; query `wait_sec` (default `180`); silent skip when `public_host` is not an IP |
+| GET | `/v1/controlplane/ssl` | List SSL profiles with `status` |
+| POST | `/v1/controlplane/ssl` | Create draft `{name}` (`self_signed`) |
+| GET/PUT/DELETE | `/v1/controlplane/ssl/{id}` | CRUD; DELETE refuses if referenced |
+| POST | `/v1/controlplane/ssl/{id}/regenerate` | Force self-signed / ECH reissue |
 
-`GET /v1/controlplane/client/bootstrap` may include `cert_manager.domains` and `free_dns` so clients can fill SNI pickers without a separate call.
+TLS inbounds set optional `bindings[].params.ssl_profile` (must exist; empty → `default`). Legacy `params.sni` / `self_signed_sni` / `tls_*` / `ech` → `400`. See [11-tls](11-tls.md).
 
-TLS inbounds may set optional `bindings[].params.sni` (must ∈ cert-manager domains). See [11-tls](11-tls.md).
+`GET /v1/controlplane/client/bootstrap` includes `ssl.profiles` (not cert-manager).
+
+Removed routes: `/tls`, `/tls/regenerate`, `/cert-manager`, `/cert-manager/ensure-free-dns`, `/ech`.
 
 ## Config fragments (dns / route / outbounds)
 
@@ -181,10 +187,12 @@ Capabilities: `config_dns_route`, `config_outbounds`, `config_fragments`, `confi
 
 | Method | Path | Meaning |
 |--------|------|---------|
-| GET | `/v1/controlplane/reality` | `user_overrides`, `effective_profiles`, `default_profiles`, `using_user_overrides`, `active_assignments` |
-| PUT | `/v1/controlplane/reality` | Replace-all profiles; response includes `accepted` / `rejected[{sni,reason}]`; all rejected → `400` `cp_invalid_reality` |
+| GET | `/v1/controlplane/reality` | `profiles`, `seed_defaults`, `active_assignments`, `updated_at` |
+| PUT | `/v1/controlplane/reality` | Replace-all `profiles`; response includes `accepted` / `rejected[{sni,reason}]`; all rejected → `400` `cp_invalid_reality` |
 
-PUT body:
+ECH is configured per SSL profile (`ech_enabled` / `ech_sni`), not a separate bank API.
+
+PUT body Reality:
 
 ```json
 {
@@ -196,12 +204,14 @@ PUT body:
 ```
 
 Rules:
-- `sni` required, domain only.
+- `sni` required, domain only (IP rejected).
 - `handshake_server` default = `sni`.
 - `handshake_port` default = `443`.
-- Validation filters unusable profiles (DNS/TCP/CDN heuristics).
 - Invalid entries are listed in `rejected` and omitted from the stored pool.
-- If `profiles` is non-empty and every entry is rejected → `400` `cp_invalid_reality` (store unchanged). Empty `profiles` clears user overrides (200).
+- If `profiles` is non-empty and every entry is rejected → `400` `cp_invalid_reality` (store unchanged).
+- Empty `profiles: []` clears the pool (200); next materialize with Reality bindings will fail until profiles are set again (first boot seeds defaults only when the file is missing/empty on load).
+- No silent failover to curated defaults after a failed PUT list.
+- Assignment prefer: `params.reality_sni` (legacy alias `demux_sni`) if present in pool; else random unused; if all taken → random reuse. Keys stay sticky while SNI assignment is unchanged.
 
 ---
 
@@ -383,17 +393,17 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 | `cp_invalid_slot` | Slot preset not allowed / duplicate across slots |
 | `cp_invalid_set` | Generic set validation failure |
 | `cp_invalid_config` | DNS/route/outbounds fragment validation failed |
-| `cp_invalid_tls` | TLS self-signed profile validation failed |
+| `cp_invalid_ssl` | SSL profile validation failed |
 | `cp_invalid_reality` | Reality PUT: all submitted profiles rejected |
-| `cp_invalid_cert_manager` | Cert-manager settings invalid |
+| `cp_ssl_in_use` | SSL profile DELETE refused (referenced by a set) |
 | `cp_materialize_failed` | Materialize build/validate failed before Apply |
 | `cp_apply_failed` | Supervisor Apply failed after materialize |
 | `cp_invalid_sub_filter` | Subscription query filter unknown/disallowed when `strict_filters=true` |
 | `unsupported_build_tag` | Same family as root validate 422 |
 
-`422` on activate / PUT active set / TLS / cert-manager / dns / route / outbounds / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
+`422` on activate / PUT active set / SSL / dns / route / outbounds / deactivate rematerialize uses `cp_materialize_failed` or `cp_apply_failed` (not the legacy `config_invalid` alias).
 
-**Persist-then-422:** for `PUT`/`DELETE` dns / route / outbounds / tls / cert-manager (and rematerialize after users/reality), the store write happens before rematerialize. On `422` the response includes `persisted: true` and the new values are already on disk — client should retry rematerialize path or re-read via GET. Dry-run/rollback is out of scope.
+**Persist-then-422:** for `PUT`/`DELETE` dns / route / outbounds / ssl (and rematerialize after users/reality), the store write happens before rematerialize. On `422` the response includes `persisted: true` and the new values are already on disk — client should retry rematerialize path or re-read via GET. Dry-run/rollback is out of scope.
 
 ### Follow-ups (не блокируют клиентский happy-path)
 
@@ -411,3 +421,18 @@ Deactivate last active set: `config_mode=idle`; does not delete last-good.
 Documented in root [05-api `config_mode`](../05-api.md#config_mode-normative). CP does not expose a second PUT config; materialize is the only CP writer path.
 
 See also [10-scenarios](10-scenarios.md).
+
+---
+
+## Block commits
+
+Async desired-state apply. Full contract: [13-commits.md](13-commits.md).
+
+| Method | Path | Meaning |
+|--------|------|---------|
+| GET | `/v1/controlplane/heads` | Block content heads + materialize sha + pending commit |
+| POST | `/v1/controlplane/commits` | Accept blocks → **202** `{id,status,block_shas}` |
+| GET | `/v1/controlplane/commits/{id}` | Commit status / result |
+| GET | `/v1/controlplane/commits` | Recent commits (`?limit=20`) |
+
+`GET /status` includes `commit.{pending_id,heads_digest,materialize_sha256}` when heads store is present.

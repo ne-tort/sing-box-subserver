@@ -184,7 +184,7 @@ func TestScenario_StickyIndexSurvivesSubnetChange(t *testing.T) {
 		t.Fatalf("sticky index must rebase: %v", p2["ip"])
 	}
 	addrs := ep2["address"].([]any)
-	if addrs[0] != "10.9.0.1" {
+	if addrs[0] != "10.9.0.1/32" {
 		t.Fatalf("hub addr=%v", addrs)
 	}
 	if ep2["subnet"] != "10.9.0.0/24" {
@@ -262,7 +262,7 @@ func TestScenario_ClientInternetAllowRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	addrs := ep["address"].([]any)
-	if len(addrs) != 1 || addrs[0] != "10.8.0.3" {
+	if len(addrs) != 1 || addrs[0] != "10.8.0.3/32" {
 		t.Fatalf("client iface addr=%v", addrs)
 	}
 	if ep["subnet"] != "10.8.0.0/24" {

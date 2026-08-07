@@ -118,7 +118,8 @@ func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceObf bool) (bool, erro
 	var err error
 	switch h.Profile {
 	case domain.WgProfilePathology:
-		// PUT never rotates Pathology key; regenerate-obfuscation does.
+		// PUT never rotates Pathology key; regenerate-obfuscation preserves it too.
+		// Key is mirrored into user WG creds as pathology_key on ensureWgUserCreds.
 		if missing {
 			bundle, err = wgawg.BundlePathology()
 		}
@@ -142,6 +143,8 @@ func (s *Service) ensureWgHubSecrets(h *domain.WgHub, forceObf bool) (bool, erro
 
 // ensureWgUserCreds assigns curve25519 + sticky wg_host_index under shared "wg" creds.
 // Also refreshes derived `address` (host IP, no CIDR) from the current hub subnet.
+// When hub Pathology is active, mirrors the hub PSK into sticky `pathology_key`
+// (same semantics as private_key — assigned once, not rotated by regenerate).
 func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, error) {
 	hub := domain.DefaultWgHub()
 	if s.store != nil {
@@ -150,6 +153,10 @@ func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, e
 		}
 	}
 	hub.Normalize()
+	hubPathologyKey := ""
+	if hub.Profile == domain.WgProfilePathology || wgawg.PathologyHasKey(hub.Pathology) {
+		hubPathologyKey = wgawg.PathologyKey(hub.Pathology)
+	}
 
 	// Pass 1: reserve sticky indices so allocation cannot steal them.
 	used := map[int]string{}
@@ -251,6 +258,10 @@ func (s *Service) ensureWgUserCreds(users []domain.User) ([]domain.User, bool, e
 				creds["address"] = want
 				uc = true
 			}
+		}
+		if hubPathologyKey != "" && credFieldEmpty(creds["pathology_key"]) {
+			creds["pathology_key"] = hubPathologyKey
+			uc = true
 		}
 		mirrored := false
 		for _, k := range wgCredKeys() {

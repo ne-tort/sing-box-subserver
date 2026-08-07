@@ -60,7 +60,7 @@ func TestRenderSubscriptionStrictAndSorted(t *testing.T) {
 			},
 		},
 	}
-	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{}, nil, nil)
+	body, err := RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestRenderSubscriptionStrictAndSorted(t *testing.T) {
 		prev = tag
 	}
 
-	_, err = RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), domain.CertManager{}, SubscriptionFilters{StrictFilters: true, Presets: []string{"no-such"}}, nil, nil)
+	_, err = RenderSubscription(user, []domain.InboundSet{set}, "h.example", domain.DefaultSelfSigned("h.example"), SubscriptionFilters{StrictFilters: true, Presets: []string{"no-such"}}, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "cp_invalid_sub_filter") {
 		t.Fatalf("strict preset err=%v", err)
 	}

@@ -153,7 +153,7 @@ func TestBuildIncludesEndpoints(t *testing.T) {
 		t.Fatal("awg3 HP missing")
 	}
 	addrs, _ := ep["address"].([]any)
-	if len(addrs) != 1 || addrs[0] != "10.9.0.1" {
+	if len(addrs) != 1 || addrs[0] != "10.9.0.1/32" {
 		t.Fatalf("address=%v", addrs)
 	}
 	if ep["subnet"] != "10.9.0.0/24" {
@@ -178,7 +178,7 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 			},
 		},
 	}
-	body, err := RenderSubscription(user, nil, "edge.example", domain.DefaultSelfSigned("edge.example"), domain.CertManager{}, SubscriptionFilters{}, nil, &hub)
+	body, err := RenderSubscription(user, nil, "edge.example", domain.DefaultSelfSigned("edge.example"), SubscriptionFilters{}, nil, &hub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,8 +190,8 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 	}
 	ep := eps[0].(map[string]any)
 	addrs, _ := ep["address"].([]any)
-	if addrs[0] != "10.8.0.3" {
-		t.Fatalf("local=%v", addrs)
+	if len(addrs) != 1 || addrs[0] != "10.8.0.3/32" {
+		t.Fatalf("local=%v want 10.8.0.3/32", addrs)
 	}
 	if ep["use_exit_node"] != true {
 		t.Fatalf("use_exit_node=%v", ep["use_exit_node"])
@@ -203,5 +203,43 @@ func TestRenderWireGuardClientSubscription(t *testing.T) {
 	}
 	if _, ok := p0["allowed_ips"]; ok {
 		t.Fatalf("allowed_ips=%v", p0)
+	}
+}
+
+func TestRenderWireGuardClientPathologyKeyFromCreds(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	hubKey := "hubPathologyKeyAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	userKey := "userPathologyKeyAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	hub := domain.WgHub{
+		Enabled: true, Profile: domain.WgProfilePathology, Subnet: "10.8.0.0/24", ListenPort: 41641,
+		HubPrivateKey: wgTestKey(1), HubPublicKey: wgTestKey(2),
+		Pathology: map[string]any{"enabled": true, "auto": true, "key": hubKey},
+	}
+	user := domain.User{
+		Name: "u", Enabled: true, CreatedAt: now,
+		Creds: map[string]map[string]any{
+			"wg": {
+				"private_key":   wgTestKey(3),
+				"public_key":    wgTestKey(4),
+				"wg_host_index": 2,
+				"pathology_key": userKey,
+			},
+		},
+	}
+	ep, err := RenderWireGuardClientEndpoint(user, hub, "edge.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ep["pathology"].(map[string]any)
+	if path == nil {
+		t.Fatal("missing pathology")
+	}
+	if path["key"] != userKey {
+		t.Fatalf("want creds pathology_key, got %v (hub was %v)", path["key"], hubKey)
+	}
+	addrs, _ := ep["address"].([]any)
+	if len(addrs) != 1 || addrs[0] != "10.8.0.2/32" {
+		t.Fatalf("address=%v", addrs)
 	}
 }

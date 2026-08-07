@@ -120,6 +120,9 @@ func BuildWireGuardEndpoint(hub domain.WgHub, users []domain.User, publicHost st
 	if err != nil {
 		return nil, err
 	}
+	if !strings.Contains(hubAddr, "/") {
+		hubAddr = hubAddr + "/32"
+	}
 	ep["subnet"] = hub.Subnet
 	ep["address"] = []any{hubAddr}
 	ep["private_key"] = hubPriv
@@ -252,6 +255,10 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	if err != nil {
 		return nil, err
 	}
+	// Explicit /32 so Prefixable never depends on bare-host sugar in older clients.
+	if !strings.Contains(localAddr, "/") {
+		localAddr = localAddr + "/32"
+	}
 
 	server := publicHost
 	if server == "" {
@@ -294,6 +301,15 @@ func RenderWireGuardClientEndpoint(user domain.User, hub domain.WgHub, publicHos
 	}
 	if domain.NeedsObfuscation(hub.Profile) {
 		wgawg.ApplyToEndpoint(ep, hub.ActiveObfuscation(), hub.Profile)
+		// Pathology PSK lives in sticky user WG creds (like private_key); subscription
+		// must take it from there when present so clients stay in sync with creds.
+		if hub.Profile == domain.WgProfilePathology || hub.Profile == "pathology" {
+			if pk, _ := creds["pathology_key"].(string); strings.TrimSpace(pk) != "" {
+				if nested, ok := ep["pathology"].(map[string]any); ok && nested != nil {
+					nested["key"] = strings.TrimSpace(pk)
+				}
+			}
+		}
 	} else {
 		wgawg.ClearEndpointObfuscation(ep)
 	}

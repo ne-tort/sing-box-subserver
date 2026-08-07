@@ -77,19 +77,22 @@ func TestParamsSchemaVlessNoRequiredExtras(t *testing.T) {
 	// Full constructor schema may expose ACME sni (user can switch tls_mode to tls).
 }
 
-func TestParamsSchemaTlsListExposesSNI(t *testing.T) {
+func TestParamsSchemaTlsListExposesSSLProfile(t *testing.T) {
 	inv, err := presets.GetInvariant("vless_tls")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pp := inv.ToProtocolPreset("en")
 	schema := buildParamsSchema(pp, false)
-	sni, ok := schema["sni"].(map[string]any)
+	sp, ok := schema["ssl_profile"].(map[string]any)
 	if !ok {
-		t.Fatalf("sni missing from list schema: %#v", schema)
+		t.Fatalf("ssl_profile missing from list schema: %#v", schema)
 	}
-	if req, _ := sni["required"].(bool); req {
-		t.Fatal("sni must be optional")
+	if req, _ := sp["required"].(bool); req {
+		t.Fatal("ssl_profile must be optional")
+	}
+	if _, has := schema["sni"]; has {
+		t.Fatal("legacy sni must not appear in schema")
 	}
 }
 

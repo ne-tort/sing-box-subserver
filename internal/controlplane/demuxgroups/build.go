@@ -23,11 +23,14 @@ type InstallRequest struct {
 	// DisabledSlots lists slot IDs to skip entirely (not installed).
 	// Omitted / empty string in slot_presets still means default_preset — use this field to disable.
 	DisabledSlots []string `json:"disabled_slots,omitempty"`
-	// SlotSNI optionally overrides demux_sni (and params.sni for ACME) per slot.
-	// Empty → auto pool + per-slot self-signed as before.
+	// SlotSNI optionally overrides demux_sni per slot.
+	// Empty → auto-assign unique random SNIs from SNIPool / Reality defaults.
 	SlotSNI map[string]string `json:"slot_sni,omitempty"` // slot_id → sni
+	// SNIPool is the Reality SNI list used for auto demux_sni (unique per slot).
+	// Empty → domain.DefaultRealitySNIs().
+	SNIPool []string `json:"sni_pool,omitempty"`
 	// SlotParams merges extra bindings[].params per slot (e.g. carrier room).
-	// Keys already set by demux (demux_sni / sni / demux_alpn) win over SlotParams.
+	// Keys already set by demux (demux_sni / demux_alpn) win over SlotParams.
 	SlotParams map[string]map[string]string `json:"slot_params,omitempty"` // slot_id → params
 	// SlotUserVariants / SlotClientProfiles control which client subscription
 	// variants/profiles are materialized for each slot binding (no query tags).
@@ -47,315 +50,8 @@ type InstallResult struct {
 	Warnings    []string
 }
 
-// defaultSNIPool unique hostnames for TLS demux differentiation.
-var defaultSNIPool = []string{
-	"www.apple.com",
-	"www.ieee.org",
-	"www.amazon.com",
-	"gateway.icloud.com",
-	"www.bing.com",
-	"www.wikipedia.org",
-	"github.com",
-	"stackoverflow.com",
-	"www.mozilla.org",
-	"ubuntu.com",
-	"www.debian.org",
-	"www.kernel.org",
-	"www.python.org",
-	"nodejs.org",
-	"www.php.net",
-	"www.mysql.com",
-	"www.postgresql.org",
-	"www.docker.com",
-	"kubernetes.io",
-	"www.hashicorp.com",
-	"www.atlassian.com",
-	"www.jetbrains.com",
-	"www.adobe.com",
-	"www.autodesk.com",
-	"www.oracle.com",
-	"www.ibm.com",
-	"www.amd.com",
-	"www.nvidia.com",
-	"www.dell.com",
-	"www.lenovo.com",
-	"www.asus.com",
-	"www.samsung.com",
-	"www.sony.com",
-	"www.lg.com",
-	"www.qualcomm.com",
-	"www.broadcom.com",
-	"www.ericsson.com",
-	"www.nokia.com",
-	"www.siemens.com",
-	"www.bosch.com",
-	"www.honeywell.com",
-	"www.salesforce.com",
-	"www.sap.com",
-	"www.servicenow.com",
-	"www.workday.com",
-	"slack.com",
-	"www.notion.so",
-	"www.figma.com",
-	"www.dropbox.com",
-	"www.box.com",
-	"asana.com",
-	"monday.com",
-	"www.shopify.com",
-	"stripe.com",
-	"www.paypal.com",
-	"www.square.com",
-	"www.mastercard.com",
-	"www.americanexpress.com",
-	"www.netflix.com",
-	"www.disney.com",
-	"www.twitch.tv",
-	"www.imdb.com",
-	"www.nytimes.com",
-	"www.theguardian.com",
-	"www.reuters.com",
-	"www.bloomberg.com",
-	"www.forbes.com",
-	"www.wsj.com",
-	"www.ft.com",
-	"www.economist.com",
-	"www.ieee.org",
-	"www.acm.org",
-	"www.ted.com",
-	"www.duolingo.com",
-	"www.edx.org",
-	"udemy.com",
-	"www.khanacademy.org",
-	"wordpress.org",
-	"wordpress.com",
-	"www.wired.com",
-	"techcrunch.com",
-	"www.theverge.com",
-	"arstechnica.com",
-	"www.npr.org",
-	"www.pbs.org",
-	"www.nationalgeographic.com",
-	"time.com",
-	"www.ap.org",
-	"www.nike.com",
-	"www.adidas.com",
-	"www.ikea.com",
-	"www.uniqlo.com",
-	"www.zara.com",
-	"www.target.com",
-	"www.walmart.com",
-	"www.costco.com",
-	"www.bestbuy.com",
-	"www.homedepot.com",
-	"www.ebay.com",
-	"www.etsy.com",
-	"www.booking.com",
-	"www.airbnb.com",
-	"www.expedia.com",
-	"www.tripadvisor.com",
-	"www.marriott.com",
-	"www.hilton.com",
-	"www.uber.com",
-	"www.lyft.com",
-	"www.agoda.com",
-	"www.kayak.com",
-	"www.toyota.com",
-	"www.honda.com",
-	"www.bmw.com",
-	"www.mercedes-benz.com",
-	"www.audi.com",
-	"www.ford.com",
-	"www.tesla.com",
-	"www.boeing.com",
-	"www.airbus.com",
-	"www.emirates.com",
-	"www.qatarairways.com",
-	"www.singaporeair.com",
-	"www.lufthansa.com",
-	"www.airfrance.com",
-	"www.klm.com",
-	"www.britishairways.com",
-	"www.united.com",
-	"www.aa.com",
-	"www.verizon.com",
-	"www.att.com",
-	"www.tmobile.com",
-	"www.vodafone.com",
-	"www.orange.com",
-	"www.bt.com",
-	"www.hsbc.com",
-	"www.barclays.co.uk",
-	"www.jpmorgan.com",
-	"www.goldmansachs.com",
-	"www.morganstanley.com",
-	"www.bankofamerica.com",
-	"www.wellsfargo.com",
-	"www.chase.com",
-	"www.citi.com",
-	"www.nasa.gov",
-	"www.nih.gov",
-	"www.cdc.gov",
-	"www.who.int",
-	"www.un.org",
-	"www.imf.org",
-	"www.worldbank.org",
-}
-
-// realitySNIPool prefers hosts that pass CP Reality validation (no CDN-edge heuristics).
-// Keep in sync with controlplane.defaultRealityProfiles. Avoid www.microsoft.com:
-// TLS dial succeeds but Reality handshake fails with official sing-box clients.
-var realitySNIPool = []string{
-	"www.apple.com",
-	"www.ieee.org",
-	"www.amazon.com",
-	"gateway.icloud.com",
-	"www.bing.com",
-	"www.wikipedia.org",
-	"github.com",
-	"stackoverflow.com",
-	"www.mozilla.org",
-	"ubuntu.com",
-	"www.debian.org",
-	"www.kernel.org",
-	"www.python.org",
-	"nodejs.org",
-	"www.php.net",
-	"www.mysql.com",
-	"www.postgresql.org",
-	"www.docker.com",
-	"kubernetes.io",
-	"www.hashicorp.com",
-	"www.atlassian.com",
-	"www.jetbrains.com",
-	"www.adobe.com",
-	"www.autodesk.com",
-	"www.oracle.com",
-	"www.ibm.com",
-	"www.amd.com",
-	"www.nvidia.com",
-	"www.dell.com",
-	"www.lenovo.com",
-	"www.asus.com",
-	"www.samsung.com",
-	"www.sony.com",
-	"www.lg.com",
-	"www.qualcomm.com",
-	"www.broadcom.com",
-	"www.ericsson.com",
-	"www.nokia.com",
-	"www.siemens.com",
-	"www.bosch.com",
-	"www.honeywell.com",
-	"www.salesforce.com",
-	"www.sap.com",
-	"www.servicenow.com",
-	"www.workday.com",
-	"slack.com",
-	"www.notion.so",
-	"www.figma.com",
-	"www.dropbox.com",
-	"www.box.com",
-	"asana.com",
-	"monday.com",
-	"www.shopify.com",
-	"stripe.com",
-	"www.paypal.com",
-	"www.square.com",
-	"www.mastercard.com",
-	"www.americanexpress.com",
-	"www.netflix.com",
-	"www.disney.com",
-	"www.twitch.tv",
-	"www.imdb.com",
-	"www.nytimes.com",
-	"www.theguardian.com",
-	"www.reuters.com",
-	"www.bloomberg.com",
-	"www.forbes.com",
-	"www.wsj.com",
-	"www.ft.com",
-	"www.economist.com",
-	"www.ieee.org",
-	"www.acm.org",
-	"www.ted.com",
-	"www.duolingo.com",
-	"www.edx.org",
-	"udemy.com",
-	"www.khanacademy.org",
-	"wordpress.org",
-	"wordpress.com",
-	"www.wired.com",
-	"techcrunch.com",
-	"www.theverge.com",
-	"arstechnica.com",
-	"www.npr.org",
-	"www.pbs.org",
-	"www.nationalgeographic.com",
-	"time.com",
-	"www.ap.org",
-	"www.nike.com",
-	"www.adidas.com",
-	"www.ikea.com",
-	"www.uniqlo.com",
-	"www.zara.com",
-	"www.target.com",
-	"www.walmart.com",
-	"www.costco.com",
-	"www.bestbuy.com",
-	"www.homedepot.com",
-	"www.ebay.com",
-	"www.etsy.com",
-	"www.booking.com",
-	"www.airbnb.com",
-	"www.expedia.com",
-	"www.tripadvisor.com",
-	"www.marriott.com",
-	"www.hilton.com",
-	"www.uber.com",
-	"www.lyft.com",
-	"www.agoda.com",
-	"www.kayak.com",
-	"www.toyota.com",
-	"www.honda.com",
-	"www.bmw.com",
-	"www.mercedes-benz.com",
-	"www.audi.com",
-	"www.ford.com",
-	"www.tesla.com",
-	"www.boeing.com",
-	"www.airbus.com",
-	"www.emirates.com",
-	"www.qatarairways.com",
-	"www.singaporeair.com",
-	"www.lufthansa.com",
-	"www.airfrance.com",
-	"www.klm.com",
-	"www.britishairways.com",
-	"www.united.com",
-	"www.aa.com",
-	"www.verizon.com",
-	"www.att.com",
-	"www.tmobile.com",
-	"www.vodafone.com",
-	"www.orange.com",
-	"www.bt.com",
-	"www.hsbc.com",
-	"www.barclays.co.uk",
-	"www.jpmorgan.com",
-	"www.goldmansachs.com",
-	"www.morganstanley.com",
-	"www.bankofamerica.com",
-	"www.wellsfargo.com",
-	"www.chase.com",
-	"www.citi.com",
-	"www.nasa.gov",
-	"www.nih.gov",
-	"www.cdc.gov",
-	"www.who.int",
-	"www.un.org",
-	"www.imf.org",
-	"www.worldbank.org",
-}
+// Demux TLS/Reality/QUIC slot SNIs come from InstallRequest.SNIPool
+// (live Reality list) or domain.DefaultRealitySNIs(). No .local synthetics.
 
 // BuildInstall materializes an InboundSet from a demux group + slot choices.
 // usedPorts are public+private ports already taken (from other sets / WG).
@@ -446,7 +142,11 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		seenPreset[pn] = sid
 	}
 
-	snis, warn := assignSlotSNIs(g, slotPreset, req.SlotSNI)
+	pool := normalizeSNIPool(req.SNIPool)
+	snis, warn, err := assignSlotSNIs(g, slotPreset, req.SlotSNI, pool)
+	if err != nil {
+		return InstallResult{}, err
+	}
 	memberPorts, err := allocateMemberPorts(slotPreset, usedPorts)
 	if err != nil {
 		return InstallResult{}, err
@@ -473,21 +173,6 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 		}
 		if sni := snis[slot.ID]; sni != "" {
 			params["demux_sni"] = sni
-			// Explicit slot_sni also sets params.sni for cert-manager (TLS only; never Reality).
-			if ov := strings.TrimSpace(req.SlotSNI[slot.ID]); ov != "" {
-				if p, err := presets.Get(pn); err == nil {
-					isReality := false
-					for _, t := range p.Traits {
-						if t == "reality" {
-							isReality = true
-							break
-						}
-					}
-					if !isReality {
-						params[domain.BindingParamSNI] = strings.ToLower(ov)
-					}
-				}
-			}
 		}
 		if len(slot.PreferredALPN) > 0 {
 			params["demux_alpn"] = strings.Join(slot.PreferredALPN, ",")
@@ -525,32 +210,61 @@ func BuildInstall(req InstallRequest, usedPorts map[uint16]struct{}) (InstallRes
 	return InstallResult{Set: set, MemberPorts: memberPorts, SlotSNIs: snis, Warnings: warn}, nil
 }
 
-func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]string) (map[string]string, []string) {
+func normalizeSNIPool(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" || strings.HasSuffix(s, ".local") {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		for _, s := range domain.DefaultRealitySNIs() {
+			s = strings.ToLower(strings.TrimSpace(s))
+			if s == "" {
+				continue
+			}
+			if _, ok := seen[s]; ok {
+				continue
+			}
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	// Fisher–Yates shuffle for random unique assignment across slots.
+	for i := len(out) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		j := i
+		if err == nil {
+			j = int(n.Int64())
+		}
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]string, pool []string) (map[string]string, []string, error) {
 	out := map[string]string{}
 	used := map[string]struct{}{}
 	var warnings []string
-	tlsIdx, realityIdx := 0, 0
-	nextFrom := func(pool []string, idx *int) string {
-		for *idx < len(pool) {
-			s := pool[*idx]
-			*idx++
+	idx := 0
+	nextFrom := func() (string, error) {
+		for idx < len(pool) {
+			s := pool[idx]
+			idx++
 			if _, ok := used[s]; ok {
 				continue
 			}
 			used[s] = struct{}{}
-			return s
+			return s, nil
 		}
-		for _, s := range defaultSNIPool {
-			if _, ok := used[s]; ok {
-				continue
-			}
-			used[s] = struct{}{}
-			return s
-		}
-		s := fmt.Sprintf("cp-slot-%d.local", len(used)+1)
-		used[s] = struct{}{}
-		warnings = append(warnings, "sni pool exhausted; using synthetic "+s)
-		return s
+		return "", fmt.Errorf("cp_sni_pool_exhausted: need unique Reality SNI for demux slot (pool size %d)", len(pool))
 	}
 	// Apply explicit overrides first so auto-assigned SNIs stay unique.
 	for _, slot := range g.Slots {
@@ -571,21 +285,29 @@ func assignSlotSNIs(g Group, slotPreset map[string]string, overrides map[string]
 		if out[slot.ID] != "" {
 			continue
 		}
+		need := false
 		switch slot.Role {
 		case RoleTCPReality:
-			out[slot.ID] = nextFrom(realitySNIPool, &realityIdx)
+			need = true
 		case RoleTCPTLS:
 			if slot.MatchHint == "alpn" || slot.MatchHint == "sni_pool" || slot.MatchHint == "tls_and_quic" || slot.MatchHint == "" {
-				out[slot.ID] = nextFrom(defaultSNIPool, &tlsIdx)
+				need = true
 			}
 		case RoleQUIC:
 			if slot.MatchHint == "sni_pool" {
-				out[slot.ID] = nextFrom(defaultSNIPool, &tlsIdx)
+				need = true
 			}
 		}
-		_ = slotPreset
+		if !need {
+			continue
+		}
+		sni, err := nextFrom()
+		if err != nil {
+			return nil, warnings, err
+		}
+		out[slot.ID] = sni
 	}
-	return out, warnings
+	return out, warnings, nil
 }
 
 func allocateMemberPorts(slotPreset map[string]string, used map[uint16]struct{}) (map[string]uint16, error) {

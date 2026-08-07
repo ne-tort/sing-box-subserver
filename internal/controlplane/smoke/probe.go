@@ -73,3 +73,53 @@ func ProbeViaSOCKS(ctx context.Context, socksAddr string, urls []string, perURL 
 	}
 	return false, 0, "", lastErr
 }
+
+// ProbeDirect GETs urls without a proxy (control check for egress / URL bank).
+func ProbeDirect(ctx context.Context, urls []string, perURL time.Duration) (ok bool, used string, err error) {
+	if perURL <= 0 {
+		perURL = defaultTimeout
+	}
+	client := &http.Client{
+		Timeout: perURL,
+		Transport: &http.Transport{
+			DisableKeepAlives:     true,
+			ResponseHeaderTimeout: perURL,
+			TLSHandshakeTimeout:   perURL,
+			DialContext: (&net.Dialer{Timeout: perURL}).DialContext,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	defer client.CloseIdleConnections()
+
+	var lastErr error
+	for _, u := range urls {
+		select {
+		case <-ctx.Done():
+			return false, "", ctx.Err()
+		default:
+		}
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if reqErr != nil {
+			lastErr = reqErr
+			continue
+		}
+		resp, doErr := client.Do(req)
+		if doErr != nil {
+			lastErr = doErr
+			continue
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		_ = resp.Body.Close()
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("http %d", resp.StatusCode)
+			continue
+		}
+		return true, u, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all probe urls failed")
+	}
+	return false, "", lastErr
+}

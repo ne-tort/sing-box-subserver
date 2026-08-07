@@ -1,32 +1,20 @@
-# 06 — TLS, ACME, Reality
+# 06 — SSL profiles + Reality
 
-## Self-signed TLS profile
-
-```http
-GET /v1/controlplane/tls
-PUT /v1/controlplane/tls
-```
-
-Default material under `data_dir`; management HTTPS and non-Reality TLS inbounds use it.
-Subscription outbounds for self-signed paths set `tls.insecure: true`.
-
-**Tests:** `test_05_tls_acme.py::test_tls_self_signed_status`
-
-## Cert-manager (ACME)
+## SSL profiles
 
 ```http
-PUT /v1/controlplane/cert-manager
-{ "email": "…", "domains": ["wiki.example"], "provider": "letsencrypt", … }
+GET  /v1/controlplane/ssl
+POST /v1/controlplane/ssl
+GET|PUT|DELETE /v1/controlplane/ssl/{id}
+POST /v1/controlplane/ssl/{id}/regenerate
 ```
 
-TLS inbounds that need a public leaf set `bindings[].params.sni` to a domain from `domains`.
-Poll `status.ready` / ACME readiness after enable — brief `no certificate available` is normal.
+Binding: `params.ssl_profile=<id>` (empty → `default`). Management HTTPS uses the Default profile leaf.
+Subscription outbounds set `tls.insecure: true` unless the profile is ACME-ready.
 
-Ops notes (shared VPS): HTTP-01 needs :80; else TLS-ALPN-01 only (`disable_http_challenge: true`).
-
-**Tests:** `test_05_tls_acme.py` (domain put, inbound with `params.sni`, optional IP SAN)  
+**Tests:** `test_05_tls_acme.py`  
 **Remote client:** `test_07_client_remote.py` param `e2e-acme-tls`  
-**Scenario:** [04-tls-acme](../scenarios/04-tls-acme.md)
+**Scenario:** [04-tls-acme](../scenarios/04-tls-acme.md) · [11-tls](../11-tls.md)
 
 ## Reality profiles
 

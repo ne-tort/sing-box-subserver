@@ -99,8 +99,10 @@ func cloneAWGView(src map[string]any, awg3 bool) map[string]any {
 }
 
 func clonePathologyView(src map[string]any) map[string]any {
+	// Omit `key`: Pathology PSK is sticky under user WG creds / hub store and is
+	// not an operator field on the obfuscation page.
 	keys := []string{
-		"enabled", "key", "auto", "persona", "pad_budget",
+		"enabled", "auto", "persona", "pad_budget",
 		"idle_persona", "pad_strategy", "start_cover", "start_gap_ms",
 		"cover_interval_ms", "low_entropy", "frame", "frame_dcid_len",
 		"start_decoy", "cipher", "preset", "rotate_sec", "intensity",
@@ -354,6 +356,7 @@ func (s *Service) handleWgRegenerateObfuscation(w http.ResponseWriter, r *http.R
 				prev["auto"] = v
 			}
 		}
+		// Never rotate Pathology PSK here — key is sticky (hub + user creds).
 		bundle, err := wgawg.RegeneratePathology(prev)
 		if err != nil {
 			failJSON(w, 500, "internal", err.Error())
@@ -661,6 +664,10 @@ func mergePathologyMap(dst, src map[string]any) error {
 		if _, ok := stringKeys[k]; ok {
 			s := strings.TrimSpace(fmt.Sprint(v))
 			if s == "" || s == "<nil>" {
+				// Never wipe sticky Pathology PSK via empty PUT from the UI.
+				if k == "key" {
+					continue
+				}
 				delete(dst, k)
 			} else {
 				dst[k] = s

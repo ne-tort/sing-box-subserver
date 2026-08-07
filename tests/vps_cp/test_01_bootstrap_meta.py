@@ -13,8 +13,8 @@ REQUIRED_CAPABILITIES = {
     "demux_groups",
     "demux_in_binary",
     "port_policy",
-    "cert_manager",
-    "inbound_tls_sni_param",
+    "ssl_profiles",
+    "inbound_ssl_profile_param",
     "config_dns_route",
     "optional_listen_port",
     "ready_poll",
@@ -34,7 +34,7 @@ def test_bootstrap_capabilities_and_flows(api, artifacts_dir):
     caps = data["capabilities"]
     missing = REQUIRED_CAPABILITIES - set(caps)
     assert not missing, f"missing capabilities: {missing}"
-    assert caps["inbound_tls_sni_param"] == "sni"
+    assert caps["inbound_ssl_profile_param"] == "ssl_profile"
     assert "activated" in str(caps["activate_contract"]).lower() or "422" in str(caps["activate_contract"])
     assert caps.get("replace_on_from_star") is True
     assert "subscription" in data
@@ -59,7 +59,7 @@ def test_status_ready_shape(api, artifacts_dir):
     assert "ok" in ready and "reasons" in ready and "poll" in ready
     assert "context" in ready
     assert ready["context"] in ("idle", "install_ready", "degraded")
-    assert "cert_manager" in data
+    assert "ssl_profiles" in data or "tls_material_status" in data
     assert "tls_material_status" in data
     assert "ownership_health" in data
 

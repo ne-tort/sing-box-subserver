@@ -29,16 +29,25 @@ type Input struct {
 	PublicHost         string
 	DataDir            string
 	TLS                domain.TLSProfile
-	TLSCertPath        string // self_signed PEM after ensure
+	TLSCertPath        string // Default SSL profile leaf (fallback when binding has no override)
 	TLSKeyPath         string
-	CertManager        domain.CertManager
+	SSLProfiles        []domain.SSLProfile
 	DNS                json.RawMessage // raw dns object; empty → default
 	Route              json.RawMessage // raw route object; empty → default
 	Outbounds          json.RawMessage // raw outbounds array; empty → default direct+block
-	// SlotTLS maps demux_sni → dedicated self-signed PEM paths (optional).
+	// SlotTLS maps demux_sni / self_signed_sni → dedicated self-signed PEM paths (optional).
 	SlotTLS            map[string]SlotTLSMaterial
 	RealityAssignments map[string]domain.RealityAssignment
+	// ECHByID maps profile id → on-disk key path + public config PEM for materialize.
+	ECHByID map[string]ECHMaterial
+	ECHDefaultID string
 	WgHub              *domain.WgHub
+}
+
+// ECHMaterial is resolved ECH key/config for one profile.
+type ECHMaterial struct {
+	KeyPath   string
+	ConfigPEM string
 }
 
 // SlotTLSMaterial is per-SNI PEM material for demux TLS members.
@@ -59,6 +68,10 @@ type SubscriptionFilters struct {
 	// TLSCertPath / SlotTLS pin leaf PEMs for Cronet naive (rejects tls.insecure).
 	TLSCertPath string
 	SlotTLS     map[string]SlotTLSMaterial
+	ECHByID     map[string]ECHMaterial
+	ECHDefaultID string
+	SSLProfiles map[string]domain.SSLProfile
+	DataDir     string
 }
 
 var leftoverToken = regexp.MustCompile(`\{\{[^{}]+\}\}`)
@@ -67,9 +80,6 @@ var leftoverToken = regexp.MustCompile(`\{\{[^{}]+\}\}`)
 func Build(in Input) ([]byte, error) {
 	if err := in.TLS.Validate(); err != nil {
 		return nil, fmt.Errorf("tls profile: %w", err)
-	}
-	if err := in.CertManager.Validate(); err != nil {
-		return nil, fmt.Errorf("cert_manager: %w", err)
 	}
 	dnsRaw := in.DNS
 	if len(bytes.TrimSpace(dnsRaw)) == 0 {
@@ -117,7 +127,7 @@ func Build(in Input) ([]byte, error) {
 	}
 	// ACME-only materialize (no active sets yet): keep a loopback mixed inbound so
 	// sing-box accepts the config while certificate_providers obtain PEMs.
-	if len(inbounds) == 0 && in.CertManager.Enabled() {
+	if len(inbounds) == 0 && sslProfilesHaveACME(in.SSLProfiles) {
 		inbounds = append(inbounds, map[string]any{
 			"type":        "mixed",
 			"tag":         "cp-acme-keepalive",
@@ -192,58 +202,114 @@ func resolveRouteRulesetPaths(routeObj any, dataDir string) error {
 	return nil
 }
 
-func certificateProviders(in Input) []any {
-	if !in.CertManager.Enabled() {
-		return nil
+func sslProfilesHaveACME(list []domain.SSLProfile) bool {
+	for _, p := range list {
+		if p.IsACME() {
+			return true
+		}
 	}
-	// Emit when domains configured (sing-box obtains; inbounds opt-in via params.sni).
-	// DNS names and bare IP use separate providers (LE shortlived cannot share a set).
-	a := in.CertManager
-	dnsNames, ips := a.SplitDomains()
-	prov := a.Provider
-	if prov == "" {
-		prov = "letsencrypt"
+	return false
+}
+
+func findSSLProfile(in Input, id string) (domain.SSLProfile, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		id = "default"
 	}
-	dataDir := filepath.Join(in.DataDir, "controlplane", "acme")
-	mk := func(tag string, domains []string, provider string) map[string]any {
-		obj := map[string]any{
-			"type":           "acme",
-			"tag":            tag,
-			"domain":         domains,
-			"email":          a.Email,
-			"provider":       provider,
-			"data_directory": dataDir,
+	for _, p := range in.SSLProfiles {
+		if p.ID == id {
+			return p, true
 		}
-		if a.KeyType != "" {
-			obj["key_type"] = a.KeyType
-		}
-		if a.DisableHTTPChallenge {
-			obj["disable_http_challenge"] = true
-		}
-		if a.DisableTLSALPNChallenge {
-			obj["disable_tls_alpn_challenge"] = true
-		}
-		if a.AlternativeHTTPPort > 0 {
-			obj["alternative_http_port"] = a.AlternativeHTTPPort
-		}
-		if a.AlternativeTLSPort > 0 {
-			obj["alternative_tls_port"] = a.AlternativeTLSPort
-		}
-		if tag == domain.TLSProviderTag && len(a.DNS01Challenge) > 0 {
-			obj["dns01_challenge"] = a.DNS01Challenge
-		}
-		return obj
 	}
-	out := make([]any, 0, 2)
-	if len(dnsNames) > 0 {
-		out = append(out, mk(domain.TLSProviderTag, dnsNames, prov))
+	return domain.SSLProfile{}, false
+}
+
+func sslProfilePaths(dataDir, id string) (certPath, keyPath, echKey, echCfg string) {
+	dir := filepath.Join(dataDir, "controlplane", "ssl", sanitizePathID(id))
+	return filepath.Join(dir, "cert.crt"), filepath.Join(dir, "cert.key"),
+		filepath.Join(dir, "ech.key.pem"), filepath.Join(dir, "ech.config.pem")
+}
+
+func sanitizePathID(id string) string {
+	s := strings.ToLower(strings.TrimSpace(id))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
 	}
-	if len(ips) > 0 {
-		out = append(out, mk(domain.TLSProviderTagIP, ips, "letsencrypt"))
+	out := b.String()
+	if out == "" {
+		return "profile"
 	}
 	return out
 }
 
+func certificateProviders(in Input) []any {
+	out := make([]any, 0)
+	seen := map[string]struct{}{}
+	for _, p := range in.SSLProfiles {
+		if !p.IsACME() {
+			continue
+		}
+		tag := domain.SSLProviderTag(p.ID)
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		domainOrIP := p.Domain
+		if p.Type == domain.SSLTypeACMEIP {
+			domainOrIP = p.IP
+		}
+		if domainOrIP == "" {
+			continue
+		}
+		prov := p.Provider
+		if prov == "" {
+			prov = "letsencrypt"
+		}
+		obj := map[string]any{
+			"type":           "acme",
+			"tag":            tag,
+			"domain":         []string{domainOrIP},
+			"email":          domain.EffectiveACMEEmail(p, nil),
+			"provider":       prov,
+			"data_directory": filepath.Join(in.DataDir, "controlplane", "ssl", sanitizePathID(p.ID), "acme"),
+		}
+		if p.KeyType != "" {
+			obj["key_type"] = p.KeyType
+		}
+		if p.DisableHTTPChallenge {
+			obj["disable_http_challenge"] = true
+		}
+		if p.DisableTLSALPNChallenge {
+			obj["disable_tls_alpn_challenge"] = true
+		}
+		if len(p.DNS01Challenge) > 0 {
+			obj["dns01_challenge"] = p.DNS01Challenge
+		}
+		if dsn := strings.TrimSpace(p.DefaultServerName); dsn != "" {
+			obj["default_server_name"] = dsn
+		}
+		if prof := strings.TrimSpace(p.ACMEProfile); prof != "" {
+			obj["profile"] = prof
+		}
+		if ak := strings.TrimSpace(p.AccountKey); ak != "" {
+			obj["account_key"] = ak
+		}
+		if len(p.ExternalAccount) > 0 {
+			obj["external_account"] = p.ExternalAccount
+		}
+		out = append(out, obj)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
 func activeSetsNeedTLS(sets []domain.InboundSet) bool {
 	for _, set := range sets {
 		for _, pn := range uniqueBindingPresets(set.EffectiveBindings()) {
@@ -294,7 +360,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 		if err := rejectRemainingInject(demux, set.Name); err != nil {
 			return nil, err
 		}
-		syncDemuxSNIFromBindings(demux, set, memberPorts)
+		syncDemuxSNIFromBindings(demux, set, memberPorts, in)
 		syncDemuxSNIWithReality(demux, set, memberPorts, in.RealityAssignments)
 		out = append(out, demux)
 	}
@@ -319,18 +385,20 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			}
 		}
 		slotSNI := strings.TrimSpace(b.Params["demux_sni"])
-		acmeSNI := strings.TrimSpace(b.Params[domain.BindingParamSNI])
+		sslID := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
 		effectiveServer := serverName
-		useCertManager := false
+		var sslProfile domain.SSLProfile
+		haveSSL := false
 		if !domain.BindingUsesReality(p, b.Params) {
-			if acmeSNI != "" && in.CertManager.HasDomain(acmeSNI) {
-				effectiveServer = strings.ToLower(acmeSNI)
-				useCertManager = true
-				// Keep demux match aligned with ACME leaf SNI.
-				if set.HasDemux() {
-					slotSNI = effectiveServer
+			if sslProfile, haveSSL = findSSLProfile(in, sslID); haveSSL {
+				if sn := sslProfile.ServerName(); sn != "" {
+					effectiveServer = sn
 				}
-			} else if slotSNI != "" {
+			}
+			// Demux match SNI must equal ClientHello / leaf CN (SlotTLS keyed by demux_sni).
+			if set.HasDemux() && slotSNI != "" {
+				effectiveServer = slotSNI
+			} else if !haveSSL && slotSNI != "" {
 				effectiveServer = slotSNI
 			}
 		}
@@ -422,8 +490,12 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			if mode == "none" {
 				delete(ib, "tls")
 			} else {
-				attachInboundTLS(ib, in, effectiveServer, useCertManager)
-				if !useCertManager {
+				attachInboundTLS(ib, in, effectiveServer, sslProfile, haveSSL, b.Params)
+				if haveSSL && !sslProfile.IsACME() {
+					if m, ok := in.SlotTLS[effectiveServer]; ok && m.CertPath != "" {
+						applySlotTLSPaths(ib, m)
+					}
+				} else if !haveSSL {
 					if m, ok := in.SlotTLS[effectiveServer]; ok && m.CertPath != "" {
 						applySlotTLSPaths(ib, m)
 					}
@@ -431,10 +503,15 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 				if alpn := strings.TrimSpace(b.Params["demux_alpn"]); alpn != "" {
 					applyInboundALPN(ib, strings.Split(alpn, ","))
 				}
+				attachInboundECHForProfile(ib, in, sslProfile, haveSSL, b.Params)
 			}
 		} else if presetNeedsTLS(p) {
-			attachInboundTLS(ib, in, effectiveServer, useCertManager)
-			if !useCertManager {
+			attachInboundTLS(ib, in, effectiveServer, sslProfile, haveSSL, b.Params)
+			if haveSSL && !sslProfile.IsACME() {
+				if m, ok := in.SlotTLS[effectiveServer]; ok && m.CertPath != "" {
+					applySlotTLSPaths(ib, m)
+				}
+			} else if !haveSSL {
 				if m, ok := in.SlotTLS[effectiveServer]; ok && m.CertPath != "" {
 					applySlotTLSPaths(ib, m)
 				}
@@ -442,6 +519,7 @@ func buildSet(set domain.InboundSet, in Input, serverName string) ([]any, error)
 			if alpn := strings.TrimSpace(b.Params["demux_alpn"]); alpn != "" {
 				applyInboundALPN(ib, strings.Split(alpn, ","))
 			}
+			attachInboundECHForProfile(ib, in, sslProfile, haveSSL, b.Params)
 		}
 		out = append(out, ib)
 	}
@@ -478,17 +556,19 @@ func resolveMemberPorts(set domain.InboundSet, presetsList []string) map[string]
 	return out
 }
 
-// syncDemuxSNIFromBindings aligns demux match SNI with binding demux_sni / params.sni.
-func syncDemuxSNIFromBindings(demux map[string]any, set domain.InboundSet, memberPorts map[string]uint16) {
+// syncDemuxSNIFromBindings aligns demux match SNI with binding demux_sni / ssl_profile / params.sni.
+func syncDemuxSNIFromBindings(demux map[string]any, set domain.InboundSet, memberPorts map[string]uint16, in Input) {
 	portToSNI := map[uint16]string{}
 	for _, b := range set.EffectiveBindings() {
 		p, err := presets.Get(b.Preset)
 		if err != nil || domain.BindingUsesReality(p, b.Params) {
 			continue
 		}
-		sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
+		sni := strings.TrimSpace(b.Params["demux_sni"])
 		if sni == "" {
-			sni = strings.TrimSpace(b.Params["demux_sni"])
+			if sp, ok := findSSLProfile(in, b.Params[domain.BindingParamSSLProfile]); ok {
+				sni = sp.ServerName()
+			}
 		}
 		if sni == "" {
 			continue
@@ -1304,7 +1384,7 @@ func presetHasTrait(p domain.ProtocolPreset, want string) bool {
 	return false
 }
 
-func attachInboundTLS(ib map[string]any, in Input, serverName string, useCertManager bool) {
+func attachInboundTLS(ib map[string]any, in Input, serverName string, profile domain.SSLProfile, haveSSL bool, params map[string]string) {
 	tlsObj, _ := ib["tls"].(map[string]any)
 	if tlsObj == nil {
 		tlsObj = map[string]any{}
@@ -1316,46 +1396,100 @@ func attachInboundTLS(ib map[string]any, in Input, serverName string, useCertMan
 	delete(tlsObj, "certificate_provider")
 	delete(tlsObj, "certificate")
 	delete(tlsObj, "key")
-	if useCertManager {
-		tlsObj["certificate_provider"] = domain.CertificateProviderTagForSNI(serverName)
+	if haveSSL {
+		if profile.IsACME() {
+			tlsObj["certificate_provider"] = domain.SSLProviderTag(profile.ID)
+		} else {
+			certPath, keyPath, _, _ := sslProfilePaths(in.DataDir, profile.ID)
+			tlsObj["certificate_path"] = certPath
+			tlsObj["key_path"] = keyPath
+		}
+		applySSLProfileHandshake(tlsObj, profile)
 	} else {
+		// Fallback: default/global self-signed PEMs when ssl_profile missing.
 		tlsObj["certificate_path"] = in.TLSCertPath
 		tlsObj["key_path"] = in.TLSKeyPath
 	}
 	ib["tls"] = tlsObj
 }
 
-func attachSubscriptionTLS(ob map[string]any, defaultServer string, b domain.SetBinding, cm domain.CertManager, filters SubscriptionFilters) {
+func applySSLProfileHandshake(tlsObj map[string]any, p domain.SSLProfile) {
+	if tlsObj == nil {
+		return
+	}
+	pseudo := map[string]string{
+		"tls_alpn":              p.ALPN,
+		"tls_min_version":       p.MinVersion,
+		"tls_max_version":       p.MaxVersion,
+		"tls_cipher_suites":     p.CipherSuites,
+		"tls_curve_preferences": p.CurvePreferences,
+	}
+	applyTLSHandshakeKnobs(tlsObj, pseudo)
+}
+
+func attachInboundECHForProfile(ib map[string]any, in Input, profile domain.SSLProfile, haveSSL bool, _ map[string]string) {
+	if !haveSSL || !profile.ECHEnabled {
+		return
+	}
+	_, _, echKey, _ := sslProfilePaths(in.DataDir, profile.ID)
+	tlsObj, _ := ib["tls"].(map[string]any)
+	if tlsObj == nil {
+		return
+	}
+	applyInboundECH(tlsObj, echKey)
+	ib["tls"] = tlsObj
+}
+
+func attachSubscriptionTLS(ob map[string]any, defaultServer string, b domain.SetBinding, filters SubscriptionFilters) {
 	tlsObj, _ := ob["tls"].(map[string]any)
 	if tlsObj == nil {
 		tlsObj = map[string]any{}
 	}
 	tlsObj["enabled"] = true
-	sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
-	if sni == "" {
-		sni = strings.TrimSpace(b.Params["demux_sni"])
+	sni := domain.EffectiveLeafServerName(b.Params, defaultServer)
+	needInsecure := true
+	if filters.SSLProfiles != nil {
+		pid := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
+		if pid == "" {
+			pid = "default"
+		}
+		if p, ok := filters.SSLProfiles[pid]; ok {
+			if sn := p.ServerName(); sn != "" {
+				sni = sn
+			}
+			applySSLProfileHandshake(tlsObj, p)
+			needInsecure = !p.IsACME()
+			if p.ECHEnabled {
+				if mat, ok := filters.ECHByID[p.ID]; ok && mat.ConfigPEM != "" {
+					applyOutboundECH(tlsObj, mat.ConfigPEM)
+				}
+			}
+		}
 	}
 	if sni != "" {
 		tlsObj["server_name"] = sni
 	} else {
 		tlsObj["server_name"] = defaultServer
 	}
-	needInsecure := domain.NeedsTLSReportsInsecure(b.Params[domain.BindingParamSNI], cm)
-	if !needInsecure && sni != "" {
-		// Demux slot SNI may not be in ACME domains either.
-		needInsecure = domain.NeedsTLSReportsInsecure(sni, cm)
-	}
 	if typ, _ := ob["type"].(string); strings.EqualFold(typ, "naive") && needInsecure {
-		// Cronet rejects insecure; pin the leaf the inbound actually serves.
 		delete(tlsObj, "insecure")
 		pinPath := naivePinCertPath(sni, filters)
+		if pinPath == "" && filters.SSLProfiles != nil {
+			pid := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
+			if pid == "" {
+				pid = "default"
+			}
+			if p, ok := filters.SSLProfiles[pid]; ok {
+				certPath, _, _, _ := sslProfilePaths(filters.DataDir, p.ID)
+				pinPath = certPath
+			}
+		}
 		if pinPath != "" {
 			if err := embedTLSCertificateFile(tlsObj, pinPath); err == nil {
 				ob["tls"] = tlsObj
 				return
 			}
 		}
-		// Fall through without insecure — dial will fail loudly rather than lie to Cronet.
 		ob["tls"] = tlsObj
 		return
 	}
@@ -1532,7 +1666,7 @@ func substituteMap(m map[string]any, vars map[string]string) (map[string]any, er
 }
 
 // RenderSubscription builds client outbounds JSON for one user.
-func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost string, tls domain.TLSProfile, cm domain.CertManager, filters SubscriptionFilters, realityAssignments map[string]domain.RealityAssignment, hub *domain.WgHub) ([]byte, error) {
+func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost string, tls domain.TLSProfile, filters SubscriptionFilters, realityAssignments map[string]domain.RealityAssignment, hub *domain.WgHub) ([]byte, error) {
 	if filters.StrictFilters {
 		cat := BuildSubscriptionCatalog(sets)
 		if err := cat.Validate(filters); err != nil {
@@ -1692,10 +1826,10 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 						if mode == "none" {
 							delete(ob, "tls")
 						} else {
-							attachSubscriptionTLS(ob, serverName, b, cm, filters)
+							attachSubscriptionTLS(ob, serverName, b, filters)
 						}
 					} else if presetNeedsTLS(p) {
-						attachSubscriptionTLS(ob, serverName, b, cm, filters)
+						attachSubscriptionTLS(ob, serverName, b, filters)
 					}
 					stripUTLSForQUICTransport(ob)
 					sanitizeNaiveOutboundTLS(ob)
@@ -1808,10 +1942,10 @@ func RenderSubscription(user domain.User, sets []domain.InboundSet, publicHost s
 					if mode == "none" {
 						delete(ob, "tls")
 					} else {
-						attachSubscriptionTLS(ob, serverName, b, cm, filters)
+						attachSubscriptionTLS(ob, serverName, b, filters)
 					}
 				} else if presetNeedsTLS(p) {
-					attachSubscriptionTLS(ob, serverName, b, cm, filters)
+					attachSubscriptionTLS(ob, serverName, b, filters)
 				}
 				stripUTLSForQUICTransport(ob)
 				sanitizeNaiveOutboundTLS(ob)

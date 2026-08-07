@@ -135,7 +135,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	body.SetName = setName
-	sets, err = s.replaceOrConflictSet(r.Context(), sets, setName, body.Replace)
+	sets, err = s.replaceOrConflictSetOpt(r.Context(), sets, setName, body.Replace, false)
 	if err != nil {
 		code, ec := 409, "cp_name_conflict"
 		if strings.Contains(err.Error(), "cp_conflict_active") {
@@ -147,6 +147,17 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 	used := collectUsedPorts(sets)
 	if hub, err := s.store.LoadWgHub(); err == nil && hub.ListenPort != 0 {
 		used[hub.ListenPort] = struct{}{}
+	}
+	if len(body.SNIPool) == 0 {
+		if rc, err := s.loadRealityConfig(); err == nil {
+			pool := make([]string, 0, len(rc.Profiles))
+			for _, ep := range rc.Profiles {
+				if sn := strings.TrimSpace(ep.SNI); sn != "" {
+					pool = append(pool, sn)
+				}
+			}
+			body.SNIPool = pool
+		}
 	}
 	res, err := demuxgroups.BuildInstall(body.InstallRequest, used)
 	if err != nil {
@@ -165,7 +176,7 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	set := res.Set
-	syncBindingSNI(&set)
+	s.syncBindingSNI(&set)
 	now := time.Now().UTC()
 	set.CreatedAt = now
 	set.UpdatedAt = now
@@ -206,6 +217,10 @@ func (s *Service) handleSetsFromDemuxGroup(w http.ResponseWriter, r *http.Reques
 // replaceOrConflictSet removes an existing set with the same name when replace=true.
 // Active sets must be deactivated first (or replace deactivates them).
 func (s *Service) replaceOrConflictSet(ctx context.Context, sets []domain.InboundSet, name string, replace bool) ([]domain.InboundSet, error) {
+	return s.replaceOrConflictSetOpt(ctx, sets, name, replace, true)
+}
+
+func (s *Service) replaceOrConflictSetOpt(ctx context.Context, sets []domain.InboundSet, name string, replace, rematerialize bool) ([]domain.InboundSet, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return sets, nil
@@ -228,7 +243,7 @@ func (s *Service) replaceOrConflictSet(ctx context.Context, sets []domain.Inboun
 		return sets, err
 	}
 	if contains(st.ActiveSets, name) {
-		if err := s.deactivateSetByName(ctx, name); err != nil {
+		if err := s.deactivateSetByNameOpt(ctx, name, rematerialize); err != nil {
 			return sets, fmt.Errorf("cp_conflict_active: deactivate existing set before replace: %w", err)
 		}
 	}
@@ -286,7 +301,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		var rerr error
-		sets, rerr = s.replaceOrConflictSet(r.Context(), sets, name, body.Replace)
+		sets, rerr = s.replaceOrConflictSetOpt(r.Context(), sets, name, body.Replace, false)
 		if rerr != nil {
 			code, ec := 409, "cp_name_conflict"
 			if strings.Contains(rerr.Error(), "cp_conflict_active") {
@@ -341,7 +356,7 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		syncBindingSNI(&set)
+		s.syncBindingSNI(&set)
 		others := append(append([]domain.InboundSet{}, sets...), created...)
 		if err := s.validateSet(set, others); err != nil {
 			code, ec := validateSetHTTP(err)
@@ -368,9 +383,9 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 	if body.Activate {
 		activated := make([]string, 0, len(created))
 		for _, set := range created {
-			if err := s.activateSetByName(r.Context(), set.Name); err != nil {
+			if err := s.activateSetByNameOpt(r.Context(), set.Name, false); err != nil {
 				for _, name := range activated {
-					_ = s.deactivateSetByName(r.Context(), name)
+					_ = s.deactivateSetByNameOpt(r.Context(), name, false)
 				}
 				failJSONData(w, 422, activateErrorCode(err), fmt.Sprintf("sets saved (%d); activate failed at %q; rolled back %d active: %v", len(created), set.Name, len(activated), err), map[string]any{
 					"set_persisted":       true,
@@ -382,6 +397,18 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			activated = append(activated, set.Name)
+		}
+		if err := s.rematerialize(r.Context()); err != nil {
+			for _, name := range activated {
+				_ = s.deactivateSetByNameOpt(r.Context(), name, false)
+			}
+			failJSONData(w, 422, activateErrorCode(err), fmt.Sprintf("sets saved (%d); rematerialize failed; rolled back: %v", len(created), err), map[string]any{
+				"set_persisted":       true,
+				"dataplane_unchanged": true,
+				"activated_sets":      []string{},
+				"rolled_back":         activated,
+			})
+			return
 		}
 		activeViews := make([]any, 0, len(created))
 		for _, set := range created {
@@ -396,6 +423,10 @@ func (s *Service) handleSetsFromPresets(w http.ResponseWriter, r *http.Request) 
 
 // activateSetByName mirrors handleSetsActivate without HTTP.
 func (s *Service) activateSetByName(ctx context.Context, name string) error {
+	return s.activateSetByNameOpt(ctx, name, true)
+}
+
+func (s *Service) activateSetByNameOpt(ctx context.Context, name string, rematerialize bool) error {
 	sets, err := s.store.LoadSets()
 	if err != nil {
 		return err
@@ -432,6 +463,9 @@ func (s *Service) activateSetByName(ctx context.Context, name string) error {
 			s.rollbackFirstActivate(wasOwner, prev, name)
 			return err
 		}
+	}
+	if !rematerialize {
+		return nil
 	}
 	if err := s.rematerialize(ctx); err != nil {
 		if cur, loadErr := s.store.LoadState(); loadErr == nil {

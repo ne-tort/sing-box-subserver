@@ -1,16 +1,16 @@
-# Scenario 04 — TLS / ACME inbound
+# Scenario 04 — SSL / ACME inbound
 
 ## Goal
 
-Enable cert-manager for a public domain, install a TLS preset with `params.sni`, verify client path (and optional IP SAN).
+Create an ACME SSL profile for a public domain, install a TLS preset with `params.ssl_profile`, verify client path (and optional IP profile).
 
 ## Steps
 
-1. `GET /v1/controlplane/tls` — self-signed ready.
-2. `PUT /v1/controlplane/cert-manager` with `email`, `domains: [$CP_DOMAIN]`, provider `letsencrypt` (challenge mode appropriate for the VPS).
-3. Poll until cert material / status reports domain ready (suite dumps `cert_manager_*.json`).
-4. `POST /sets/from-presets` with a TLS preset and `"params": { "sni": "<domain>" }`, `activate: true` (name e.g. `e2e-acme-tls`).
-5. Poll `ready.ok` (includes ACME readiness when bindings use `sni`).
+1. `GET /v1/controlplane/ssl` — Default self-signed ready.
+2. `POST /v1/controlplane/ssl` then `PUT /v1/controlplane/ssl/{id}` with `type=acme`, `domain`, `email`, provider `letsencrypt`.
+3. Poll profile `status.state` until `ready` (or document soft failure if :80 blocked).
+4. `POST /sets/from-presets` with a TLS preset and `"params": { "ssl_profile": "<id>" }`, `activate: true` (name e.g. `e2e-acme-tls`).
+5. Poll `ready.ok` (includes SSL ACME readiness when bindings reference ACME profiles).
 6. Remote client: `test_07` param `e2e-acme-tls`.
 
 ## Success
@@ -22,7 +22,7 @@ Enable cert-manager for a public domain, install a TLS preset with `params.sni`,
 
 | File | Cases |
 |------|-------|
-| [`test_05_tls_acme.py`](../../../tests/vps_cp/test_05_tls_acme.py) | self-signed, domain put, inbound sni, IP SAN optional |
+| [`test_05_tls_acme.py`](../../../tests/vps_cp/test_05_tls_acme.py) | Default SSL, ACME domain, inbound ssl_profile, optional IP |
 | [`test_07_client_remote.py`](../../../tests/vps_cp/test_07_client_remote.py) | `e2e-acme-tls` |
 
 ## API refs

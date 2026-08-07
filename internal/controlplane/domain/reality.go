@@ -4,6 +4,10 @@ package domain
 
 import "time"
 
+// BindingParamRealitySNI optionally pins a Reality inbound to a pool SNI.
+// Empty / absent means auto-pick from the server Reality profiles list.
+const BindingParamRealitySNI = "reality_sni"
+
 // RealityEndpoint describes one reusable Reality server name profile.
 type RealityEndpoint struct {
 	SNI             string `json:"sni"`
@@ -11,16 +15,15 @@ type RealityEndpoint struct {
 	HandshakePort   uint16 `json:"handshake_port,omitempty"`
 }
 
-// RealityConfig stores user overrides and the currently effective validated pool.
+// RealityConfig is the editable Reality SNI pool for the server.
+// Seeded once from DefaultRealityProfiles on first start.
 type RealityConfig struct {
-	UserProfiles       []RealityEndpoint `json:"user_profiles,omitempty"`
-	EffectiveProfiles  []RealityEndpoint `json:"effective_profiles,omitempty"`
-	UsingUserOverrides bool              `json:"using_user_overrides"`
-	UpdatedAt          *time.Time        `json:"updated_at,omitempty"`
+	Profiles  []RealityEndpoint `json:"profiles,omitempty"`
+	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
 
 // RealityAssignment binds one inbound identity to generated key material
-// and one chosen endpoint from the effective pool.
+// and one chosen endpoint from the profiles pool.
 type RealityAssignment struct {
 	InboundKey       string    `json:"inbound_key"`
 	SNI              string    `json:"sni"`

@@ -220,7 +220,14 @@ func TestBundlePathologyAutoAndManual(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if regen["auto"] != false || regen["key"] == "old" {
-		t.Fatalf("%#v", regen)
+	if regen["auto"] != false || regen["key"] != "old" {
+		t.Fatalf("regenerate must preserve key: %#v", regen)
+	}
+	rotated, err := RotatePathologyKey(prev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotated["key"] == "old" || !PathologyHasKey(rotated) {
+		t.Fatalf("rotate must replace key: %#v", rotated)
 	}
 }

@@ -17,16 +17,79 @@ type User struct {
 	ExpiresAt             *time.Time                `json:"expires_at,omitempty"`
 	TrafficLimitBytes     *uint64                   `json:"traffic_limit_bytes,omitempty"`
 	TrafficUsedBytes      uint64                    `json:"traffic_used_bytes"`
+	TrafficIngressBytes   uint64                    `json:"traffic_ingress_bytes"`
+	TrafficEpoch          uint64                    `json:"traffic_epoch"`
 	TrafficResetAt        *time.Time                `json:"traffic_reset_at,omitempty"`
 	TrafficResetPeriodSec *uint64                   `json:"traffic_reset_period_sec,omitempty"`
 	SpeedUpBytesPerSec    int64                     `json:"speed_up_bytes_per_sec,omitempty"`
 	SpeedDownBytesPerSec  int64                     `json:"speed_down_bytes_per_sec,omitempty"`
 	SubToken              string                    `json:"sub_token"`
 	Creds                 map[string]map[string]any `json:"creds"`
+	SyncID                string                    `json:"sync_id,omitempty"`
+	SyncMode              string                    `json:"sync_mode,omitempty"` // local | identity | full
+	SyncEnabled           bool                      `json:"sync_enabled"`
+	DeletedAt             *time.Time                `json:"deleted_at,omitempty"`
+	Origin                string                    `json:"origin,omitempty"` // local | import | sync
+	Revision              uint64                    `json:"revision"`
+}
+
+// SyncModeLocal / identity / full.
+const (
+	SyncModeLocal    = "local"
+	SyncModeIdentity = "identity"
+	SyncModeFull     = "full"
+)
+
+// OriginLocal / import / sync.
+const (
+	OriginLocal  = "local"
+	OriginImport = "import"
+	OriginSync   = "sync"
+)
+
+// SyncActive reports whether this user participates in sync exchange on this node.
+func (u User) SyncActive() bool {
+	if u.DeletedAt != nil {
+		return false
+	}
+	if strings.TrimSpace(u.SyncID) == "" {
+		return false
+	}
+	mode := u.EffectiveSyncMode()
+	if mode == SyncModeLocal || mode == "" {
+		return false
+	}
+	return u.SyncEnabled
+}
+
+// EffectiveSyncMode returns sync_mode or local default.
+func (u User) EffectiveSyncMode() string {
+	m := strings.TrimSpace(u.SyncMode)
+	if m == "" {
+		if strings.TrimSpace(u.SyncID) != "" {
+			return SyncModeIdentity
+		}
+		return SyncModeLocal
+	}
+	return m
+}
+
+// SeedIngressFromUsed copies displayed used into ingress when promoting a local
+// user to syncable so the hub can count prior local contribution once.
+func (u *User) SeedIngressFromUsed() {
+	if u == nil {
+		return
+	}
+	if u.TrafficIngressBytes == 0 && u.TrafficUsedBytes > 0 {
+		u.TrafficIngressBytes = u.TrafficUsedBytes
+	}
 }
 
 // Eligible reports whether the user may appear in materialize / fetch a sub.
 func (u User) Eligible(now time.Time) bool {
+	if u.DeletedAt != nil {
+		return false
+	}
 	if !u.Enabled {
 		return false
 	}

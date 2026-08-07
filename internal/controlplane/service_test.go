@@ -96,91 +96,7 @@ func TestUsersCRUDAndSub(t *testing.T) {
 	}
 }
 
-func TestTLSProfileAPI(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	cfg := &agentcfg.Config{
-		NodeID: "n1", Token: "secret", Listen: "127.0.0.1:8080", DataDir: dir,
-		Controlplane: agentcfg.ControlplaneConfig{PublicHost: "203.0.113.10", ExpiryTickSec: 60},
-	}
-	store, err := configstore.New(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	o := obs.Setup("error")
-	sup := supervisor.NewWithOptions(store, &testutil.FakeEngine{}, o.Logger, o.Metrics, supervisor.Options{Probe: 0})
-	owner, err := configowner.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc := New(Deps{Cfg: cfg, DataDir: dir, Supervisor: sup, Owner: owner, Logger: o.Logger})
-	svc.Bootstrap(nil)
-	mux := http.NewServeMux()
-	svc.Register(mux, func(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
-		return http.HandlerFunc(next)
-	})
-
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/tls", nil))
-	if rr.Code != 200 {
-		t.Fatalf("GET tls: %d %s", rr.Code, rr.Body.String())
-	}
-	var env struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
-		t.Fatal(err)
-	}
-	if env.Data["self_signed"] == nil {
-		t.Fatalf("expected self_signed, got %v", env.Data)
-	}
-	if _, hasMode := env.Data["mode"]; hasMode {
-		t.Fatal("tls modes removed; mode must not appear")
-	}
-	ms, _ := env.Data["material_status"].(map[string]any)
-	if ms["self_signed_cert_present"] != true {
-		t.Fatalf("material_status=%v", ms)
-	}
-
-	// ACME on /tls must fail validation (no self_signed).
-	put := []byte(`{"acme":{"email":"admin@example.com","domains":["vpn.example.com"]}}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/tls", bytes.NewReader(put)))
-	if rr.Code != 400 {
-		t.Fatalf("expected 400 without self_signed, got %d %s", rr.Code, rr.Body.String())
-	}
-	var tlsErr struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	_ = json.Unmarshal(rr.Body.Bytes(), &tlsErr)
-	if tlsErr.Error.Code != "cp_invalid_tls" {
-		t.Fatalf("want cp_invalid_tls got %q body=%s", tlsErr.Error.Code, rr.Body.String())
-	}
-
-	ss := []byte(`{
-		"self_signed":{
-			"common_name":"203.0.113.10",
-			"dns_sans":["localhost"],
-			"ip_sans":["203.0.113.10"],
-			"key_type":"p256",
-			"valid_days":3650
-		}
-	}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/tls", bytes.NewReader(ss)))
-	if rr.Code != 200 {
-		t.Fatalf("PUT self_signed: %d %s", rr.Code, rr.Body.String())
-	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/tls/regenerate", nil))
-	if rr.Code != 200 {
-		t.Fatalf("regenerate: %d %s", rr.Code, rr.Body.String())
-	}
-}
-
-func TestCertManagerAPI(t *testing.T) {
+func TestSSLProfilesAPI(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := &agentcfg.Config{
@@ -205,49 +121,39 @@ func TestCertManagerAPI(t *testing.T) {
 	})
 
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/cert-manager", nil))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/controlplane/ssl", nil))
 	if rr.Code != 200 {
-		t.Fatalf("GET cert-manager: %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("GET ssl: %d %s", rr.Code, rr.Body.String())
 	}
 
-	put := []byte(`{"email":"admin@example.com","domains":["vpn.example.com"],"provider":"letsencrypt"}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/cert-manager", bytes.NewReader(put)))
-	if rr.Code != 200 {
-		t.Fatalf("PUT cert-manager: %d %s", rr.Code, rr.Body.String())
-	}
-	var env struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
-		t.Fatal(err)
-	}
-	if env.Data["enabled"] != true {
-		t.Fatalf("enabled=%v", env.Data["enabled"])
+	// Legacy TLS / cert-manager routes removed.
+	for _, path := range []string{"/v1/controlplane/tls", "/v1/controlplane/cert-manager", "/v1/controlplane/ech"} {
+		rr = httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+		if rr.Code != 404 {
+			t.Fatalf("%s want 404 got %d", path, rr.Code)
+		}
 	}
 
-	bad := []byte(`{"email":"admin@example.com","domains":["203.0.113.10"],"provider":"zerossl"}`)
+	create := []byte(`{"name":"vpn","type":"acme","domain":"vpn.example.com","email":"admin@example.com"}`)
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/v1/controlplane/cert-manager", bytes.NewReader(bad)))
-	if rr.Code != 400 {
-		t.Fatalf("expected 400 for zerossl+ip, got %d %s", rr.Code, rr.Body.String())
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/ssl", bytes.NewReader(create)))
+	if rr.Code != 201 && rr.Code != 200 {
+		t.Fatalf("POST ssl: %d %s", rr.Code, rr.Body.String())
 	}
 
-	// Binding with params.sni must be in domains.
-	usersPut := []byte(`{"name":"u1"}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/users", bytes.NewReader(usersPut)))
+	// Legacy params.sni hard-rejected.
 	setBody := []byte(`{"name":"t1","listen":"::","listen_port":8443,"bindings":[{"preset":"trojan-tcp","params":{"sni":"vpn.example.com"}}]}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(setBody)))
-	if rr.Code != 201 {
-		t.Fatalf("create set with sni: %d %s", rr.Code, rr.Body.String())
-	}
-	badSNI := []byte(`{"name":"t2","listen":"::","listen_port":8444,"bindings":[{"preset":"trojan-tcp","params":{"sni":"other.example.com"}}]}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(badSNI)))
 	if rr.Code != 400 {
-		t.Fatalf("expected 400 for unknown sni, got %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("expected 400 for legacy sni, got %d %s", rr.Code, rr.Body.String())
+	}
+	badProf := []byte(`{"name":"t3","listen":"::","listen_port":8445,"bindings":[{"preset":"trojan-tcp","params":{"ssl_profile":"no-such"}}]}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/sets", bytes.NewReader(badProf)))
+	if rr.Code != 400 {
+		t.Fatalf("expected 400 for missing ssl_profile, got %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -475,7 +381,7 @@ func TestDemuxGroupsMatchMetaAPI(t *testing.T) {
 	}
 }
 
-func TestTLSRegenerateForcesBoxReload(t *testing.T) {
+func TestSSLRegenerateForcesBoxReload(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := &agentcfg.Config{
@@ -547,9 +453,9 @@ func TestTLSRegenerateForcesBoxReload(t *testing.T) {
 	}
 
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/tls/regenerate", nil))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/controlplane/ssl/default/regenerate", nil))
 	if rr.Code != 200 {
-		t.Fatalf("regenerate: %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("ssl regenerate: %d %s", rr.Code, rr.Body.String())
 	}
 	if eng.Starts.Load() != startsAfterActivate+1 {
 		t.Fatalf("regenerate must Force reload: starts=%d afterActivate=%d", eng.Starts.Load(), startsAfterActivate)
@@ -888,7 +794,7 @@ func TestUserRenameConflictAndTrafficReset(t *testing.T) {
 		t.Fatalf("demux_in_binary=%v", env.Data["demux_in_binary"])
 	}
 	if _, ok := env.Data["tls_material_status"]; !ok {
-		// Bootstrap not called — ensureTLSProfile still creates default.
+		// Bootstrap not called — Default SSL profile still surfaces status.
 		t.Fatalf("missing tls_material_status: %v", env.Data)
 	}
 }
@@ -1503,8 +1409,14 @@ func TestRealityAPIAndStickyAssignment(t *testing.T) {
 		t.Fatalf("empty short_id in assignment: %v", first)
 	}
 
-	if env.Data["default_profiles"] == nil {
-		t.Fatal("expected default_profiles on GET reality")
+	if env.Data["seed_defaults"] == nil {
+		t.Fatal("expected seed_defaults on GET reality")
+	}
+	if env.Data["profiles"] == nil {
+		t.Fatal("expected profiles on GET reality")
+	}
+	if env.Data["default_profiles"] != nil {
+		t.Fatal("legacy default_profiles must be absent")
 	}
 
 	// Trigger rematerialize and ensure sticky assignment is stable.

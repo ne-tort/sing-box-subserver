@@ -43,8 +43,7 @@ type Service struct {
 	cfg                   Deps
 	store                 *store.Store
 	log                   *slog.Logger
-	mu                    sync.Mutex
-	realityLastValidation time.Time
+	mu  sync.Mutex
 
 	mgmtTLS   mgmtCertCache
 	acmeWatch struct {
@@ -93,7 +92,7 @@ func (s *Service) OnLeaveOwnership() {
 	_ = s.store.ClearActiveSets()
 }
 
-// Bootstrap ensures default TLS profile, migrates cert-manager, rematerializes if we own the dataplane.
+// Bootstrap ensures Default SSL profile exists, registers free-DNS + managed ACME SSL profiles, and rematerializes if we own the dataplane.
 func (s *Service) Bootstrap(ctx context.Context) {
 	if s == nil {
 		return
@@ -101,28 +100,11 @@ func (s *Service) Bootstrap(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	p, err := s.ensureTLSProfile(false)
-	if err != nil && s.log != nil {
-		s.log.Warn("controlplane tls profile bootstrap failed", "err", err)
-	} else if err == nil {
-		if err := s.ensureSafetySelfSignedPEMs(p); err != nil && s.log != nil {
-			s.log.Warn("controlplane safety self_signed pems failed", "err", err)
-		}
+	if err := s.ensureSSLProfiles(); err != nil && s.log != nil {
+		s.log.Warn("controlplane ssl profiles bootstrap failed", "err", err)
 	}
-	if cm, err := s.ensureCertManager(); err != nil && s.log != nil {
-		s.log.Warn("controlplane cert-manager bootstrap failed", "err", err)
-	} else if cm.Enabled() {
-		s.noteACMEModeEntered()
-		ready, _, _ := acmeCertificateReady(s.cfg.DataDir, cm.NormalizedDomains())
-		s.noteACMEReady(ready)
-	}
-	// Free-DNS + ACME: sync register/merge (no wait), then background obtain/shrink.
-	_ = s.ensureAutoFreeDNSAndACME(ctx, 0)
-	go func() {
-		bg, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
-		defer cancel()
-		_ = s.ensureAutoFreeDNSAndACME(bg, acmeObtainWaitDefault)
-	}()
+	s.bootstrapFreeDNSSSL(ctx)
+	s.noteSSLACMEReadiness()
 	if s.cfg.Owner == nil {
 		return
 	}
@@ -160,25 +142,10 @@ func (s *Service) Run(ctx context.Context) {
 			_ = s.applyTrafficResetsLocked(time.Now().UTC())
 			s.notifyBecameIneligibleLocked(beforeElig)
 			fp := s.eligibilityFingerprintLocked()
-			needRealityRefresh := time.Since(s.realityLastValidation) >= realityValidationInterval
-			if needRealityRefresh {
-				s.realityLastValidation = time.Now().UTC()
-			}
 			s.mu.Unlock()
 			if s.cfg.Owner == nil || s.cfg.Owner.Owner() != configowner.ModeControlplane {
 				lastFP = fp
 				continue
-			}
-			if needRealityRefresh {
-				sets, err := s.activeSetObjects()
-				if err == nil && hasRealityPreset(sets) {
-					cfg, changed, err := s.refreshRealityConfig(ctx, true)
-					if err == nil {
-						if _, aChanged, err := s.ensureRealityAssignments(sets, cfg.EffectiveProfiles); err == nil && (changed || aChanged) {
-							_ = s.rematerialize(ctx)
-						}
-					}
-				}
 			}
 			if fp != lastFP {
 				lastFP = fp
@@ -254,6 +221,8 @@ func (s *Service) applyTrafficResetsLocked(now time.Time) bool {
 			continue
 		}
 		u.TrafficUsedBytes = 0
+		u.TrafficIngressBytes = 0
+		u.TrafficEpoch++
 		resetIDs = append(resetIDs, u.ID)
 		if u.TrafficResetPeriodSec != nil && *u.TrafficResetPeriodSec > 0 {
 			next := now.Add(time.Duration(*u.TrafficResetPeriodSec) * time.Second)
@@ -289,13 +258,17 @@ func (s *Service) ListUserIDs() []string {
 	}
 	out := make([]string, 0, len(users))
 	for _, u := range users {
+		if u.DeletedAt != nil {
+			continue
+		}
 		out = append(out, u.ID)
 	}
 	return out
 }
 
-// ApplyTrafficUsage writes cumulative totals from the traffic module into users.json.
-// Returns whether eligibility changed (and rematerialize was triggered).
+// ApplyTrafficUsage writes dataplane totals from the traffic module into users.json.
+// Syncable users update ingress only (hub owns traffic_used_bytes / global quota).
+// Local users mirror store → used + ingress.
 func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint64) (bool, error) {
 	if s == nil || len(updates) == 0 {
 		return false, nil
@@ -315,9 +288,25 @@ func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint
 		if !ok {
 			continue
 		}
-		if users[i].TrafficUsedBytes != v {
-			users[i].TrafficUsedBytes = v
-			users[i].UpdatedAt = now
+		u := &users[i]
+		if u.SyncActive() {
+			if v < u.TrafficIngressBytes {
+				u.TrafficEpoch++
+			}
+			if u.TrafficIngressBytes != v {
+				u.TrafficIngressBytes = v
+				u.UpdatedAt = now
+				changed = true
+			}
+			continue
+		}
+		if v < u.TrafficUsedBytes || v < u.TrafficIngressBytes {
+			u.TrafficEpoch++
+		}
+		if u.TrafficUsedBytes != v || u.TrafficIngressBytes != v {
+			u.TrafficUsedBytes = v
+			u.TrafficIngressBytes = v
+			u.UpdatedAt = now
 			changed = true
 		}
 	}
@@ -339,13 +328,23 @@ func (s *Service) ApplyTrafficUsage(ctx context.Context, updates map[string]uint
 }
 
 func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.ResponseWriter, *http.Request)) http.HandlerFunc) {
+	mux.HandleFunc("GET /v1/controlplane/heads", requireAuth(s.handleHeadsGet))
+	mux.HandleFunc("POST /v1/controlplane/commits", requireAuth(s.handleCommitsPost))
+	mux.HandleFunc("GET /v1/controlplane/commits", requireAuth(s.handleCommitsList))
+	mux.HandleFunc("GET /v1/controlplane/commits/{id}", requireAuth(s.handleCommitsGet))
 	mux.HandleFunc("GET /v1/controlplane/status", requireAuth(s.handleStatus))
 	mux.HandleFunc("GET /v1/controlplane/status/details", requireAuth(s.handleStatusDetails))
+	mux.HandleFunc("GET /v1/controlplane/users/export", requireAuth(s.handleUsersExport))
+	mux.HandleFunc("POST /v1/controlplane/users/import", requireAuth(s.handleUsersImport))
+	mux.HandleFunc("GET /v1/controlplane/users/sync/metrics", requireAuth(s.handleUsersSyncMetricsGet))
+	mux.HandleFunc("POST /v1/controlplane/users/sync/metrics", requireAuth(s.handleUsersSyncMetricsPost))
+	mux.HandleFunc("POST /v1/controlplane/users/sync/membership", requireAuth(s.handleUsersSyncMembership))
 	mux.HandleFunc("GET /v1/controlplane/users", requireAuth(s.handleUsersList))
 	mux.HandleFunc("POST /v1/controlplane/users", requireAuth(s.handleUsersCreate))
 	mux.HandleFunc("GET /v1/controlplane/users/{id}", requireAuth(s.handleUsersGet))
 	mux.HandleFunc("PATCH /v1/controlplane/users/{id}", requireAuth(s.handleUsersPatch))
 	mux.HandleFunc("DELETE /v1/controlplane/users/{id}", requireAuth(s.handleUsersDelete))
+	mux.HandleFunc("POST /v1/controlplane/users/{id}/sync", requireAuth(s.handleUsersSyncToggle))
 	mux.HandleFunc("POST /v1/controlplane/users/{id}/rotate-token", requireAuth(s.handleUsersRotateToken))
 	mux.HandleFunc("POST /v1/controlplane/users/{id}/rotate-creds", requireAuth(s.handleUsersRotateCreds))
 	mux.HandleFunc("PUT /v1/controlplane/users/{id}/creds", requireAuth(s.handleUsersPutCreds))
@@ -371,12 +370,12 @@ func (s *Service) Register(mux *http.ServeMux, requireAuth func(func(http.Respon
 	mux.HandleFunc("POST /v1/controlplane/sets/{name}/deactivate", requireAuth(s.handleSetsDeactivate))
 	mux.HandleFunc("POST /v1/controlplane/smoke", requireAuth(s.handleSmoke))
 	mux.HandleFunc("GET /v1/controlplane/smoke/last", requireAuth(s.handleSmokeLast))
-	mux.HandleFunc("GET /v1/controlplane/tls", requireAuth(s.handleTLSGet))
-	mux.HandleFunc("PUT /v1/controlplane/tls", requireAuth(s.handleTLSPut))
-	mux.HandleFunc("POST /v1/controlplane/tls/regenerate", requireAuth(s.handleTLSRegenerate))
-	mux.HandleFunc("GET /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerGet))
-	mux.HandleFunc("PUT /v1/controlplane/cert-manager", requireAuth(s.handleCertManagerPut))
-	mux.HandleFunc("POST /v1/controlplane/cert-manager/ensure-free-dns", requireAuth(s.handleCertManagerEnsureFreeDNS))
+	mux.HandleFunc("GET /v1/controlplane/ssl", requireAuth(s.handleSSLList))
+	mux.HandleFunc("POST /v1/controlplane/ssl", requireAuth(s.handleSSLCreate))
+	mux.HandleFunc("GET /v1/controlplane/ssl/{id}", requireAuth(s.handleSSLGet))
+	mux.HandleFunc("PUT /v1/controlplane/ssl/{id}", requireAuth(s.handleSSLPut))
+	mux.HandleFunc("DELETE /v1/controlplane/ssl/{id}", requireAuth(s.handleSSLDelete))
+	mux.HandleFunc("POST /v1/controlplane/ssl/{id}/regenerate", requireAuth(s.handleSSLRegenerate))
 	mux.HandleFunc("GET /v1/controlplane/config", requireAuth(s.handleConfigGet))
 	mux.HandleFunc("GET /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSGet))
 	mux.HandleFunc("PUT /v1/controlplane/config/dns", requireAuth(s.handleConfigDNSPut))
@@ -793,13 +792,16 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		return err
 	}
 	if len(sets) == 0 && !hub.Enabled {
-		// Still materialize an ACME-only box so cert-manager can obtain PEMs before
-		// any inbound set exists (bootstrap / free-DNS ensure).
-		cmEarly, cmErr := s.ensureCertManager()
-		if cmErr != nil {
-			return cmErr
+		_ = s.ensureSSLProfiles()
+		sslEarly, _ := s.loadSSLProfiles()
+		hasACME := false
+		for _, sp := range sslEarly {
+			if sp.IsACME() {
+				hasACME = true
+				break
+			}
 		}
-		if !cmEarly.Enabled() || strings.TrimSpace(cmEarly.Email) == "" {
+		if !hasACME {
 			s.publishTrafficPolicyLocked()
 			return nil
 		}
@@ -868,35 +870,40 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	if s.cfg.Cfg != nil && s.cfg.Cfg.Controlplane.PublicHost != "" {
 		host = s.cfg.Cfg.Controlplane.PublicHost
 	}
-	profile, err := s.ensureTLSProfile(false)
+	if err := s.ensureSSLProfiles(); err != nil {
+		return err
+	}
+	sslList, err := s.loadSSLProfiles()
 	if err != nil {
 		return err
 	}
-	cm, err := s.ensureCertManager()
-	if err != nil {
-		return err
+	sslForMat := s.sslProfilesWithResolvedACMEEmail(sslList)
+	defHost := host
+	defCert, defKey := sslCertPaths(s.cfg.DataDir, defaultSSLProfileID)
+	for _, sp := range sslList {
+		if sp.ID == defaultSSLProfileID {
+			if sn := sp.ServerName(); sn != "" {
+				defHost = sn
+			}
+			defCert, defKey = sslCertPaths(s.cfg.DataDir, sp.ID)
+			break
+		}
 	}
+	profile := domain.DefaultSelfSigned(defHost)
 	fragments, err := s.store.LoadConfigFragments()
 	if err != nil {
 		return err
 	}
 	realityAssignments := map[string]domain.RealityAssignment{}
 	if hasRealityPreset(sets) {
-		realityCfg, _, err := s.refreshRealityConfig(ctx, false)
+		realityCfg, err := s.loadRealityConfig()
 		if err != nil {
 			return err
 		}
-		realityAssignments, _, err = s.ensureRealityAssignments(sets, realityCfg.EffectiveProfiles)
+		realityAssignments, _, err = s.ensureRealityAssignments(sets, realityCfg.Profiles)
 		if err != nil {
 			return err
 		}
-	}
-	if profile.SelfSigned == nil {
-		return fmt.Errorf("self_signed spec missing")
-	}
-	cert, key, pemChanged, err := ensureSelfSigned(s.cfg.DataDir, *profile.SelfSigned, false)
-	if err != nil {
-		return fmt.Errorf("tls material: %w", err)
 	}
 	in := materialize.Input{
 		ActiveSets:         sets,
@@ -904,26 +911,68 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 		PublicHost:         host,
 		DataDir:            s.cfg.DataDir,
 		TLS:                profile,
-		TLSCertPath:        cert,
-		TLSKeyPath:         key,
-		CertManager:        cm,
+		TLSCertPath:        defCert,
+		TLSKeyPath:         defKey,
+		SSLProfiles:        sslForMat,
 		DNS:                fragments.EffectiveDNS(),
 		Route:              fragments.EffectiveRoute(),
 		Outbounds:          fragments.EffectiveOutbounds(),
 		RealityAssignments: realityAssignments,
 	}
+	echByID := map[string]materialize.ECHMaterial{}
+	for _, sp := range sslList {
+		if !sp.ECHEnabled {
+			continue
+		}
+		keyPath, cfgPath := sslECHPaths(s.cfg.DataDir, sp.ID)
+		raw, err := os.ReadFile(cfgPath)
+		if err != nil {
+			continue
+		}
+		echByID[sp.ID] = materialize.ECHMaterial{KeyPath: keyPath, ConfigPEM: string(raw)}
+	}
+	if len(echByID) > 0 {
+		in.ECHByID = echByID
+	}
+	pemChanged := false
+	slotTLS := map[string]materialize.SlotTLSMaterial{}
+	for _, set := range sets {
+		if !set.HasDemux() {
+			continue
+		}
+		for _, b := range set.EffectiveBindings() {
+			sni := strings.ToLower(strings.TrimSpace(b.Params["demux_sni"]))
+			if sni == "" || net.ParseIP(sni) != nil || strings.HasSuffix(sni, ".local") {
+				continue
+			}
+			p, err := presets.Get(b.Preset)
+			if err != nil || domain.BindingUsesReality(p, b.Params) {
+				continue
+			}
+			sslID := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
+			if sslID == "" {
+				sslID = defaultSSLProfileID
+			}
+			if sp, ok, _ := s.findSSLProfile(sslID); ok && sp.IsACME() {
+				continue
+			}
+			cert, key, changed, err := ensureSlotSelfSigned(s.cfg.DataDir, sni)
+			if err != nil {
+				return err
+			}
+			if changed {
+				pemChanged = true
+			}
+			slotTLS[sni] = materialize.SlotTLSMaterial{CertPath: cert, KeyPath: key}
+		}
+	}
+	if len(slotTLS) > 0 {
+		in.SlotTLS = slotTLS
+	}
 	if hub.Enabled {
 		h := hub
 		in.WgHub = &h
 	}
-	slotTLS, slotChanged, err := s.ensureDemuxSlotTLS(sets, cm)
-	if err != nil {
-		return err
-	}
-	if slotChanged {
-		pemChanged = true
-	}
-	in.SlotTLS = slotTLS
 	raw, err := materialize.Build(in)
 	if err != nil {
 		s.recordMaterializeResult(false, err, false, "", materializeErrorCode(err))
@@ -948,102 +997,15 @@ func (s *Service) rematerializeLocked(ctx context.Context, forceReload bool) err
 	return nil
 }
 
-func (s *Service) ensureDemuxSlotTLS(sets []domain.InboundSet, cm domain.CertManager) (map[string]materialize.SlotTLSMaterial, bool, error) {
-	out := map[string]materialize.SlotTLSMaterial{}
-	changed := false
-	for _, set := range sets {
-		if !set.HasDemux() {
-			continue
-		}
-		for _, b := range set.EffectiveBindings() {
-			acmeSNI := ""
-			sni := ""
-			if b.Params != nil {
-				acmeSNI = strings.TrimSpace(b.Params[domain.BindingParamSNI])
-				sni = strings.TrimSpace(b.Params["demux_sni"])
-			}
-			if acmeSNI != "" && cm.HasDomain(acmeSNI) {
-				// Cert-manager provider path — no per-slot PEM.
-				continue
-			}
-			if sni == "" {
-				continue
-			}
-			p, err := presets.Get(b.Preset)
-			if err != nil {
-				continue
-			}
-			// Reality uses handshake assignment, not PEM slots.
-			if domain.BindingUsesReality(p, b.Params) {
-				continue
-			}
-			needsPEM := domain.BindingNeedsPEMTLS(p, b.Params) || presetHasTrait(p, "tls_custom")
-			if !needsPEM {
-				continue
-			}
-			cert, key, wrote, err := ensureSlotSelfSigned(s.cfg.DataDir, sni)
-			if err != nil {
-				return nil, false, fmt.Errorf("slot tls %q: %w", sni, err)
-			}
-			if wrote {
-				changed = true
-			}
-			out[sni] = materialize.SlotTLSMaterial{CertPath: cert, KeyPath: key}
-		}
-	}
-	return out, changed, nil
-}
-
-func (s *Service) ensureTLSProfile(forceDefault bool) (domain.TLSProfile, error) {
-	host := ""
-	if s.cfg.Cfg != nil {
-		host = s.cfg.Cfg.Controlplane.PublicHost
-	}
-	p, ok, err := s.store.LoadTLSProfile()
-	if err != nil {
-		return domain.TLSProfile{}, err
-	}
-	if !ok || forceDefault || p.SelfSigned == nil {
-		p = domain.DefaultSelfSigned(host)
-		if err := p.Validate(); err != nil {
-			return domain.TLSProfile{}, err
-		}
-		if err := s.store.SaveTLSProfile(p); err != nil {
-			return domain.TLSProfile{}, err
-		}
-		if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
-			return domain.TLSProfile{}, err
-		}
-		return p, nil
-	}
-	if err := p.Validate(); err != nil {
-		return domain.TLSProfile{}, err
-	}
-	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
-		return domain.TLSProfile{}, err
-	}
-	return p, nil
-}
-
 func (s *Service) acmeWatchdog(ctx context.Context) {
-	cm, err := s.ensureCertManager()
-	if err != nil || !cm.Enabled() {
-		return
-	}
-	ready, _, _ := acmeCertificateReady(s.cfg.DataDir, cm.NormalizedDomains())
-	s.noteACMEReady(ready)
-	if ready {
-		return
-	}
-	// Mgmt HTTPS always has self_signed PEMs; log obtain/renew stalls for ops.
+	s.noteSSLACMEReadiness()
 	ok, reason := s.shouldACMEFallback()
 	if !ok {
 		return
 	}
 	if s.log != nil {
-		s.log.Warn("cert-manager ACME not ready", "reason", reason)
+		s.log.Warn("ssl ACME not ready", "reason", reason)
 	}
-	// Invalidate mgmt cert cache so interim self_signed is preferred until ACME returns.
 	s.mgmtTLS.mu.Lock()
 	s.mgmtTLS.cert = nil
 	s.mgmtTLS.source = ""
@@ -1051,45 +1013,108 @@ func (s *Service) acmeWatchdog(ctx context.Context) {
 	_ = ctx
 }
 
+func (s *Service) noteSSLACMEReadiness() {
+	_ = s.ensureSSLProfiles()
+	list, err := s.loadSSLProfiles()
+	if err != nil {
+		return
+	}
+	hasACME := false
+	allReady := true
+	for _, p := range list {
+		if !p.IsACME() {
+			continue
+		}
+		hasACME = true
+		st := s.computeSSLStatus(p)
+		if st.State != domain.SSLStateReady {
+			allReady = false
+		}
+	}
+	if !hasACME {
+		return
+	}
+	s.noteACMEModeEntered()
+	s.noteACMEReady(allReady)
+}
+
+func (s *Service) ensureFreeDNS(ctx context.Context) {
+	if s == nil || s.cfg.DataDir == "" {
+		return
+	}
+	ip, err := s.resolveBootstrapIPv4(ctx)
+	if err != nil {
+		if s.log != nil {
+			s.log.Debug("free-dns: skip ensure", "err", err)
+		}
+		return
+	}
+	st, err := freedns.Ensure(ctx, freedns.Options{DataDir: s.cfg.DataDir, IPv4: ip})
+	if err != nil && s.log != nil {
+		s.log.Warn("free-dns: ensure failed", "err", err)
+		return
+	}
+	if s.log != nil && len(st.Hosts()) > 0 {
+		s.log.Info("free-dns: hosts ready", "hosts", st.Hosts())
+	}
+}
+
 func (s *Service) freeDNSHeartbeat(ctx context.Context) {
 	ip, err := s.resolveBootstrapIPv4(ctx)
 	if err != nil {
 		return
 	}
+	// First ensure providers when state is empty (bootstrap race / IP change).
+	st, err := freedns.LoadState(s.cfg.DataDir)
+	if err != nil || len(st.Hosts()) == 0 || st.IPv4 != ip.String() {
+		st, err = freedns.Ensure(ctx, freedns.Options{DataDir: s.cfg.DataDir, IPv4: ip})
+		if err != nil && s.log != nil {
+			s.log.Warn("free-dns: ensure failed", "err", err)
+		}
+	}
 	st, did, err := freedns.RefreshAddrTools(ctx, freedns.Options{DataDir: s.cfg.DataDir, IPv4: ip})
 	if err != nil && s.log != nil {
 		s.log.Warn("free-dns: addr.tools heartbeat failed", "err", err)
-		return
-	}
-	if did && s.log != nil {
+	} else if did && s.log != nil {
 		s.log.Debug("free-dns: addr.tools heartbeat", "host", st.AddrHost)
 	}
+	// Keep managed ACME profiles aligned (reuse stable ids; soft-skip errors).
+	s.ensureFreeDNSSSLProfiles(ctx)
 }
 
-func (s *Service) clientBootstrapCertManager() map[string]any {
+func (s *Service) clientBootstrapSSL() map[string]any {
 	out := map[string]any{
-		"enabled": false,
-		"domains": []string{},
-		"ready":   true,
+		"profiles": []any{},
+		"ready":    true,
 	}
-	cm, err := s.ensureCertManager()
-	if err == nil {
-		domains := cm.NormalizedDomains()
-		out["enabled"] = cm.Enabled()
-		out["domains"] = domains
-		if len(domains) > 0 {
-			ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
-			out["ready"] = ready
-			out["partial_ready"] = len(found) > 0
-			out["acme_certs_found"] = found
-			out["acme_certs_missing"] = missing
+	_ = s.ensureSSLProfiles()
+	list, err := s.loadSSLProfiles()
+	if err != nil {
+		return out
+	}
+	profiles := make([]any, 0, len(list))
+	allReady := true
+	hasACME := false
+	for _, p := range list {
+		st := s.computeSSLStatus(p)
+		profiles = append(profiles, map[string]any{
+			"id":     p.ID,
+			"name":   p.Name,
+			"type":   p.Type,
+			"domain": p.Domain,
+			"ip":     p.IP,
+			"state":  st.State,
+		})
+		if p.IsACME() {
+			hasACME = true
+			if st.State != domain.SSLStateReady {
+				allReady = false
+			}
 		}
 	}
-	if fd, err := freedns.LoadState(s.cfg.DataDir); err == nil {
-		out["free_dns"] = fd.Payload()
-		if hosts := fd.Hosts(); len(hosts) > 0 {
-			out["suggested_domains"] = hosts
-		}
+	out["profiles"] = profiles
+	if hasACME {
+		out["ready"] = allReady
 	}
 	return out
 }
@@ -1234,11 +1259,21 @@ func redactUser(u domain.User, secrets bool) map[string]any {
 		"expires_at":               u.ExpiresAt,
 		"traffic_limit_bytes":      u.TrafficLimitBytes,
 		"traffic_used_bytes":       u.TrafficUsedBytes,
+		"traffic_ingress_bytes":    u.TrafficIngressBytes,
+		"traffic_epoch":            u.TrafficEpoch,
 		"traffic_reset_at":         u.TrafficResetAt,
 		"traffic_reset_period_sec": u.TrafficResetPeriodSec,
 		"speed_up_bytes_per_sec":   u.SpeedUpBytesPerSec,
 		"speed_down_bytes_per_sec": u.SpeedDownBytesPerSec,
 		"has_token":                u.SubToken != "",
+		"sync_id":                  u.SyncID,
+		"sync_mode":                u.EffectiveSyncMode(),
+		"sync_enabled":             u.SyncEnabled,
+		"revision":                 u.Revision,
+		"origin":                   u.Origin,
+	}
+	if u.DeletedAt != nil {
+		m["deleted_at"] = u.DeletedAt
 	}
 	names := make([]string, 0, len(u.Creds))
 	for k := range u.Creds {
@@ -1281,9 +1316,12 @@ func parseTimePtr(s string) (*time.Time, error) {
 	if s == "" {
 		return nil, nil
 	}
-	t, err := time.Parse(time.RFC3339, s)
+	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
-		return nil, err
+		t, err = time.Parse(time.RFC3339, s)
+		if err != nil {
+			return nil, err
+		}
 	}
 	t = t.UTC()
 	return &t, nil
@@ -1334,31 +1372,31 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 		}
 		out["owner_transitions_recent"] = st.OwnerTransitions[len(st.OwnerTransitions)-n:]
 	}
-	if p, err := s.ensureTLSProfile(false); err == nil {
-		tls := s.tlsStatusPayload(p)
-		if ms, ok := tls["material_status"]; ok {
-			out["tls_material_status"] = ms
+	_ = s.ensureSSLProfiles()
+	if list, err := s.loadSSLProfiles(); err == nil {
+		sslOut := make([]any, 0, len(list))
+		for _, p := range list {
+			st := s.computeSSLStatus(p)
+			sslOut = append(sslOut, map[string]any{
+				"id": p.ID, "name": p.Name, "type": p.Type, "state": st.State,
+			})
+		}
+		out["ssl_profiles"] = sslOut
+		if def, ok, _ := s.findSSLProfile(defaultSSLProfileID); ok {
+			st := s.computeSSLStatus(def)
+			out["tls_material_status"] = map[string]any{
+				"ssl_profile_id": def.ID,
+				"ssl_state":      st.State,
+				"cert_path":      st.CertPath,
+				"key_path":       st.KeyPath,
+				"ready":          st.State == domain.SSLStateReady,
+				"mgmt_https":     true,
+				"mgmt_cert_source": s.mgmtCertSource(),
+			}
 		}
 	}
-	if cm, err := s.ensureCertManager(); err == nil {
-		cmPayload := map[string]any{
-			"enabled": cm.Enabled(),
-			"domains": cm.NormalizedDomains(),
-		}
-		if domains := cm.NormalizedDomains(); len(domains) > 0 {
-			ready, missing, found := acmeCertificateReady(s.cfg.DataDir, domains)
-			cmPayload["ready"] = ready
-			cmPayload["partial_ready"] = len(found) > 0
-			cmPayload["acme_certs_missing"] = missing
-			cmPayload["acme_certs_found"] = found
-		} else {
-			cmPayload["ready"] = true
-			cmPayload["partial_ready"] = false
-		}
-		if fd, err := freedns.LoadState(s.cfg.DataDir); err == nil {
-			cmPayload["free_dns"] = fd.Payload()
-		}
-		out["cert_manager"] = cmPayload
+	if fd, err := freedns.LoadState(s.cfg.DataDir); err == nil {
+		out["free_dns"] = fd.Payload()
 	}
 	if hub, err := s.store.LoadWgHub(); err == nil {
 		out["wg_hub"] = map[string]any{"enabled": hub.Enabled, "listen_port": hub.ListenPort, "profile": hub.Profile}
@@ -1368,6 +1406,9 @@ func (s *Service) buildStatusPayload(details bool) map[string]any {
 	}
 	out["ownership_health"] = s.ownershipHealth(st)
 	out["ready"] = s.computeClientReady(st, out)
+	if proj := s.commitStatusProjection(); proj != nil {
+		out["commit"] = proj
+	}
 	if details {
 		out["owner_transitions"] = st.OwnerTransitions
 		out["active_set_details"] = s.buildActiveSetDetails(st.ActiveSets, sets)
@@ -1421,13 +1462,10 @@ func (s *Service) computeClientReady(st domain.State, payload map[string]any) ma
 			reasons = append(reasons, "tls_not_ready")
 		}
 	}
-	if snis := s.activeBindingSNIs(st); len(snis) > 0 {
-		ready, missing, _ := acmeCertificateReady(s.cfg.DataDir, snis)
-		if !ready {
-			ok = false
-			reasons = append(reasons, "acme_not_ready")
-			_ = missing
-		}
+	if ids := s.activeSSLACMEProfilesNotReady(st); len(ids) > 0 {
+		ok = false
+		reasons = append(reasons, "ssl_acme_not_ready")
+		_ = ids
 	}
 	boxUp := false
 	supState := ""
@@ -1481,14 +1519,22 @@ func readyContext(live, wgEnabled, ok bool, reasons []string) string {
 	return "degraded"
 }
 
-// activeBindingSNIs returns params.sni values used by currently active sets (ACME leaf domains).
-func (s *Service) activeBindingSNIs(st domain.State) []string {
+// activeSSLACMEProfilesNotReady returns IDs of ACME SSL profiles referenced by
+// active sets whose leaf is not yet ready.
+func (s *Service) activeSSLACMEProfilesNotReady(st domain.State) []string {
 	if s == nil || s.store == nil || len(st.ActiveSets) == 0 {
 		return nil
 	}
 	sets, err := s.store.LoadSets()
 	if err != nil {
 		return nil
+	}
+	_ = s.ensureSSLProfiles()
+	sslByID := map[string]domain.SSLProfile{}
+	if list, err := s.loadSSLProfiles(); err == nil {
+		for _, p := range list {
+			sslByID[p.ID] = p
+		}
 	}
 	active := map[string]struct{}{}
 	for _, n := range st.ActiveSets {
@@ -1504,16 +1550,22 @@ func (s *Service) activeBindingSNIs(st domain.State) []string {
 			if b.Params == nil {
 				continue
 			}
-			sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
-			if sni == "" {
+			id := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
+			if id == "" {
+				id = defaultSSLProfileID
+			}
+			p, ok := sslByID[id]
+			if !ok || !p.IsACME() {
 				continue
 			}
-			sni = strings.ToLower(sni)
-			if _, ok := seen[sni]; ok {
+			if _, dup := seen[id]; dup {
 				continue
 			}
-			seen[sni] = struct{}{}
-			out = append(out, sni)
+			seen[id] = struct{}{}
+			st := s.computeSSLStatus(p)
+			if st.State != domain.SSLStateReady {
+				out = append(out, id)
+			}
 		}
 	}
 	return out
@@ -1581,9 +1633,13 @@ func (s *Service) handleUsersList(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
+	includeDeleted := r.URL.Query().Get("include_deleted") == "1"
 	out := make([]any, 0, len(users))
 	for _, u := range users {
 		if smoke.IsSmokeUser(u.Name) {
+			continue
+		}
+		if !includeDeleted && u.DeletedAt != nil {
 			continue
 		}
 		out = append(out, redactUser(u, false))
@@ -1602,6 +1658,11 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		SpeedUpBytesPerSec    int64                     `json:"speed_up_bytes_per_sec"`
 		SpeedDownBytesPerSec  int64                     `json:"speed_down_bytes_per_sec"`
 		Creds                 map[string]map[string]any `json:"creds"`
+		SyncID                string                    `json:"sync_id"`
+		SyncMode              string                    `json:"sync_mode"`
+		SyncEnabled           *bool                     `json:"sync_enabled"`
+		Origin                string                    `json:"origin"`
+		Revision              *uint64                   `json:"revision"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		failJSON(w, 400, "bad_request", err.Error())
@@ -1619,14 +1680,39 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 400, "cp_invalid_creds", strings.TrimPrefix(err.Error(), "cp_invalid_creds: "))
 		return
 	}
+	syncID := strings.TrimSpace(body.SyncID)
+	syncMode := strings.TrimSpace(body.SyncMode)
+	if syncMode == "" {
+		if syncID != "" {
+			syncMode = domain.SyncModeIdentity
+		} else {
+			syncMode = domain.SyncModeLocal
+		}
+	}
+	if syncMode != domain.SyncModeLocal && syncMode != domain.SyncModeIdentity && syncMode != domain.SyncModeFull {
+		failJSON(w, 400, "bad_request", "invalid sync_mode")
+		return
+	}
+	if syncMode != domain.SyncModeLocal && syncID == "" {
+		var err error
+		syncID, err = newSyncUUID()
+		if err != nil {
+			failJSON(w, 500, "internal", err.Error())
+			return
+		}
+	}
 	users, err := s.store.LoadUsers()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
 	for _, u := range users {
-		if u.Name == body.Name {
+		if u.DeletedAt == nil && u.Name == body.Name {
 			failJSON(w, 409, "cp_name_conflict", "name already exists")
+			return
+		}
+		if syncID != "" && u.SyncID == syncID && u.DeletedAt == nil {
+			failJSON(w, 409, "cp_sync_id_conflict", "sync_id already exists")
 			return
 		}
 	}
@@ -1649,6 +1735,22 @@ func (s *Service) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: now,
 		SubToken:  tok,
 		Creds:     map[string]map[string]any{},
+		SyncID:    syncID,
+		SyncMode:  syncMode,
+		Origin:    domain.OriginLocal,
+		Revision:  1,
+	}
+	if body.Origin != "" {
+		u.Origin = body.Origin
+	}
+	if body.Revision != nil {
+		u.Revision = *body.Revision
+	}
+	if syncMode != domain.SyncModeLocal {
+		u.SyncEnabled = true
+	}
+	if body.SyncEnabled != nil {
+		u.SyncEnabled = *body.SyncEnabled
 	}
 	if body.Enabled != nil {
 		u.Enabled = *body.Enabled
@@ -1744,10 +1846,11 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	u := &users[i]
 	wasEligible := u.Eligible(time.Now().UTC())
+	wasSync := u.SyncActive()
 	if v, ok := body["name"].(string); ok && v != "" {
 		if v != u.Name {
 			for j := range users {
-				if j != i && users[j].Name == v {
+				if j != i && users[j].Name == v && users[j].DeletedAt == nil {
 					failJSON(w, 409, "cp_name_conflict", "name already exists")
 					return
 				}
@@ -1757,6 +1860,49 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := body["enabled"].(bool); ok {
 		u.Enabled = v
+	}
+	if v, ok := body["sync_id"].(string); ok {
+		v = strings.TrimSpace(v)
+		if v != "" && v != u.SyncID {
+			for j := range users {
+				if j != i && users[j].SyncID == v && users[j].DeletedAt == nil {
+					failJSON(w, 409, "cp_sync_id_conflict", "sync_id already exists")
+					return
+				}
+			}
+		}
+		u.SyncID = v
+	}
+	if v, ok := body["sync_mode"].(string); ok {
+		v = strings.TrimSpace(v)
+		if v != domain.SyncModeLocal && v != domain.SyncModeIdentity && v != domain.SyncModeFull {
+			failJSON(w, 400, "bad_request", "invalid sync_mode")
+			return
+		}
+		u.SyncMode = v
+		if v != domain.SyncModeLocal && u.SyncID == "" {
+			sid, err := newSyncUUID()
+			if err != nil {
+				failJSON(w, 500, "internal", err.Error())
+				return
+			}
+			u.SyncID = sid
+		}
+		if v != domain.SyncModeLocal && !u.SyncEnabled {
+			// Enabling sync mode without explicit sync_enabled keeps prior flag;
+			// first transition from local defaults to enabled.
+			if body["sync_enabled"] == nil {
+				u.SyncEnabled = true
+			}
+		}
+	}
+	if v, ok := body["sync_enabled"].(bool); ok {
+		u.SyncEnabled = v
+	}
+	revisionSet := false
+	if v, ok := body["revision"].(float64); ok {
+		u.Revision = uint64(v)
+		revisionSet = true
 	}
 	if _, ok := body["expires_at"]; ok {
 		if body["expires_at"] == nil {
@@ -1780,8 +1926,20 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	usedPatched := false
 	if v, ok := body["traffic_used_bytes"].(float64); ok {
-		u.TrafficUsedBytes = uint64(v)
+		newUsed := uint64(v)
+		if newUsed < u.TrafficUsedBytes && !u.SyncActive() {
+			u.TrafficEpoch++
+			u.TrafficIngressBytes = newUsed
+		}
+		u.TrafficUsedBytes = newUsed
 		usedPatched = true
+	}
+	if v, ok := body["traffic_ingress_bytes"].(float64); ok {
+		newIng := uint64(v)
+		if newIng < u.TrafficIngressBytes {
+			u.TrafficEpoch++
+		}
+		u.TrafficIngressBytes = newIng
 	}
 	if v, ok := body["speed_up_bytes_per_sec"].(float64); ok {
 		u.SpeedUpBytesPerSec = int64(v)
@@ -1810,11 +1968,19 @@ func (s *Service) handleUsersPatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	u.UpdatedAt = time.Now().UTC()
+	if !revisionSet {
+		u.Revision++
+	}
+	// Local → syncable: seed ingress from prior used so hub can count it once.
+	if !wasSync && u.SyncActive() {
+		u.SeedIngressFromUsed()
+	}
 	if err := s.store.SaveUsers(users); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	if usedPatched && s.trafficHooks != nil {
+	// Only sync traffic store for local users; syncable used_bytes is hub-owned.
+	if usedPatched && s.trafficHooks != nil && !u.SyncActive() {
 		s.trafficHooks.OnTrafficUsedPatched(u.ID, u.TrafficUsedBytes)
 	}
 	if wasEligible && !u.Eligible(time.Now().UTC()) && s.trafficHooks != nil {
@@ -1838,7 +2004,16 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	deletedID := users[i].ID
-	users = append(users[:i], users[i+1:]...)
+	hard := r.URL.Query().Get("hard") == "1"
+	if hard {
+		users = append(users[:i], users[i+1:]...)
+	} else {
+		now := time.Now().UTC()
+		users[i].DeletedAt = &now
+		users[i].Enabled = false
+		users[i].UpdatedAt = now
+		users[i].Revision++
+	}
 	if err := s.store.SaveUsers(users); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
@@ -1852,10 +2027,10 @@ func (s *Service) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	// User already deleted from store — rematerialize failure must not hide success.
 	if err := s.rematerialize(r.Context()); err != nil {
-		okJSON(w, 200, map[string]any{"deleted": true, "rematerialize_warning": err.Error()})
+		okJSON(w, 200, map[string]any{"deleted": true, "hard": hard, "rematerialize_warning": err.Error()})
 		return
 	}
-	okJSON(w, 200, map[string]any{"deleted": true})
+	okJSON(w, 200, map[string]any{"deleted": true, "hard": hard})
 }
 
 func (s *Service) handleUsersRotateToken(w http.ResponseWriter, r *http.Request) {
@@ -2173,10 +2348,6 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 	if !set.HasDemux() && len(presetsList) != 1 {
 		return fmt.Errorf("without demux exactly one preset required")
 	}
-	cm, err := s.ensureCertManager()
-	if err != nil {
-		return err
-	}
 	for _, pn := range presetsList {
 		p, err := presets.Get(pn)
 		if err != nil {
@@ -2200,7 +2371,7 @@ func (s *Service) validateSet(set domain.InboundSet, others []domain.InboundSet)
 		if err != nil {
 			return fmt.Errorf("cp_unknown_preset: %w", err)
 		}
-		if err := validateBindingParams(p, b, cm); err != nil {
+		if err := s.validateBindingParams(p, b); err != nil {
 			return err
 		}
 	}
@@ -2245,9 +2416,6 @@ func validateDemuxUniqueSNITLS(set domain.InboundSet) error {
 		sni := ""
 		if b.Params != nil {
 			sni = strings.TrimSpace(b.Params["demux_sni"])
-			if sni == "" {
-				sni = strings.TrimSpace(b.Params[domain.BindingParamSNI])
-			}
 		}
 		if sni == "" {
 			continue
@@ -2261,7 +2429,7 @@ func validateDemuxUniqueSNITLS(set domain.InboundSet) error {
 	return nil
 }
 
-func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm domain.CertManager) error {
+func (s *Service) validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding) error {
 	if b.Params == nil {
 		b.Params = map[string]string{}
 	}
@@ -2273,7 +2441,6 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 	if err := paramvalidate.Validate(p, b.Params); err != nil {
 		return err
 	}
-	// Operator-supplied values must be applicable under visible_when (e.g. Vision on WS).
 	for k, v := range operator {
 		v = strings.TrimSpace(v)
 		if v == "" || isNeutralParamValue(v) {
@@ -2289,19 +2456,29 @@ func validateBindingParams(p domain.ProtocolPreset, b domain.SetBinding, cm doma
 	if err := validateVlessFlowConflicts(b.Params); err != nil {
 		return err
 	}
-	sni := strings.TrimSpace(b.Params[domain.BindingParamSNI])
-	if sni == "" {
-		return nil
+	legacyKeys := []string{
+		"sni", "self_signed_sni",
+		"tls_alpn", "tls_min_version", "tls_max_version",
+		"tls_cipher_suites", "tls_curve_preferences", "ech",
 	}
-	if domain.BindingUsesReality(p, b.Params) {
-		return fmt.Errorf("cp_invalid_bindings: params.sni not allowed for Reality preset %q", p.Name)
+	for _, k := range legacyKeys {
+		if strings.TrimSpace(b.Params[k]) != "" {
+			return fmt.Errorf("cp_invalid_bindings: legacy params.%s rejected; use params.ssl_profile", k)
+		}
 	}
-	needsTLS := domain.BindingNeedsPEMTLS(p, b.Params)
-	if !needsTLS {
-		return fmt.Errorf("cp_invalid_bindings: params.sni only for TLS presets, got %q", p.Name)
-	}
-	if !cm.HasDomain(sni) {
-		return fmt.Errorf("cp_invalid_bindings: params.sni %q not in cert-manager domains", sni)
+	sslID := strings.TrimSpace(b.Params[domain.BindingParamSSLProfile])
+	if sslID != "" {
+		if domain.BindingUsesReality(p, b.Params) {
+			return fmt.Errorf("cp_invalid_bindings: params.ssl_profile not allowed for Reality preset %q", p.Name)
+		}
+		if !domain.BindingNeedsPEMTLS(p, b.Params) && !presetHasTrait(p, "tls_custom") {
+			return fmt.Errorf("cp_invalid_bindings: params.ssl_profile only for TLS presets, got %q", p.Name)
+		}
+		if _, ok, err := s.findSSLProfile(sslID); err != nil {
+			return err
+		} else if !ok {
+			return fmt.Errorf("cp_invalid_bindings: params.ssl_profile %q not found", sslID)
+		}
 	}
 	return nil
 }
@@ -2345,27 +2522,39 @@ func applyParamMetaDefaults(p domain.ProtocolPreset, params map[string]string) {
 			continue
 		}
 		if d := strings.TrimSpace(meta.Default); d != "" {
+			// Tentatively set, then drop if not visible under current params.
 			params[k] = d
+			if !paramvalidate.Visible(p, k, params) {
+				delete(params, k)
+			}
 		}
 	}
 }
 
-// syncBindingSNI copies params.sni onto demux_sni so ClientHello matches cert/match.
-func syncBindingSNI(set *domain.InboundSet) {
+// syncBindingSNI copies SSL profile server_name onto demux_sni when demux_sni is empty.
+func (s *Service) syncBindingSNI(set *domain.InboundSet) {
 	if set == nil {
 		return
 	}
+	_ = s.ensureSSLProfiles()
 	for i := range set.Bindings {
-		sni := strings.TrimSpace(set.Bindings[i].Params[domain.BindingParamSNI])
-		if sni == "" {
-			continue
-		}
-		sni = strings.ToLower(sni)
 		if set.Bindings[i].Params == nil {
 			set.Bindings[i].Params = map[string]string{}
 		}
-		set.Bindings[i].Params[domain.BindingParamSNI] = sni
-		set.Bindings[i].Params["demux_sni"] = sni
+		if strings.TrimSpace(set.Bindings[i].Params["demux_sni"]) != "" {
+			continue
+		}
+		id := strings.TrimSpace(set.Bindings[i].Params[domain.BindingParamSSLProfile])
+		if id == "" {
+			id = defaultSSLProfileID
+		}
+		p, ok, err := s.findSSLProfile(id)
+		if err != nil || !ok {
+			continue
+		}
+		if sn := p.ServerName(); sn != "" {
+			set.Bindings[i].Params["demux_sni"] = strings.ToLower(sn)
+		}
 	}
 }
 
@@ -2436,7 +2625,7 @@ func (s *Service) handleSetsCreate(w http.ResponseWriter, r *http.Request) {
 	if set.Listen == "" {
 		set.Listen = "::"
 	}
-	syncBindingSNI(&set)
+	s.syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
 		code, ec := validateSetHTTP(err)
 		failJSON(w, code, ec, err.Error())
@@ -2520,7 +2709,7 @@ func (s *Service) handleSetsPut(w http.ResponseWriter, r *http.Request) {
 	if set.Listen == "" {
 		set.Listen = "::"
 	}
-	syncBindingSNI(&set)
+	s.syncBindingSNI(&set)
 	if err := s.validateSet(set, sets); err != nil {
 		code, ec := validateSetHTTP(err)
 		failJSON(w, code, ec, err.Error())
@@ -2699,6 +2888,10 @@ func (s *Service) handleSetsDeactivate(w http.ResponseWriter, r *http.Request) {
 
 // deactivateSetByName removes name from active_sets and rematerializes (or claims idle).
 func (s *Service) deactivateSetByName(ctx context.Context, name string) error {
+	return s.deactivateSetByNameOpt(ctx, name, true)
+}
+
+func (s *Service) deactivateSetByNameOpt(ctx context.Context, name string, rematerialize bool) error {
 	st, err := s.store.LoadState()
 	if err != nil {
 		return err
@@ -2710,6 +2903,9 @@ func (s *Service) deactivateSetByName(ctx context.Context, name string) error {
 	st.ActiveSets = removeStr(st.ActiveSets, name)
 	if err := s.store.SaveState(st); err != nil {
 		return err
+	}
+	if !rematerialize {
+		return nil
 	}
 	if len(st.ActiveSets) == 0 {
 		hub, _ := s.store.LoadWgHub()
@@ -2738,104 +2934,11 @@ func (s *Service) deactivateSetByName(ctx context.Context, name string) error {
 	return nil
 }
 
-func (s *Service) handleTLSGet(w http.ResponseWriter, r *http.Request) {
-	p, err := s.ensureTLSProfile(false)
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
-	okJSONETag(w, r, s.tlsStatusPayload(p))
-}
-
-func (s *Service) handleTLSPut(w http.ResponseWriter, r *http.Request) {
-	var p domain.TLSProfile
-	if err := decodeBody(r, &p); err != nil {
-		failJSON(w, 400, "bad_request", err.Error())
-		return
-	}
-	if err := p.Validate(); err != nil {
-		failJSON(w, 400, "cp_invalid_tls", err.Error())
-		return
-	}
-	if err := s.store.SaveTLSProfile(p); err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
-	forceReload := false
-	if _, _, changed, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, false); err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	} else {
-		forceReload = changed
-	}
-	s.mgmtTLS.mu.Lock()
-	s.mgmtTLS.cert = nil
-	s.mgmtTLS.mu.Unlock()
-	if err := s.rematerializeForce(r.Context(), forceReload); err != nil {
-		failJSON(w, 422, materializeErrorCode(err), err.Error())
-		return
-	}
-	okJSON(w, 200, s.tlsStatusPayload(p))
-}
-
-func (s *Service) handleTLSRegenerate(w http.ResponseWriter, r *http.Request) {
-	p, err := s.ensureTLSProfile(false)
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
-	if p.SelfSigned == nil {
-		failJSON(w, 400, "bad_request", "self_signed spec required")
-		return
-	}
-	if _, _, _, err := ensureSelfSigned(s.cfg.DataDir, *p.SelfSigned, true); err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
-	s.mgmtTLS.mu.Lock()
-	s.mgmtTLS.cert = nil
-	s.mgmtTLS.mu.Unlock()
-	if err := s.rematerializeForce(r.Context(), true); err != nil {
-		failJSON(w, 422, materializeErrorCode(err), err.Error())
-		return
-	}
-	okJSON(w, 200, s.tlsStatusPayload(p))
-}
-
-func (s *Service) tlsStatusPayload(p domain.TLSProfile) map[string]any {
-	out := map[string]any{
-		"self_signed": p.SelfSigned,
-	}
-	cert, key := tlsMaterialPaths(s.cfg.DataDir)
-	_, certErr := os.Stat(cert)
-	_, keyErr := os.Stat(key)
-	pemPresent := certErr == nil && keyErr == nil
-	status := map[string]any{
-		"self_signed_cert_present": pemPresent,
-		"cert_path":                cert,
-		"key_path":                 key,
-		"active_material":          "self_signed_pem",
-		"ready":                    pemPresent,
-		"mgmt_https":               true,
-		"mgmt_cert_source":         s.mgmtCertSource(),
-	}
-	if !pemPresent {
-		status["ready_reason"] = "self_signed pem missing"
-	}
-	if _, _, src, err := s.mgmtMaterialPaths(); err == nil {
-		status["mgmt_cert_source"] = src
-	}
-	out["material_status"] = status
-	return out
-}
-
 func (s *Service) realityStatusPayload(cfg domain.RealityConfig) map[string]any {
 	payload := map[string]any{
-		"user_overrides":       cfg.UserProfiles,
-		"effective_profiles":   cfg.EffectiveProfiles,
-		"default_profiles":     defaultRealityProfiles(),
-		"using_user_overrides": cfg.UsingUserOverrides,
-		"updated_at":           cfg.UpdatedAt,
+		"profiles":       cfg.Profiles,
+		"seed_defaults":  defaultRealityProfiles(),
+		"updated_at":     cfg.UpdatedAt,
 	}
 	assignments, err := s.store.LoadRealityAssignments()
 	if err == nil {
@@ -2899,24 +3002,16 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	cfg.UserProfiles = accepted
-	cfg.UsingUserOverrides = len(accepted) > 0
+	cfg.Profiles = accepted
 	now := time.Now().UTC()
 	cfg.UpdatedAt = &now
 	if err := s.store.SaveRealityConfig(cfg); err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	refreshed, _, err := s.refreshRealityConfig(ctx, true)
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
-	}
 	sets, err := s.activeSetObjects()
 	if err == nil {
-		if _, _, err := s.ensureRealityAssignments(sets, refreshed.EffectiveProfiles); err != nil {
+		if _, _, err := s.ensureRealityAssignments(sets, cfg.Profiles); err != nil {
 			failJSON(w, 500, "internal", err.Error())
 			return
 		}
@@ -2925,7 +3020,7 @@ func (s *Service) handleRealityPut(w http.ResponseWriter, r *http.Request) {
 		failJSON(w, 422, materializeErrorCode(err), err.Error())
 		return
 	}
-	payload := s.realityStatusPayload(refreshed)
+	payload := s.realityStatusPayload(cfg)
 	payload["accepted"] = accepted
 	payload["rejected"] = rejected
 	okJSON(w, 200, payload)
@@ -3010,16 +3105,24 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	filterNetwork := strings.TrimSpace(r.URL.Query().Get("network"))
 	strictFilters := parseBoolQuery(r, "strict_filters", false)
 	host := s.publicHost(r)
-	profile, err := s.ensureTLSProfile(false)
+	_ = s.ensureSSLProfiles()
+	sslList, err := s.loadSSLProfiles()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
 		return
 	}
-	cm, err := s.ensureCertManager()
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
+	defHost := host
+	defCert, _ := sslCertPaths(s.cfg.DataDir, defaultSSLProfileID)
+	for _, sp := range sslList {
+		if sp.ID == defaultSSLProfileID {
+			if sn := sp.ServerName(); sn != "" {
+				defHost = sn
+			}
+			defCert, _ = sslCertPaths(s.cfg.DataDir, sp.ID)
+			break
+		}
 	}
+	profile := domain.DefaultSelfSigned(defHost)
 	assignments, err := s.store.LoadRealityAssignments()
 	if err != nil {
 		failJSON(w, 500, "internal", err.Error())
@@ -3029,13 +3132,24 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 	if hub.Enabled {
 		hubPtr = &hub
 	}
-	certPath, _ := tlsMaterialPaths(s.cfg.DataDir)
-	slotTLS, _, err := s.ensureDemuxSlotTLS(sets, cm)
-	if err != nil {
-		failJSON(w, 500, "internal", err.Error())
-		return
+	var echByID map[string]materialize.ECHMaterial
+	sslByID := map[string]domain.SSLProfile{}
+	for _, sp := range s.sslProfilesWithResolvedACMEEmail(sslList) {
+		sslByID[sp.ID] = sp
+		if !sp.ECHEnabled {
+			continue
+		}
+		keyPath, cfgPath := sslECHPaths(s.cfg.DataDir, sp.ID)
+		raw, err := os.ReadFile(cfgPath)
+		if err != nil {
+			continue
+		}
+		if echByID == nil {
+			echByID = map[string]materialize.ECHMaterial{}
+		}
+		echByID[sp.ID] = materialize.ECHMaterial{KeyPath: keyPath, ConfigPEM: string(raw)}
 	}
-	body, err := materialize.RenderSubscription(*user, sets, host, profile, cm, materialize.SubscriptionFilters{
+	body, err := materialize.RenderSubscription(*user, sets, host, profile, materialize.SubscriptionFilters{
 		Set:           filterSet,
 		Presets:       filterPresets,
 		Variants:      filterVariants,
@@ -3044,8 +3158,10 @@ func (s *Service) handleSub(w http.ResponseWriter, r *http.Request) {
 		Flow:          filterFlow,
 		Network:       filterNetwork,
 		StrictFilters: strictFilters,
-		TLSCertPath:   certPath,
-		SlotTLS:       slotTLS,
+		TLSCertPath:   defCert,
+		ECHByID:       echByID,
+		SSLProfiles:   sslByID,
+		DataDir:       s.cfg.DataDir,
 	}, assignments, hubPtr)
 	if err != nil {
 		if strictFilters && strings.Contains(err.Error(), "cp_invalid_sub_filter") {
