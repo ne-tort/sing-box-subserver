@@ -1,0 +1,51 @@
+{
+  "elapsed_s": 40.4,
+  "min_mbps": 0.5,
+  "results": [
+    {
+      "group": "dg_443_naive_h2",
+      "status": "pass",
+      "cells": [
+        {
+          "tag": "naive_tls",
+          "status": "pass",
+          "mbps": 1957.05,
+          "detail": "IPERF_RC=0\nBPS=1957052199.4829073\nMBPS=1957.05\nPASS\n"
+        }
+      ],
+      "rendered": [
+        "naive_tls"
+      ]
+    },
+    {
+      "group": "dg_443_naive_dual",
+      "status": "pass",
+      "cells": [
+        {
+          "tag": "naive_quic",
+          "status": "pass",
+          "mbps": 1950.99,
+          "detail": "IPERF_RC=0\nBPS=1950990674.691834\nMBPS=1950.99\nPASS\n"
+        }
+      ],
+      "rendered": [
+        "naive_quic"
+      ]
+    },
+    {
+      "group": "dg_443_naive_quic",
+      "status": "pass",
+      "cells": [
+        {
+          "tag": "naive_quic",
+          "status": "pass",
+          "mbps": 1952.46,
+          "detail": "IPERF_RC=0\nBPS=1952462456.877636\nMBPS=1952.46\nPASS\n"
+        }
+      ],
+      "rendered": [
+        "naive_quic"
+      ]
+    }
+  ]
+}

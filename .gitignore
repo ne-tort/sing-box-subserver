@@ -2,6 +2,8 @@
 dist/
 *.exe
 *.test
+*.bak
+*.bak.*
 .idea/
 .vscode/
 *.log
@@ -10,7 +12,13 @@ agent.local.yaml
 testdata/docker/client/*.json
 !testdata/docker/client/.gitkeep
 
+# Locally built agent binaries (go build / copy for docker fixtures).
+# Prefer dist/; never commit ELF/Mach-O without extension either.
+testdata/docker/subserver
+testdata/docker/subserver-linux
+testdata/docker/subserver-darwin
+testdata/docker/subserver-*
+
 # Python bytecode
 **/__pycache__/
 *.py[cod]
-

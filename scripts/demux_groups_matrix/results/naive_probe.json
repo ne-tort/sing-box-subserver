@@ -1,0 +1,64 @@
+{
+  "elapsed_s": 44.3,
+  "min_mbps": 0.5,
+  "results": [
+    {
+      "mode": "direct",
+      "tag": "naive_tls",
+      "status": "pass",
+      "mbps": 1896.87,
+      "insecure": null,
+      "server_name": "matrix.local",
+      "hosts": [
+        "matrix.local",
+        "inv-server"
+      ],
+      "detail": "IPERF_RC=0\nBPS=1896874578.7216322\nMBPS=1896.87\nPASS\n"
+    },
+    {
+      "mode": "demux",
+      "group": "dg_443_tls_quic",
+      "slot": "tls",
+      "tag": "naive_tls",
+      "status": "pass",
+      "mbps": 1952.62,
+      "insecure": null,
+      "server_name": "www.apple.com",
+      "hosts": [
+        "matrix.local",
+        "inv-server",
+        "www.apple.com"
+      ],
+      "detail": "IPERF_RC=0\nBPS=1952621278.2628162\nMBPS=1952.62\nPASS\n"
+    },
+    {
+      "mode": "direct",
+      "tag": "naive_quic",
+      "status": "pass",
+      "mbps": 797.82,
+      "insecure": null,
+      "server_name": "matrix.local",
+      "hosts": [
+        "matrix.local",
+        "inv-server"
+      ],
+      "detail": "IPERF_RC=0\nBPS=797824426.5296154\nMBPS=797.82\nPASS\n"
+    },
+    {
+      "mode": "demux",
+      "group": "dg_443_tls_quic",
+      "slot": "quic",
+      "tag": "naive_quic",
+      "status": "pass",
+      "mbps": 869.02,
+      "insecure": null,
+      "server_name": "www.apple.com",
+      "hosts": [
+        "matrix.local",
+        "inv-server",
+        "www.apple.com"
+      ],
+      "detail": "IPERF_RC=0\nBPS=869024955.5947306\nMBPS=869.02\nPASS\n"
+    }
+  ]
+}
